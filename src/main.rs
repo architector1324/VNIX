@@ -2,8 +2,9 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use core::fmt::Write;
 
-pub mod driver;
+mod driver;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -12,6 +13,8 @@ fn panic(_info: &PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    driver::vga::puts(b"Hello, vnix!");
+    let mut cli = driver::amd64::vga::Buf::default();
+    write!(cli, "Hello, vnix: {}", core::f32::consts::E).unwrap();
+
     loop {}
 }
