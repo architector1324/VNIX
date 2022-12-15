@@ -1,24 +1,25 @@
 #![no_std]
 #![no_main]
+#![feature(abi_efiapi)]
 
-use core::panic::PanicInfo;
-use core::fmt::Write;
+use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
+use uefi_services::{println, print};
 
-mod driver;
+#[entry]
+fn main(fb: Handle, mut st: SystemTable<Boot>) -> Status {
+    uefi_services::init(&mut st).unwrap();
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    let mut cli = driver::amd64::vga::Buf::default();
-    write!(cli, "{}", info).unwrap();
-    loop {}
-}
+    uefi_services::system_table();
+    println!("Hello, vnix!");
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    let mut cli = driver::amd64::vga::Buf::default();
-    write!(cli, "Hello, vnix: {}", core::f32::consts::E).unwrap();
+    let input = st.stdin();
 
-    panic!("some");
+    loop {
+        if let Some(key) = input.read_key().unwrap() {
+            print!("{:?} ", key);
+        }
+    }
 
-    loop {}
+    // st.boot_services().stall(10_000_000);
+    // Status::SUCCESS
 }
