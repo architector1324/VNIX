@@ -1,24 +1,25 @@
 use core::{fmt::{Display, Formatter, write}, str::FromStr};
-use heapless::{String, Vec, LinearMap};
+use heapless::{String, Vec, LinearMap, pool::Box};
 
 use super::msg::MsgParseErr;
 
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Unit<'a> {
+#[derive(Debug, PartialEq)]
+pub enum Unit {
     None,
     Bool(bool),
     Byte(u8),
     Int(i32),
     Dec(f32),
     Str(String<256>),
-    Lst(Vec<&'a Unit<'a>, 256>),
-    Map(LinearMap<&'a Unit<'a>, &'a Unit<'a>, 256>)
+    Pair((Box<Unit>, Box<Unit>)),
+    Lst(Vec<Box<Unit>, 128>),
+    Map(LinearMap<Box<Unit>, Box<Unit>, 128>)
 }
 
-impl<'a> Eq for Unit<'a> {}
+impl Eq for Unit {}
 
-impl<'a> Display for Unit<'a> {
+impl Display for Unit {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Unit::None => write(f, core::format_args!("-")),
@@ -33,6 +34,7 @@ impl<'a> Display for Unit<'a> {
                     write(f, core::format_args!("{}", s))
                 }
             },
+            Unit::Pair(p) => write(f, core::format_args!("({} {})", p.0, p.1)),
             Unit::Lst(lst) => {
                 write(f, core::format_args!("["))?;
 
@@ -63,7 +65,7 @@ impl<'a> Display for Unit<'a> {
     }
 }
 
-impl<'a> FromStr for Unit<'a> {
+impl FromStr for Unit {
     type Err = MsgParseErr;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
