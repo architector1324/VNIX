@@ -1,7 +1,7 @@
-use core::{fmt::{Display, Formatter, write}, str::FromStr};
+use core::fmt::{Display, Formatter, write};
 use heapless::{String, Vec, LinearMap, pool::Box};
 
-use super::msg::MsgParseErr;
+use super::{msg::MsgParseErr, kern::{Kern, KernErr}};
 
 
 #[derive(Debug, PartialEq)]
@@ -23,8 +23,14 @@ impl Display for Unit {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Unit::None => write(f, core::format_args!("-")),
-            Unit::Bool(b) => write(f, core::format_args!("{}", b)),
-            Unit::Byte(b) => write(f, core::format_args!("{}", b)),
+            Unit::Bool(b) => {
+                if *b {
+                    write(f, core::format_args!("t"))
+                } else {
+                    write(f, core::format_args!("f"))
+                }
+            },
+            Unit::Byte(b) => write(f, core::format_args!("{:#02x}", b)),
             Unit::Int(i) => write(f, core::format_args!("{}", i)),
             Unit::Dec(d) => write(f, core::format_args!("{}", d)),
             Unit::Str(s) => {
@@ -65,14 +71,81 @@ impl Display for Unit {
     }
 }
 
-impl FromStr for Unit {
-    type Err = MsgParseErr;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl Unit {
+    pub fn parse(s: &str, kern: &mut Kern) -> Result<Self, KernErr> {
+        // none
         if s == "-" {
-            return Ok(Unit::None)
+            return Ok(Unit::None);
         }
 
-        Err(MsgParseErr::NotUnit)
+        // bool
+        if s == "t" {
+            return Ok(Unit::Bool(true));
+        }
+
+        if s == "f" {
+            return Ok(Unit::Bool(false));
+        }
+
+        // int
+        if let Ok(v) = s.parse::<i32>() {
+            return Ok(Unit::Int(v));
+        }
+
+        // dec
+        if let Ok(v) = s.parse::<f32>() {
+            return Ok(Unit::Dec(v));
+        }
+
+        // byte
+        if s.len() >= 2 {
+            if let Ok(v) = u8::from_str_radix(s.trim_start_matches("0x"), 16) {
+                return Ok(Unit::Byte(v));
+            }
+        }
+
+        // str
+        if s.starts_with("`") && s.ends_with("`") {
+            return Ok(Unit::Str(s.strip_prefix("`").unwrap().strip_suffix("`").unwrap().into()));
+        }
+
+        if s.chars().all(|c| c.is_alphanumeric()) {
+            return Ok(Unit::Str(s.into()));
+        }
+
+        // // pair
+        // if s.starts_with("(") && s.ends_with(")") {
+        //     if let Some(p) = s.strip_prefix("(").unwrap().strip_suffix(")").unwrap().split_once(" ") {
+        //         kern.cli.println(core::format_args!("{:?}", p));
+
+        //         let u0 = Unit::parse(p.0, kern)?;
+        //         let u1 = Unit::parse(p.1, kern)?;
+
+        //         return Ok(Unit::Pair((
+        //             kern.unit(u0)?,
+        //             kern.unit(u1)?
+        //         )))
+        //     }
+        // }
+
+        // // list
+        // if s.starts_with("[") && s.ends_with("]") {
+        //     let mut lst = Vec::new();
+
+        //     let mut s = s.strip_prefix("[").unwrap().strip_suffix("]").unwrap();
+
+        //     while let Some(p) = s.split_once(" ") {
+        //         kern.cli.println(core::format_args!("{:?}", p));
+
+        //         let u = Unit::parse(p.0, kern)?;
+        //         lst.push(kern.unit(u)?).map_err(|_| KernErr::MemoryOut)?;
+
+        //         s = p.1;
+        //     }
+
+        //     return Ok(Unit::Lst(lst))
+        // }
+
+        Err(KernErr::ParseErr(MsgParseErr::NotUnit))
     }
 }

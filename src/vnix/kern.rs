@@ -2,11 +2,13 @@ use heapless::pool::{Pool, Box};
 use heapless::{Vec, LinearMap};
 use core::ops::Deref;
 
+use super::msg::MsgParseErr;
 use super::{super::driver::CLI, super::driver::CLIErr, unit::Unit};
 
 #[derive(Debug)]
 pub enum KernErr {
     MemoryOut,
+    ParseErr(MsgParseErr),
     CLIErr(CLIErr)
 }
 
