@@ -24,10 +24,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let u0 = Unit::parse(s.chars(), &mut kern)?.0;
     let u = kern.unit(u0)?;
 
-    let msg = Msg {
-        ath: _super,
-        msg: u
-    };
+    let msg = Msg::new(&_super, u)?;
 
     // run
     writeln!(kern.cli, "INFO vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;

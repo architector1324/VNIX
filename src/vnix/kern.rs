@@ -11,6 +11,7 @@ use super::super::driver::CLIErr;
 #[derive(Debug)]
 pub enum KernErr {
     MemoryOut,
+    EncodeFault,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr)
 }
