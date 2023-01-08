@@ -2,14 +2,15 @@
 #![no_main]
 #![feature(abi_efiapi)]
 
-
 pub mod vnix;
 pub mod driver;
 
 use core::fmt::Write;
 
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
-use vnix::{vnix_entry, kern::Kern};
+
+use vnix::vnix_entry;
+use vnix::core::kern::Kern;
 
 
 #[entry]

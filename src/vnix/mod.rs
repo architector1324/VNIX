@@ -1,34 +1,28 @@
-pub mod unit;
-pub mod msg;
-pub mod user;
+pub mod core;
 pub mod serv;
-pub mod kern;
 
-use unit::Unit;
-use msg::Msg;
-use user::Usr;
-use kern::{Kern, KernErr};
+use self::core::unit::Unit;
+use self::core::user::Usr;
+use self::core::kern::{Kern, KernErr};
 
-use crate::driver::CLIErr;
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     kern.cli.reset().map_err(|e| KernErr::CLIErr(e))?;
 
-    // prepare user
-    let _super = Usr {
-        name: "super".into()
-    };
+    // register user
+    let _super = Usr::new("super")?;
+    kern.reg_usr(_super)?;
 
     // prepare message
     let s = "{`msg`:`Hello, vnix ®!` `a`:- `b`:[`a` 1 3.14 (`c` 2.74)]}";
+
     let u0 = Unit::parse(s.chars(), &mut kern)?.0;
     let u = kern.unit(u0)?;
 
-    let msg = Msg::new(&_super, u)?;
+    let msg = kern.msg("super", u)?;
 
     // run
-    writeln!(kern.cli, "INFO vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-    writeln!(kern.cli, "DEBG vnix:kern: {:?}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    let _ = kern.send("io.term", msg)?;
 
     loop {
 

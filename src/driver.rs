@@ -20,7 +20,7 @@ pub mod amd64 {
 
         pub use uefi_services::{println, print};
         use uefi::prelude::{SystemTable, Boot};
-        use super::super::{CLI, CLIErr};
+        use crate::driver::{CLI, CLIErr};
 
         pub struct Amd64CLI {
             pub st: SystemTable<Boot>

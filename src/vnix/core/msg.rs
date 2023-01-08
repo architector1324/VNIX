@@ -10,20 +10,20 @@ use super::unit::Unit;
 use super::user::Usr;
 
 #[derive(Debug)]
-pub struct Msg<'a> {
+pub struct Msg {
     pub msg: Box<Unit>,
-    pub ath: &'a Usr,
+    pub ath: Usr,
     pub hash: String<256>
 }
 
-impl<'a> Display for Msg<'a> {
+impl Display for Msg {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{{ath:{} msg:{} hsh:{}}}", self.ath, self.msg, self.hash)
     }
 }
 
-impl<'a> Msg<'a> {
-    pub fn new(ath: &'a Usr, msg: Box<Unit>) -> Result<Self, KernErr> {
+impl Msg {
+    pub fn new(ath: Usr, msg: Box<Unit>) -> Result<Self, KernErr> {
         let mut s = String::<256>::new();
         write!(s, "{}", msg).map_err(|_| KernErr::MemoryOut)?;
 

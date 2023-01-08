@@ -2,16 +2,25 @@ use core::ops::Deref;
 use heapless::pool::{Pool, Box};
 use heapless::{Vec, LinearMap};
 
+use super::msg::Msg;
+use super::serv::Serv;
 use super::unit::Unit;
-use super::super::driver::CLI;
 use super::unit::UnitParseErr;
-use super::super::driver::CLIErr;
+
+use super::user::Usr;
+
+use crate::vnix::serv::io;
+
+use crate::driver::CLI;
+use crate::driver::CLIErr;
 
 
 #[derive(Debug)]
 pub enum KernErr {
     MemoryOut,
     EncodeFault,
+    UsrNotFound,
+    ServNotFound,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr)
 }
@@ -21,7 +30,8 @@ pub struct Kern<'a> {
     pub cli: &'a mut dyn CLI,
 
     // vnix
-    units: Pool<Unit>
+    units: Pool<Unit>,
+    users: Vec<Usr, 32>
 }
 
 
@@ -29,7 +39,8 @@ impl<'a> Kern<'a> {
     pub fn new(cli: &'a mut dyn CLI) -> Self {
         let kern = Kern {
             cli,
-            units: Pool::new()
+            units: Pool::new(),
+            users: Vec::new(),
         };
 
         static mut UNITS_MEM: [u8; 256 * core::mem::size_of::<Unit>()] = [0; 256 * core::mem::size_of::<Unit>()];
@@ -39,6 +50,25 @@ impl<'a> Kern<'a> {
         }
 
         kern
+    }
+
+    pub fn reg_usr(&mut self, usr: Usr) -> Result<(), KernErr> {
+        self.users.push(usr).map_err(|_| KernErr::MemoryOut)
+    }
+
+    pub fn msg(&self, ath: &str, u: Box<Unit>) -> Result<Msg, KernErr> {
+        let usr = self.users.iter().find(|usr| usr.name == ath).ok_or(KernErr::UsrNotFound).cloned()?;
+        Msg::new(usr, u)
+    }
+
+    pub fn send(&mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
+        match serv {
+            "io.term" => {
+                let inst = io::Term {};
+                inst.handle(msg, self)
+            },
+            _ => Err(KernErr::ServNotFound)
+        }
     }
 
     pub fn unit(&mut self, u: Unit) -> Result<Box<Unit>, KernErr> {
