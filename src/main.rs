@@ -6,9 +6,8 @@
 pub mod vnix;
 pub mod driver;
 
-use core::format_args;
+use core::fmt::Write;
 
-use driver::CLI;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use vnix::{vnix_entry, kern::Kern};
 
@@ -24,7 +23,7 @@ fn main(fb: Handle, mut st: SystemTable<Boot>) -> Status {
     let kern = Kern::new(&mut cli);
 
     if let Err(err) = vnix_entry(kern) {
-        cli.println(format_args!("ERR vnix: {:?}", err));
+        writeln!(cli, "ERR vnix: {:?}", err).unwrap();
         cli.st.boot_services().stall(10_000_000);
     }
 

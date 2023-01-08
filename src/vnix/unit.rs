@@ -1,5 +1,5 @@
 use core::str::Chars;
-use core::fmt::{Display, Formatter, write, Write};
+use core::fmt::{Display, Formatter, Write};
 use heapless::{String, Vec, LinearMap, pool::Box};
 
 use super::kern::{Kern, KernErr};
@@ -42,50 +42,50 @@ impl Eq for Unit {}
 impl Display for Unit {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            Unit::None => write(f, core::format_args!("-")),
+            Unit::None => write!(f, "-"),
             Unit::Bool(b) => {
                 if *b {
-                    write(f, core::format_args!("t"))
+                    write!(f, "t")
                 } else {
-                    write(f, core::format_args!("f"))
+                    write!(f, "f")
                 }
             },
-            Unit::Byte(b) => write(f, core::format_args!("{:#02x}", b)),
-            Unit::Int(i) => write(f, core::format_args!("{}", i)),
-            Unit::Dec(d) => write(f, core::format_args!("{}", d)),
+            Unit::Byte(b) => write!(f, "{:#02x}", b),
+            Unit::Int(i) => write!(f, "{}", i),
+            Unit::Dec(d) => write!(f, "{}", d),
             Unit::Str(s) => {
                 if s.contains(" ") {
-                    write(f, core::format_args!("`{}`", s))
+                    write!(f, "`{}`", s)
                 } else {
-                    write(f, core::format_args!("{}", s))
+                    write!(f, "{}", s)
                 }
             },
-            Unit::Pair(p) => write(f, core::format_args!("({} {})", p.0, p.1)),
+            Unit::Pair(p) => write!(f, "({} {})", p.0, p.1),
             Unit::Lst(lst) => {
-                write(f, core::format_args!("["))?;
+                write!(f, "[")?;
 
                 for (i, u) in lst.iter().enumerate() {
                     if i == lst.len() - 1 {
-                        write(f, core::format_args!("{}", u))?;
+                        write!(f, "{}", u)?;
                     } else {
-                        write(f, core::format_args!("{} ", u))?;
+                        write!(f, "{} ", u)?;
                     }
                 }
 
-                write(f, core::format_args!("]"))
+                write!(f, "]")
             },
             Unit::Map(map) => {
-                write(f, core::format_args!("{{"))?;
+                write!(f, "{{")?;
 
                 for (i, (u0, u1)) in map.iter().enumerate() {
                     if i == map.len() - 1 {
-                        write(f, core::format_args!("{}:{}", u0, u1))?;
+                        write!(f, "{}:{}", u0, u1)?;
                     } else {
-                        write(f, core::format_args!("{}:{} ", u0, u1))?;
+                        write!(f, "{}:{} ", u0, u1)?;
                     }
                 }
 
-                write(f, core::format_args!("}}"))
+                write!(f, "}}")
             }
         }
     }

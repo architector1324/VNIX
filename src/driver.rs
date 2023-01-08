@@ -1,14 +1,13 @@
-use core::fmt::Arguments;
+use core::fmt::Write;
 
 #[derive(Debug)]
 pub enum CLIErr {
-    Reset
+    Reset,
+    Write
 }
 
-pub trait CLI {
+pub trait CLI: Write {
     fn reset(&mut self) -> Result<(), CLIErr>;
-    fn print(&self, args: Arguments);
-    fn println(&self, args: Arguments);
 }
 
 pub trait Disp {
@@ -17,7 +16,7 @@ pub trait Disp {
 
 pub mod amd64 {
     pub mod cli {
-        use core::fmt::Arguments;
+        use core::fmt::Write;
 
         pub use uefi_services::{println, print};
         use uefi::prelude::{SystemTable, Boot};
@@ -27,17 +26,16 @@ pub mod amd64 {
             pub st: SystemTable<Boot>
         }
 
+        impl Write for Amd64CLI {
+            fn write_str(&mut self, s: &str) -> core::fmt::Result {
+                print!("{}", s);
+                Ok(())
+            }
+        }
+
         impl CLI for Amd64CLI {
             fn reset(&mut self) -> Result<(), CLIErr> {
                 self.st.stdout().reset(false).map_err(|_| CLIErr::Reset)
-            }
-
-            fn print(&self, args: Arguments) {
-                print!("{}", args);
-            }
-
-            fn println(&self, args: Arguments) {
-                println!("{}", args);
             }
         }
     }

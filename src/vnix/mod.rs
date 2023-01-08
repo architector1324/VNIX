@@ -7,9 +7,9 @@ pub mod kern;
 use unit::Unit;
 use msg::Msg;
 use user::Usr;
-use kern::Kern;
+use kern::{Kern, KernErr};
 
-use self::kern::KernErr;
+use crate::driver::CLIErr;
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     kern.cli.reset().map_err(|e| KernErr::CLIErr(e))?;
@@ -30,8 +30,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     };
 
     // run
-    kern.cli.println(core::format_args!("{}", msg));
-    kern.cli.println(core::format_args!("{:?}", msg));
+    writeln!(kern.cli, "INFO vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    writeln!(kern.cli, "DEBG vnix:kern: {:?}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     loop {
 
