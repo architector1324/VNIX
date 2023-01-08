@@ -14,7 +14,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     kern.reg_usr(_super)?;
 
     // prepare message
-    let s = "{`full`:t `msg`:`Hello, vnix ®!`}";
+    let s = "{`fill`:16711680 `msg`:`Hello, vnix ®Ꮘ!`}";
 
     let u0 = Unit::parse(s.chars(), &mut kern)?.0;
     let u = kern.unit(u0)?;

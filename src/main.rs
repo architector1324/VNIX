@@ -8,18 +8,22 @@ pub mod driver;
 use core::fmt::Write;
 
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
+pub use uefi_services::println;
 
 use vnix::vnix_entry;
 use vnix::core::kern::Kern;
 
 
 #[entry]
-fn main(fb: Handle, mut st: SystemTable<Boot>) -> Status {
+fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
     uefi_services::init(&mut st).unwrap();
 
-    let mut cli = driver::amd64::cli::Amd64CLI {
-        st: st
-    };
+    let cli = driver::amd64::term::Amd64Term::new(st);
+    if let Err(ref err) = cli {
+        println!("ERR loader: {:?}", err);
+    }
+
+    let mut cli = cli.unwrap();
 
     let kern = Kern::new(&mut cli);
 

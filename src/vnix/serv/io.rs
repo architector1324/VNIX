@@ -1,6 +1,6 @@
 use core::ops::Deref;
 
-use crate::driver::CLIErr;
+use crate::driver::{CLIErr, DispErr};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
@@ -8,8 +8,12 @@ use crate::vnix::core::unit::Unit;
 use crate::vnix::core::serv::Serv;
 use crate::vnix::core::kern::{KernErr, Kern};
 
+struct GFXMng {
+    fill: Option<u32>
+}
 
 pub struct Term {
+    gfx: Option<GFXMng>,
     full: bool,
     nl: bool
 }
@@ -17,6 +21,7 @@ pub struct Term {
 impl Default for Term {
     fn default() -> Self {
         Term {
+            gfx: None,
             full: false,
             nl: true
         }
@@ -42,6 +47,14 @@ impl Serv for Term {
                             inst.nl = *v;
                         }
                     }
+
+                    if s == "fill" {
+                        if let Unit::Int(v) = u1.deref() {
+                            inst.gfx = Some(GFXMng {
+                                fill: Some(*v as u32)
+                            });
+                        }
+                    }
                 }
             });
 
@@ -56,6 +69,20 @@ impl Serv for Term {
         if self.full {
             writeln!(kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
         } else {
+            // gfx
+            if let Some(ref gfx) = self.gfx {
+                if let Some(fill) = gfx.fill {
+                    let res = kern.cli.res().map_err(|e| KernErr::DispErr(e))?;
+
+                    for x in 0..res.0 {
+                        for y in 0..res.1 {
+                            kern.cli.px(fill, x, y).map_err(|e| KernErr::DispErr(e))?;
+                        }
+                    }
+                }
+            }
+
+            // cli
             if self.nl {
                 writeln!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {

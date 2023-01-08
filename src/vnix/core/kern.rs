@@ -12,9 +12,7 @@ use super::user::Usr;
 
 use crate::vnix::serv::io;
 
-use crate::driver::CLI;
-use crate::driver::CLIErr;
-
+use crate::driver::{Term, CLIErr, DispErr};
 
 #[derive(Debug)]
 pub enum KernErr {
@@ -23,12 +21,13 @@ pub enum KernErr {
     UsrNotFound,
     ServNotFound,
     ParseErr(UnitParseErr),
-    CLIErr(CLIErr)
+    CLIErr(CLIErr),
+    DispErr(DispErr)
 }
 
 pub struct Kern<'a> {
     // drivers
-    pub cli: &'a mut dyn CLI,
+    pub cli: &'a mut dyn Term,
 
     // vnix
     units: Pool<Unit>,
@@ -37,7 +36,7 @@ pub struct Kern<'a> {
 
 
 impl<'a> Kern<'a> {
-    pub fn new(cli: &'a mut dyn CLI) -> Self {
+    pub fn new(cli: &'a mut dyn Term) -> Self {
         let kern = Kern {
             cli,
             units: Pool::new(),
