@@ -1,13 +1,8 @@
-use core::fmt::{Display, Formatter, write};
 use heapless::pool::Box;
+use core::fmt::{Display, Formatter, write};
 
 use super::unit::Unit;
 use super::user::Usr;
-
-#[derive(Debug)]
-pub enum MsgParseErr {
-    NotUnit
-}
 
 #[derive(Debug)]
 pub struct Msg {

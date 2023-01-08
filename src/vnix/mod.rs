@@ -20,8 +20,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     };
 
     // prepare message
-    let s = "`Hello, vnix ®!`";
-    let u0 = Unit::parse(s, &mut kern)?;
+    let s = "{`msg`:`Hello, vnix ®!` `a`:- `b`:[`a` 1 3.14 (`c` 2.74)]}";
+    let u0 = Unit::parse(s.chars(), &mut kern)?.0;
     let u = kern.unit(u0)?;
 
     let msg = Msg {

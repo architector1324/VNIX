@@ -1,5 +1,5 @@
-use core::fmt::{Display, Formatter, write};
 use heapless::String;
+use core::fmt::{Display, Formatter, write};
 
 #[derive(Debug, Clone)]
 pub struct Usr {

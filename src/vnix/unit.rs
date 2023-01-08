@@ -1,8 +1,28 @@
-use core::fmt::{Display, Formatter, write};
+use core::str::Chars;
+use core::fmt::{Display, Formatter, write, Write};
 use heapless::{String, Vec, LinearMap, pool::Box};
 
-use super::{msg::MsgParseErr, kern::{Kern, KernErr}};
+use super::kern::{Kern, KernErr};
 
+
+#[derive(Debug)]
+pub enum UnitParseErr {
+    NotNone,
+    NotBool,
+    NotByte,
+    NotInt,
+    NotDec,
+    NotStr,
+    NotPair,
+    NotList,
+    NotMap,
+    NotUnit,
+    NotClosedBrackets,
+    NotClosedQuotes,
+    MissedSeparator,
+    MissedDot,
+    MissedPartAfterDot
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Unit {
@@ -72,80 +92,274 @@ impl Display for Unit {
 }
 
 impl Unit {
-    pub fn parse(s: &str, kern: &mut Kern) -> Result<Self, KernErr> {
-        // none
-        if s == "-" {
-            return Ok(Unit::None);
+    fn parse_none<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(c) = it.next() {
+            if c == '-' {
+                return Ok((Unit::None, it));
+            }
         }
+        Err(KernErr::ParseErr(UnitParseErr::NotNone))
+    }
 
-        // bool
-        if s == "t" {
-            return Ok(Unit::Bool(true));
+    fn parse_bool<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(c) = it.next() {
+            // bool
+            if c == 't' {
+                return Ok((Unit::Bool(true), it));
+            }
+
+            if c == 'f' {
+                return Ok((Unit::Bool(false), it));
+            }
         }
+        Err(KernErr::ParseErr(UnitParseErr::NotBool))
+    }
 
-        if s == "f" {
-            return Ok(Unit::Bool(false));
-        }
+    fn parse_byte<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(s) = it.as_str().get(0..4) {
+            it.next().unwrap();
+            it.next().unwrap();
+            it.next().unwrap();
+            it.next().unwrap();
 
-        // int
-        if let Ok(v) = s.parse::<i32>() {
-            return Ok(Unit::Int(v));
-        }
-
-        // dec
-        if let Ok(v) = s.parse::<f32>() {
-            return Ok(Unit::Dec(v));
-        }
-
-        // byte
-        if s.len() >= 2 {
             if let Ok(v) = u8::from_str_radix(s.trim_start_matches("0x"), 16) {
-                return Ok(Unit::Byte(v));
+                return Ok((Unit::Byte(v), it))
             }
         }
 
+        Err(KernErr::ParseErr(UnitParseErr::NotByte))
+    }
+
+    fn parse_int<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+        let mut s = String::<256>::new();
+        let mut tmp = it.clone();
+
+        while let Some(c) = it.next() {
+            if !c.is_numeric() {
+                break;
+            }
+
+            s.push(c).map_err(|_| KernErr::MemoryOut)?;
+            tmp = it.clone();
+        }
+
+        if let Ok(v) = s.parse::<i32>() {
+            return Ok((Unit::Int(v), tmp));
+        }
+
+        Err(KernErr::ParseErr(UnitParseErr::NotInt))
+    }
+
+    fn parse_dec<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Ok((fst, mut it)) = Unit::parse_int(it) {
+            if let Some(c) = it.next() {
+                if c != '.' {
+                    return Err(KernErr::ParseErr(UnitParseErr::MissedDot));
+                }
+
+                if let Ok((scd, it)) = Unit::parse_int(it) {
+                    let mut s = String::<256>::new();
+                    write!(s, "{}.{}", fst, scd).map_err(|_| KernErr::MemoryOut)?;
+
+                    let out = s.parse::<f32>().map_err(|_| KernErr::ParseErr(UnitParseErr::NotDec))?;
+
+                    return Ok((Unit::Dec(out), it));
+                } else {
+                    return Err(KernErr::ParseErr(UnitParseErr::MissedPartAfterDot));
+                }
+            }
+        }
+        Err(KernErr::ParseErr(UnitParseErr::NotDec))
+    }
+
+    fn parse_str<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(c) = it.next() {
+            if c == '`' {
+                let mut s = String::<256>::new();
+                let mut tmp = it.clone();
+
+                while let Some(c) = it.next() {
+                    if c == '`' {
+                        break;
+                    }
+
+                    s.push(c).map_err(|_| KernErr::MemoryOut)?;
+                    tmp = it.clone();
+                }
+
+                if let Some(c) = tmp.next() {
+                    if c == '`' {
+                        return Ok((Unit::Str(s), tmp));
+                    } else {
+                        return Err(KernErr::ParseErr(UnitParseErr::NotClosedQuotes));
+                    }
+                } else {
+                    return Err(KernErr::ParseErr(UnitParseErr::NotClosedQuotes));
+                }
+            }
+        }
+        Err(KernErr::ParseErr(UnitParseErr::NotStr))
+    }
+
+    fn parse_pair<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(c) = it.next() {
+            if c == '(' {
+                let u0 = Unit::parse(it, kern)?;
+                it = u0.1;
+
+                if let Some(c) = it.next() {
+                    if c == ' ' {
+                        let u1 = Unit::parse(it, kern)?;
+                        it = u1.1;
+
+                        if let Some(c) = it.next() {
+                            if c == ')' {
+                                return Ok((
+                                    Unit::Pair((
+                                        kern.unit(u0.0)?,
+                                        kern.unit(u1.0)?
+                                    )),
+                                    it
+                                ))
+                            } else {
+                                return Err(KernErr::ParseErr(UnitParseErr::NotClosedBrackets));
+                            }
+                        }
+                    } else {
+                        return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                    }
+                } else {
+                    return Err(KernErr::ParseErr(UnitParseErr::NotClosedBrackets));
+                }
+            }
+        }
+
+        Err(KernErr::ParseErr(UnitParseErr::NotPair))
+    }
+
+    fn parse_list<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(c) = it.next() {
+            if c == '[' {
+                let mut lst = Vec::new();
+
+                loop {
+                    let u = Unit::parse(it, kern)?;
+                    it = u.1;
+
+                    if let Some(c) = it.next() {
+                        if c == ' ' {
+                            let u = kern.unit(u.0)?;
+                            lst.push(u).map_err(|_| KernErr::MemoryOut)?;
+                        } else if c == ']' {
+                            let u = kern.unit(u.0)?;
+                            lst.push(u).map_err(|_| KernErr::MemoryOut)?;
+
+                            return Ok((Unit::Lst(lst), it))
+                        } else {
+                            return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                        }
+                    } else {
+                        return Err(KernErr::ParseErr(UnitParseErr::NotClosedBrackets));
+                    }
+                }
+            }
+        }
+
+        Err(KernErr::ParseErr(UnitParseErr::NotList))
+    }
+
+    fn parse_map<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+        if let Some(c) = it.next() {
+            if c == '{' {
+                let mut map = LinearMap::new();
+
+                loop {
+                    let u0 = Unit::parse(it, kern)?;
+                    it = u0.1;
+
+                    if let Some(c) = it.next() {
+                        if c == ':' {
+                            let u1 = Unit::parse(it, kern)?;
+                            it = u1.1;
+
+                            if let Some(c) = it.next() {
+                                if c == ' ' {
+                                    let u0 = kern.unit(u0.0)?;
+                                    let u1 = kern.unit(u1.0)?;
+
+                                    map.insert(u0, u1).map_err(|_| KernErr::MemoryOut)?;
+                                } else if c == '}' {
+                                    let u0 = kern.unit(u0.0)?;
+                                    let u1 = kern.unit(u1.0)?;
+
+                                    map.insert(u0, u1).map_err(|_| KernErr::MemoryOut)?;
+
+                                    return Ok((Unit::Map(map), it))
+                                } else {
+                                    return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                                }
+                            } else {
+                                return Err(KernErr::ParseErr(UnitParseErr::NotClosedBrackets));
+                            }
+                        } else {
+                            return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                        }
+                    } else {
+                        return Err(KernErr::ParseErr(UnitParseErr::NotClosedBrackets));
+                    }
+                }
+            }
+        }
+
+        Err(KernErr::ParseErr(UnitParseErr::NotMap))
+    }
+
+    pub fn parse<'a>(it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+        // none
+        if let Ok((u, it)) = Unit::parse_none(it.clone()) {
+            return Ok((u, it));
+        }
+
+        // bool
+        if let Ok((u, it)) = Unit::parse_bool(it.clone()) {
+            return Ok((u, it));
+        }
+
+        // byte
+        if let Ok((u, it)) = Unit::parse_byte(it.clone()) {
+            return Ok((u, it));
+        }
+
+        // dec
+        if let Ok((u, it)) = Unit::parse_dec(it.clone()) {
+            return Ok((u, it));
+        }
+
+        // int
+        if let Ok((u, it)) = Unit::parse_int(it.clone()) {
+            return Ok((u, it));
+        }
+
         // str
-        if s.starts_with("`") && s.ends_with("`") {
-            return Ok(Unit::Str(s.strip_prefix("`").unwrap().strip_suffix("`").unwrap().into()));
+        if let Ok((u, it)) = Unit::parse_str(it.clone()) {
+            return Ok((u, it));
         }
 
-        if s.chars().all(|c| c.is_alphanumeric()) {
-            return Ok(Unit::Str(s.into()));
+        // pair
+        if let Ok((u, it)) = Unit::parse_pair(it.clone(), kern) {
+            return Ok((u, it));
         }
 
-        // // pair
-        // if s.starts_with("(") && s.ends_with(")") {
-        //     if let Some(p) = s.strip_prefix("(").unwrap().strip_suffix(")").unwrap().split_once(" ") {
-        //         kern.cli.println(core::format_args!("{:?}", p));
+        // list
+        if let Ok((u, it)) = Unit::parse_list(it.clone(), kern) {
+            return Ok((u, it));
+        }
 
-        //         let u0 = Unit::parse(p.0, kern)?;
-        //         let u1 = Unit::parse(p.1, kern)?;
+        // map
+        if let Ok((u, it)) = Unit::parse_map(it.clone(), kern) {
+            return Ok((u, it));
+        }
 
-        //         return Ok(Unit::Pair((
-        //             kern.unit(u0)?,
-        //             kern.unit(u1)?
-        //         )))
-        //     }
-        // }
-
-        // // list
-        // if s.starts_with("[") && s.ends_with("]") {
-        //     let mut lst = Vec::new();
-
-        //     let mut s = s.strip_prefix("[").unwrap().strip_suffix("]").unwrap();
-
-        //     while let Some(p) = s.split_once(" ") {
-        //         kern.cli.println(core::format_args!("{:?}", p));
-
-        //         let u = Unit::parse(p.0, kern)?;
-        //         lst.push(kern.unit(u)?).map_err(|_| KernErr::MemoryOut)?;
-
-        //         s = p.1;
-        //     }
-
-        //     return Ok(Unit::Lst(lst))
-        // }
-
-        Err(KernErr::ParseErr(MsgParseErr::NotUnit))
+        Err(KernErr::ParseErr(UnitParseErr::NotUnit))
     }
 }
