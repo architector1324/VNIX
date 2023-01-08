@@ -1,4 +1,5 @@
 use core::ops::Deref;
+
 use heapless::pool::{Pool, Box};
 use heapless::{Vec, LinearMap};
 
@@ -64,7 +65,7 @@ impl<'a> Kern<'a> {
     pub fn send(&mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
         match serv {
             "io.term" => {
-                let inst = io::Term {};
+                let (inst, msg) = io::Term::inst(msg, self)?;
                 inst.handle(msg, self)
             },
             _ => Err(KernErr::ServNotFound)
