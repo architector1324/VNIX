@@ -5,7 +5,8 @@ use core::fmt::Write;
 #[derive(Debug)]
 pub enum CLIErr {
     Clear,
-    Write
+    Write,
+    GetKey
 }
 
 #[derive(Debug)]
@@ -21,7 +22,13 @@ pub enum DrvErr {
     Disp(DispErr)
 }
 
+#[derive(Debug, PartialEq)]
+pub enum TermKey {
+    Esc
+}
+
 pub trait CLI: Write {
+    fn get_key(&mut self) -> Result<Option<TermKey>, CLIErr>;
     fn clear(&mut self) -> Result<(), CLIErr>;
 }
 

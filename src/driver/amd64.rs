@@ -2,25 +2,28 @@ pub mod term {
     use core::fmt::Write;
 
     pub use uefi_services::{println, print};
-    use uefi::{prelude::{SystemTable, Boot}, proto::console::{text::Output, gop::GraphicsOutput}, Handle};
+    use uefi::{prelude::{SystemTable, Boot}, proto::console::{text::{Output, Input, Key, ScanCode}, gop::GraphicsOutput}, Handle};
     use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes};
-    use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, Term};
+    use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, Term, TermKey};
 
     pub struct Amd64Term {
         pub st: SystemTable<Boot>,
-        cli_hlr: Handle,
+        cli_out_hlr: Handle,
+        cli_in_hlr: Handle,
         disp_hlr: Handle
     }
 
     impl Amd64Term {
         pub fn new(st: SystemTable<Boot>) -> Result<Amd64Term, DrvErr> {
             let bt = st.boot_services();
-            let cli_hlr = bt.get_handle_for_protocol::<Output>().map_err(|_| DrvErr::HandleFault)?;
+            let cli_out_hlr = bt.get_handle_for_protocol::<Output>().map_err(|_| DrvErr::HandleFault)?;
+            let cli_in_hlr = bt.get_handle_for_protocol::<Input>().map_err(|_| DrvErr::HandleFault)?;
             let disp_hlr = bt.get_handle_for_protocol::<GraphicsOutput>().map_err(|_| DrvErr::HandleFault)?;
 
             Ok(Amd64Term {
                 st,
-                cli_hlr,
+                cli_out_hlr,
+                cli_in_hlr,
                 disp_hlr
             })
         }
@@ -28,14 +31,31 @@ pub mod term {
 
     impl Write for Amd64Term {
         fn write_str(&mut self, s: &str) -> core::fmt::Result {
-            let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_hlr).map_err(|_| core::fmt::Error)?;
+            let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| core::fmt::Error)?;
             write!(cli, "{}", s)
         }
     }
 
     impl CLI for Amd64Term {
+        fn get_key(&mut self) -> Result<Option<crate::driver::TermKey>, CLIErr> {
+            let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
+
+            cli.wait_for_key_event();
+
+            if let Some(key) = cli.read_key().map_err(|_| CLIErr::GetKey)? {
+                match key {
+                    Key::Special(scan) => match scan {
+                        ScanCode::ESCAPE => return Ok(Some(TermKey::Esc)),
+                        _ => ()
+                    },
+                    _ => ()
+                }
+            }
+            Ok(None)
+        }
+
         fn clear(&mut self) -> Result<(), CLIErr> {
-            let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_hlr).map_err(|_| CLIErr::Clear)?;
+            let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| CLIErr::Clear)?;
             cli.clear().map_err(|_| CLIErr::Clear)
         }
     }
