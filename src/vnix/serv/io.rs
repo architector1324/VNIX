@@ -87,8 +87,13 @@ impl Term {
                             break;
                         }
 
-                        write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                        write!(kern.cli, "\r{}{}", inp.pmt, out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        if c == '\u{8}' {
+                            out.pop();
+                        } else {
+                            write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        }
+
+                        write!(kern.cli, "\r{}{out} ", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     }
                 }
             }
