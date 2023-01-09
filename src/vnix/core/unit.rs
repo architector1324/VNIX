@@ -105,11 +105,21 @@ impl Unit {
         if let Some(c) = it.next() {
             // bool
             if c == 't' {
-                return Ok((Unit::Bool(true), it));
+                let tmp = it.clone();
+                if let Some(c) = it.next() {
+                    if !c.is_alphanumeric() {
+                        return Ok((Unit::Bool(true), tmp));
+                    }
+                }
             }
 
             if c == 'f' {
-                return Ok((Unit::Bool(false), it));
+                let tmp = it.clone();
+                if let Some(c) = it.next() {
+                    if !c.is_alphanumeric() {
+                        return Ok((Unit::Bool(false), tmp));
+                    }
+                }
             }
         }
         Err(KernErr::ParseErr(UnitParseErr::NotBool))

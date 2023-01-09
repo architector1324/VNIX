@@ -3,7 +3,7 @@ use core::fmt::Write;
 
 use heapless::String;
 
-use crate::driver::{CLIErr, DispErr, TermKey};
+use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
@@ -25,7 +25,8 @@ pub struct Term {
     inp: Option<Inp>,
     nl: bool,
     msg: Option<String<256>>,
-    trc: bool
+    trc: bool,
+    prs: bool
 }
 
 impl Default for Term {
@@ -35,7 +36,8 @@ impl Default for Term {
             inp: None,
             nl: true,
             msg: None,
-            trc: false
+            trc: false,
+            prs: false
         }
     }
 }
@@ -91,7 +93,13 @@ impl Term {
                 }
             }
 
-            let u = kern.unit(Unit::Str(out))?;
+            let u = if self.prs {
+                let tmp = Unit::parse(out.chars(), kern)?.0;
+                kern.unit(tmp)?
+            } else {
+                kern.unit(Unit::Str(out))?
+            };
+
             return Ok(Some(kern.msg(&msg.ath.name, u)?))
         }
 
@@ -130,6 +138,12 @@ impl Serv for Term {
                     if s == "msg" {
                         if let Unit::Str(s) = u1.deref() {
                             inst.msg = Some(s.clone());
+                        }
+                    }
+
+                    if s == "prs" {
+                        if let Unit::Bool(v) = u1.deref() {
+                            inst.prs = *v;
                         }
                     }
 
