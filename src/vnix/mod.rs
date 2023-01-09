@@ -7,7 +7,7 @@ use self::core::kern::{Kern, KernErr};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
-    kern.cli.reset().map_err(|e| KernErr::CLIErr(e))?;
+    kern.cli.clear().map_err(|e| KernErr::CLIErr(e))?;
 
     // register user
     let _super = Usr::new("super")?;

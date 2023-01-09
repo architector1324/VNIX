@@ -4,7 +4,7 @@ use core::fmt::Write;
 
 #[derive(Debug)]
 pub enum CLIErr {
-    Reset,
+    Clear,
     Write
 }
 
@@ -22,7 +22,7 @@ pub enum DrvErr {
 }
 
 pub trait CLI: Write {
-    fn reset(&mut self) -> Result<(), CLIErr>;
+    fn clear(&mut self) -> Result<(), CLIErr>;
 }
 
 pub trait Disp {

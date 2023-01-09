@@ -79,6 +79,8 @@ impl Serv for Term {
                             kern.cli.px(fill, x, y).map_err(|e| KernErr::DispErr(e))?;
                         }
                     }
+
+                    kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
                 }
             }
 
