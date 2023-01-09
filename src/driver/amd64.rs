@@ -40,7 +40,10 @@ pub mod term {
         fn get_key(&mut self) -> Result<Option<crate::driver::TermKey>, CLIErr> {
             let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 
-            cli.wait_for_key_event();
+            unsafe {
+                let e = cli.wait_for_key_event().unsafe_clone();
+                self.st.boot_services().wait_for_event(&mut [e]).map_err(|_| CLIErr::GetKey)?;
+            }
 
             if let Some(key) = cli.read_key().map_err(|_| CLIErr::GetKey)? {
                 match key {

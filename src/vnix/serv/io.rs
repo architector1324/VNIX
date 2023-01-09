@@ -109,15 +109,8 @@ impl Serv for Term {
                     return Ok(Some(msg));
                 }
 
-                // wait for Esc
-                loop {
-                    if let Some(key) = kern.cli.get_key().map_err(|e| KernErr::CLIErr(e))? {
-                        if key == TermKey::Esc {
-                            break;
-                        }
-                    }
-                }
-
+                // wait for key
+                kern.cli.get_key().map_err(|e| KernErr::CLIErr(e))?;
                 kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
             }
 
