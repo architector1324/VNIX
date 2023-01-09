@@ -24,7 +24,8 @@ pub enum DrvErr {
 
 #[derive(Debug, PartialEq)]
 pub enum TermKey {
-    Esc
+    Esc,
+    Char(char)
 }
 
 pub trait CLI: Write {

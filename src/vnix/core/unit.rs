@@ -54,10 +54,10 @@ impl Display for Unit {
             Unit::Int(i) => write!(f, "{}", i),
             Unit::Dec(d) => write!(f, "{}", d),
             Unit::Str(s) => {
-                if s.contains(" ") {
-                    write!(f, "`{}`", s)
-                } else {
+                if s.as_str().chars().all(|c| c.is_alphanumeric()) {
                     write!(f, "{}", s)
+                } else {
+                    write!(f, "`{}`", s)
                 }
             },
             Unit::Pair(p) => write!(f, "({} {})", p.0, p.1),
@@ -174,6 +174,7 @@ impl Unit {
 
     fn parse_str<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
         if let Some(c) = it.next() {
+            // `complex string`
             if c == '`' {
                 let mut s = String::<256>::new();
                 let mut tmp = it.clone();
@@ -196,6 +197,25 @@ impl Unit {
                 } else {
                     return Err(KernErr::ParseErr(UnitParseErr::NotClosedQuotes));
                 }
+            }
+
+            // abc123
+            if c.is_alphanumeric() {
+                let mut s = String::<256>::new();
+                let mut tmp = it.clone();
+
+                s.push(c).map_err(|_| KernErr::MemoryOut)?;
+
+                while let Some(c) = it.next() {
+                    if !c.is_alphanumeric() {
+                        break;
+                    }
+
+                    s.push(c).map_err(|_| KernErr::MemoryOut)?;
+                    tmp = it.clone();
+                }
+
+                return Ok((Unit::Str(s), tmp));
             }
         }
         Err(KernErr::ParseErr(UnitParseErr::NotStr))

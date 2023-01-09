@@ -51,7 +51,7 @@ pub mod term {
                         ScanCode::ESCAPE => return Ok(Some(TermKey::Esc)),
                         _ => ()
                     },
-                    _ => ()
+                    Key::Printable(c) => return Ok(Some(TermKey::Char(c.into())))
                 }
             }
             Ok(None)

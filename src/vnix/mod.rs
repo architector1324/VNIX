@@ -1,6 +1,8 @@
 pub mod core;
 pub mod serv;
 
+use crate::driver::CLIErr;
+
 use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
@@ -14,7 +16,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     kern.reg_usr(_super)?;
 
     // prepare message
-    let s = "{`fill`:16711680 `msg`:`Hello, vnix ®Ꮘ!`}";
+    // λ
+    let s = "{inp:`$ ` msg:`Hello, vnix ®Ꮘ!`}";
 
     let u0 = Unit::parse(s.chars(), &mut kern)?.0;
     let u = kern.unit(u0)?;
@@ -22,7 +25,9 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let msg = kern.msg("super", u)?;
 
     // run
-    let _ = kern.send("io.term", msg)?;
+    if let Some(msg) = kern.send("io.term", msg)? {
+        writeln!(kern.cli, "INFO vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    }
 
     loop {
 
