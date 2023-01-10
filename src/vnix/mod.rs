@@ -19,21 +19,20 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super.name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-    // prepare message
-    // λ
-    let s = "{fill:16711680 prs:t inp:`$ ` msg:`Hello, vnix!`}";
-
-    let u0 = Unit::parse(s.chars(), &mut kern)?.0;
-    let u = kern.unit(u0)?;
-
-    let msg = kern.msg("super", u)?;
-
-    // run
-    if let Some(msg) = kern.send("io.term", msg)? {
-        writeln!(kern.cli, "INFO vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-    }
-
     loop {
+        // prepare message
+        // λ
+        let s = "{prs:t inp:`$ ` msg:`Hello, vnix!`}";
+    
+        let u0 = Unit::parse(s.chars(), &mut kern)?.0;
+        let u = kern.unit(u0)?;
+    
+        let mut msg = kern.msg("super", u)?;
 
+        // run
+        while let Some(_msg) = kern.send("io.term", msg)? {
+            // writeln!(kern.cli, "INFO vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            msg = _msg;
+        }
     }
 }

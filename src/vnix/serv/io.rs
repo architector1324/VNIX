@@ -62,11 +62,11 @@ impl Term {
             } else {
                 write!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
-        } else {
+        } else if self.inp.is_none() {
             if self.nl {
-                writeln!(kern.cli, "{}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                writeln!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {
-                write!(kern.cli, "{}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                write!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
         }
 
@@ -94,14 +94,16 @@ impl Term {
                 }
             }
 
-            let u = if self.prs {
-                let tmp = Unit::parse(out.chars(), kern)?.0;
-                kern.unit(tmp)?
-            } else {
-                kern.unit(Unit::Str(out))?
-            };
-
-            return Ok(Some(kern.msg(&msg.ath.name, u)?))
+            if !out.is_empty() {
+                let u = if self.prs {
+                    let tmp = Unit::parse(out.chars(), kern)?.0;
+                    kern.unit(tmp)?
+                } else {
+                    kern.unit(Unit::Str(out))?
+                };
+    
+                return Ok(Some(kern.msg(&msg.ath.name, u)?))
+            }
         }
 
         Ok(None)
@@ -114,7 +116,7 @@ impl Serv for Term {
     
         // config instance
         if let Unit::Map(m) = msg.msg.deref() {
-            m.iter().for_each(|(u0, u1)| {
+            for (u0, u1) in m.iter() {
                 if let Unit::Str(s) = u0.deref() {
                     if s == "trc" {
                         if let Unit::Bool(v) = u1.deref() {
@@ -137,9 +139,10 @@ impl Serv for Term {
                     }
 
                     if s == "msg" {
-                        if let Unit::Str(s) = u1.deref() {
-                            inst.msg = Some(s.clone());
-                        }
+                        let mut s = String::<256>::new();
+                        write!(s, "{}", u1.deref()).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
+                        inst.msg = Some(s);
                     }
 
                     if s == "prs" {
@@ -156,7 +159,7 @@ impl Serv for Term {
                         }
                     }
                 }
-            });
+            }
         }
 
         // default
