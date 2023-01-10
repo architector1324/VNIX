@@ -36,6 +36,7 @@ pub trait CLI: Write {
 pub trait Disp {
     fn res(&self) -> Result<(usize, usize), DispErr>;
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
+    fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
 }
 
 pub trait Term: CLI + Disp {}

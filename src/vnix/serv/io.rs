@@ -46,13 +46,9 @@ impl Term {
     fn gfx_hlr(&self, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(ref gfx) = self.gfx {
             if let Some(fill) = gfx.fill {
-                let res = kern.cli.res().map_err(|e| KernErr::DispErr(e))?;
-    
-                for x in 0..res.0 {
-                    for y in 0..res.1 {
-                        kern.cli.px(fill, x, y).map_err(|e| KernErr::DispErr(e))?;
-                    }
-                }
+                kern.cli.fill(&|_, _| {
+                    fill
+                }).map_err(|e| KernErr::DispErr(e))?;
             }
         }
 

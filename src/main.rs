@@ -27,10 +27,12 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
 
     let kern = Kern::new(&mut cli);
 
+    writeln!(kern.cli, "INFO vnix: kernel running on `amd64` platform").unwrap();
+
     if let Err(err) = vnix_entry(kern) {
         writeln!(cli, "ERR vnix: {:?}", err).unwrap();
-        cli.st.boot_services().stall(10_000_000);
     }
+    cli.st.boot_services().stall(10_000_000);
 
     Status::SUCCESS
 }
