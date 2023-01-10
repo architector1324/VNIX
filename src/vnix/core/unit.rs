@@ -392,4 +392,46 @@ impl Unit {
 
         Err(KernErr::ParseErr(UnitParseErr::NotUnit))
     }
+
+    pub fn as_none(&self) -> Option<()> {
+        if let Unit::None = self {
+            return Some(())
+        }
+        None
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        if let Unit::Bool(v) = self {
+            return Some(*v)
+        }
+        None
+    }
+
+    pub fn as_byte(&self) -> Option<u8> {
+        if let Unit::Byte(v) = self {
+            return Some(*v)
+        }
+        None
+    }
+
+    pub fn as_int(&self) -> Option<i32> {
+        if let Unit::Int(v) = self {
+            return Some(*v)
+        }
+        None
+    }
+
+    pub fn as_dec(&self) -> Option<f32> {
+        if let Unit::Dec(v) = self {
+            return Some(*v)
+        }
+        None
+    }
+
+    pub fn as_str(&self) -> Option<String<256>> {
+        if let Unit::Str(s) = self {
+            return Some(s.clone())
+        }
+        None
+    }
 }

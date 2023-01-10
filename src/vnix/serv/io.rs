@@ -116,49 +116,32 @@ impl Serv for Term {
 
         // config instance
         if let Unit::Map(m) = msg.msg.deref() {
-            for (u0, u1) in m.iter() {
-                if let Unit::Str(s) = u0.deref() {
-                    if s == "trc" {
-                        if let Unit::Bool(v) = u1.deref() {
-                            inst.trc = *v;
-                        }
-                    }
+            let mut it = m.iter().filter_map(|p| Some((p.0.deref().as_str()?, p.1.deref())));
+            let mut bool_it = it.clone().filter_map(|(s, u)| Some((s, u.as_bool()?)));
 
-                    if s == "nl" {
-                        if let Unit::Bool(v) = u1.deref() {
-                            inst.nl = *v;
-                        }
-                    }
+            bool_it.clone().find(|(s, _)| s == "trc").map(|(_, v)| inst.trc = v);
+            bool_it.clone().find(|(s, _)| s == "nl").map(|(_, v)| inst.nl = v);
+            bool_it.find(|(s, _)| s == "prs").map(|(_, v)| inst.prs = v);
 
-                    if s == "inp" {
-                        if let Unit::Str(s) = u1.deref() {
-                            inst.inp = Some(Inp {
-                                pmt: s.clone()
-                            })
-                        }
-                    }
+            it.clone().filter_map(|(s, u)| Some((s, u.as_str()?))).find(|(s, _)| s == "inp").map(|(_, s)| {
+                inst.inp = Some(Inp {
+                    pmt: s
+                })
+            });
 
-                    if s == "msg" {
-                        let mut s = String::<256>::new();
-                        write!(s, "{}", u1.deref()).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            it.clone().filter_map(|(s, u)| Some((s, u.as_int()?))).find(|(s, _)| s == "fill").map(|(_, v)| {
+                inst.gfx = Some(GFXMng {
+                    fill: Some(v as u32)
+                });
+            });
 
-                        inst.msg = Some(s);
-                    }
+            let msg = it.find(|(s, _)| s == "msg").map(|(_, u)| u);
 
-                    if s == "prs" {
-                        if let Unit::Bool(v) = u1.deref() {
-                            inst.prs = *v;
-                        }
-                    }
+            if let Some(u) = msg {
+                let mut s = String::<256>::new();
+                write!(s, "{}", u).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-                    if s == "fill" {
-                        if let Unit::Int(v) = u1.deref() {
-                            inst.gfx = Some(GFXMng {
-                                fill: Some(*v as u32)
-                            });
-                        }
-                    }
-                }
+                inst.msg = Some(s);
             }
         }
 
