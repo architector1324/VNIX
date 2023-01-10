@@ -113,7 +113,7 @@ impl Term {
 impl Serv for Term {
     fn inst(msg: Msg, _kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
         let mut inst = Term::default();
-    
+
         // config instance
         if let Unit::Map(m) = msg.msg.deref() {
             for (u0, u1) in m.iter() {

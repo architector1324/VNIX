@@ -61,6 +61,29 @@ impl<'a> Kern<'a> {
         Msg::new(usr, u)
     }
 
+    pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
+        let mut serv = None;
+
+        if let Unit::Map(m) = msg.msg.deref() {
+            for (u0, u1) in m.iter() {
+                if let Unit::Str(s) = u0.deref() {
+                    if s == "task" {
+                        if let Unit::Str(s) = u1.deref() {
+                            serv = Some(s.clone());
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(serv) = serv {
+            return self.send(serv.as_str(), msg);
+        }
+
+        Ok(None)
+    }
+
     pub fn send(&mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
         match serv {
             "io.term" => {
