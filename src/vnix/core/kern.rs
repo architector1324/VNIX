@@ -10,9 +10,9 @@ use super::unit::UnitParseErr;
 
 use super::user::Usr;
 
-use crate::vnix::serv::io;
+use crate::vnix::serv::{io, etc};
 
-use crate::driver::{Term, CLIErr, DispErr};
+use crate::driver::{CLIErr, DispErr, TimeErr, CLI, Disp, Time};
 
 #[derive(Debug)]
 pub enum KernErr {
@@ -22,23 +22,27 @@ pub enum KernErr {
     ServNotFound,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
-    DispErr(DispErr)
+    DispErr(DispErr),
+    TimeErr(TimeErr)
 }
 
 pub struct Kern<'a> {
     // drivers
-    pub cli: &'a mut dyn Term,
+    pub cli: &'a mut dyn CLI,
+    pub disp: &'a mut dyn Disp,
+    pub time: &'a mut dyn Time,
 
     // vnix
     units: Pool<Unit>,
     users: Vec<Usr, 32>
 }
 
-
 impl<'a> Kern<'a> {
-    pub fn new(cli: &'a mut dyn Term) -> Self {
+    pub fn new(cli: &'a mut dyn CLI, disp: &'a mut dyn Disp, time: &'a mut dyn Time) -> Self {
         let kern = Kern {
             cli,
+            disp,
+            time,
             units: Pool::new(),
             users: Vec::new(),
         };
@@ -79,6 +83,10 @@ impl<'a> Kern<'a> {
                 let (inst, msg) = io::Term::inst(msg, self)?;
                 inst.handle(msg, self)
             },
+            "etc.chrono" => {
+                let (inst, msg) = etc::Chrono::inst(msg, self)?;
+                inst.handle(msg, self)
+            }
             _ => Err(KernErr::ServNotFound)
         }
     }

@@ -18,21 +18,42 @@ use vnix::core::kern::Kern;
 fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
     uefi_services::init(&mut st).unwrap();
 
-    let cli = driver::amd64::term::Amd64Term::new(st);
-    if let Err(ref err) = cli {
-        println!("ERR loader: {:?}", err);
+    unsafe {
+        // load drivers
+        let cli = driver::amd64::Amd64CLI::new(st.unsafe_clone());
+        if let Err(ref err) = cli {
+            println!("ERR loader: {:?}", err);
+        }
+    
+        let mut cli = cli.unwrap();
+    
+        let disp = driver::amd64::Amd64Disp::new(st.unsafe_clone());
+        if let Err(ref err) = disp {
+            println!("ERR loader: {:?}", err);
+        }
+    
+        let mut disp = disp.unwrap();
+    
+        let time = driver::amd64::Amd64Time::new(st.unsafe_clone());
+        if let Err(ref err) = time {
+            println!("ERR loader: {:?}", err);
+        }
+    
+        let mut time = time.unwrap();
+    
+        // load kernel
+        let kern = Kern::new(&mut cli, &mut disp, &mut time);
+    
+        writeln!(kern.cli, "INFO vnix: kernel running on `amd64` platform").unwrap();
+    
+        // run
+        if let Err(err) = vnix_entry(kern) {
+            writeln!(cli, "ERR vnix: {:?}", err).unwrap();
+        }
     }
 
-    let mut cli = cli.unwrap();
 
-    let kern = Kern::new(&mut cli);
-
-    writeln!(kern.cli, "INFO vnix: kernel running on `amd64` platform").unwrap();
-
-    if let Err(err) = vnix_entry(kern) {
-        writeln!(cli, "ERR vnix: {:?}", err).unwrap();
-    }
-    cli.st.boot_services().stall(10_000_000);
+    st.boot_services().stall(10_000_000);
 
     Status::SUCCESS
 }

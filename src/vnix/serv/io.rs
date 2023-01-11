@@ -46,7 +46,7 @@ impl Term {
     fn gfx_hlr(&self, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(ref gfx) = self.gfx {
             if let Some(fill) = gfx.fill {
-                kern.cli.fill(&|_, _| {
+                kern.disp.fill(&|_, _| {
                     fill
                 }).map_err(|e| KernErr::DispErr(e))?;
             }
@@ -145,7 +145,6 @@ impl Serv for Term {
             }
         }
 
-        // default
         Ok((inst, msg))
     }
 

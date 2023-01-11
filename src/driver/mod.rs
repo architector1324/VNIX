@@ -16,16 +16,26 @@ pub enum DispErr {
 }
 
 #[derive(Debug)]
+pub enum TimeErr {
+    Wait
+}
+
+#[derive(Debug)]
 pub enum DrvErr {
     HandleFault,
     CLI(CLIErr),
-    Disp(DispErr)
+    Disp(DispErr),
+    Time(TimeErr)
 }
 
 #[derive(Debug, PartialEq)]
 pub enum TermKey {
     Esc,
     Char(char)
+}
+
+pub trait Time {
+    fn wait(&mut self, mcs: usize) -> Result<(), TimeErr>;
 }
 
 pub trait CLI: Write {
@@ -38,5 +48,3 @@ pub trait Disp {
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
 }
-
-pub trait Term: CLI + Disp {}
