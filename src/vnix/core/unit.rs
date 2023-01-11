@@ -1,6 +1,9 @@
 use core::str::Chars;
 use core::fmt::{Display, Formatter, Write};
-use heapless::{String, Vec, LinearMap, pool::Box};
+
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use alloc::string::String;
 
 use super::kern::{Kern, KernErr};
 
@@ -24,17 +27,17 @@ pub enum UnitParseErr {
     MissedPartAfterDot
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Unit {
     None,
     Bool(bool),
     Byte(u8),
     Int(i32),
     Dec(f32),
-    Str(String<256>),
+    Str(String),
     Pair((Box<Unit>, Box<Unit>)),
-    Lst(Vec<Box<Unit>, 128>),
-    Map(LinearMap<Box<Unit>, Box<Unit>, 128>)
+    Lst(Vec<Unit>),
+    Map(Vec<(Unit, Unit)>)
 }
 
 impl Eq for Unit {}
@@ -141,7 +144,7 @@ impl Unit {
     }
 
     fn parse_int<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
-        let mut s = String::<256>::new();
+        let mut s = String::new();
         let mut tmp = it.clone();
 
         while let Some(c) = it.next() {
@@ -149,7 +152,7 @@ impl Unit {
                 break;
             }
 
-            s.push(c).map_err(|_| KernErr::MemoryOut)?;
+            s.push(c);
             tmp = it.clone();
         }
 
@@ -168,7 +171,7 @@ impl Unit {
                 }
 
                 if let Ok((scd, it)) = Unit::parse_int(it) {
-                    let mut s = String::<256>::new();
+                    let mut s = String::new();
                     write!(s, "{}.{}", fst, scd).map_err(|_| KernErr::MemoryOut)?;
 
                     let out = s.parse::<f32>().map_err(|_| KernErr::ParseErr(UnitParseErr::NotDec))?;
@@ -186,7 +189,7 @@ impl Unit {
         if let Some(c) = it.next() {
             // `complex string`
             if c == '`' {
-                let mut s = String::<256>::new();
+                let mut s = String::new();
                 let mut tmp = it.clone();
 
                 while let Some(c) = it.next() {
@@ -194,7 +197,7 @@ impl Unit {
                         break;
                     }
 
-                    s.push(c).map_err(|_| KernErr::MemoryOut)?;
+                    s.push(c);
                     tmp = it.clone();
                 }
 
@@ -211,17 +214,17 @@ impl Unit {
 
             // abc123
             if c.is_alphanumeric() {
-                let mut s = String::<256>::new();
+                let mut s = String::new();
                 let mut tmp = it.clone();
 
-                s.push(c).map_err(|_| KernErr::MemoryOut)?;
+                s.push(c);
 
                 while let Some(c) = it.next() {
                     if !c.is_alphanumeric() {
                         break;
                     }
 
-                    s.push(c).map_err(|_| KernErr::MemoryOut)?;
+                    s.push(c);
                     tmp = it.clone();
                 }
 
@@ -246,8 +249,8 @@ impl Unit {
                             if c == ')' {
                                 return Ok((
                                     Unit::Pair((
-                                        kern.unit(u0.0)?,
-                                        kern.unit(u1.0)?
+                                        Box::new(u0.0),
+                                        Box::new(u1.0)
                                     )),
                                     it
                                 ))
@@ -278,12 +281,9 @@ impl Unit {
 
                     if let Some(c) = it.next() {
                         if c == ' ' {
-                            let u = kern.unit(u.0)?;
-                            lst.push(u).map_err(|_| KernErr::MemoryOut)?;
+                            lst.push(u.0);
                         } else if c == ']' {
-                            let u = kern.unit(u.0)?;
-                            lst.push(u).map_err(|_| KernErr::MemoryOut)?;
-
+                            lst.push(u.0);
                             return Ok((Unit::Lst(lst), it))
                         } else {
                             return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
@@ -301,7 +301,7 @@ impl Unit {
     fn parse_map<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
         if let Some(c) = it.next() {
             if c == '{' {
-                let mut map = LinearMap::new();
+                let mut map = Vec::new();
 
                 loop {
                     let u0 = Unit::parse(it, kern)?;
@@ -314,16 +314,9 @@ impl Unit {
 
                             if let Some(c) = it.next() {
                                 if c == ' ' {
-                                    let u0 = kern.unit(u0.0)?;
-                                    let u1 = kern.unit(u1.0)?;
-
-                                    map.insert(u0, u1).map_err(|_| KernErr::MemoryOut)?;
+                                    map.push((u0.0, u1.0));
                                 } else if c == '}' {
-                                    let u0 = kern.unit(u0.0)?;
-                                    let u1 = kern.unit(u1.0)?;
-
-                                    map.insert(u0, u1).map_err(|_| KernErr::MemoryOut)?;
-
+                                    map.push((u0.0, u1.0));
                                     return Ok((Unit::Map(map), it))
                                 } else {
                                     return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
@@ -428,9 +421,30 @@ impl Unit {
         None
     }
 
-    pub fn as_str(&self) -> Option<String<256>> {
+    pub fn as_str(&self) -> Option<String> {
         if let Unit::Str(s) = self {
             return Some(s.clone())
+        }
+        None
+    }
+
+    pub fn as_pair(&self) -> Option<(Box<Unit>, Box<Unit>)> {
+        if let Unit::Pair((u0, u1)) = self {
+            return Some((u0.clone(), u1.clone()))
+        }
+        None
+    }
+
+    pub fn as_vec(&self) -> Option<Vec<Unit>> {
+        if let Unit::Lst(lst) = self {
+            return Some(lst.clone());
+        }
+        None
+    }
+
+    pub fn as_map(&self) -> Option<Vec<(Unit, Unit)>> {
+        if let Unit::Map(m) = self {
+            return Some(m.clone());
         }
         None
     }

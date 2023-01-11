@@ -1,7 +1,8 @@
 use core::ops::Deref;
 use core::fmt::Write;
 
-use heapless::String;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use crate::driver::{CLIErr, TermKey};
 
@@ -12,19 +13,19 @@ use crate::vnix::core::serv::Serv;
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
-struct GFXMng {
-    fill: Option<u32>
+struct Inp {
+    pmt: String
 }
 
-struct Inp {
-    pmt: String<256>
+struct Img {
+    img: Vec<u32>
 }
 
 pub struct Term {
-    gfx: Option<GFXMng>,
     inp: Option<Inp>,
+    img: Option<Img>,
     nl: bool,
-    msg: Option<String<256>>,
+    msg: Option<String>,
     trc: bool,
     prs: bool
 }
@@ -32,8 +33,8 @@ pub struct Term {
 impl Default for Term {
     fn default() -> Self {
         Term {
-            gfx: None,
             inp: None,
+            img: None,
             nl: true,
             msg: None,
             trc: false,
@@ -43,13 +44,13 @@ impl Default for Term {
 }
 
 impl Term {
-    fn gfx_hlr(&self, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some(ref gfx) = self.gfx {
-            if let Some(fill) = gfx.fill {
-                kern.disp.fill(&|_, _| {
-                    fill
-                }).map_err(|e| KernErr::DispErr(e))?;
-            }
+    fn img_hlr(&self, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+        if let Some(ref img) = self.img {
+            let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+            kern.disp.fill(&|x, y| {
+                img.img[x + w * y]
+            }).map_err(|e| KernErr::DispErr(e))?;
         }
 
         Ok(None)
@@ -71,7 +72,7 @@ impl Term {
         }
 
         if let Some(inp) = &self.inp {
-            let mut out = String::<256>::new();
+            let mut out = String::new();
 
             write!(kern.cli, "\r{}", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
@@ -96,10 +97,9 @@ impl Term {
 
             if !out.is_empty() {
                 let u = if self.prs {
-                    let tmp = Unit::parse(out.chars(), kern)?.0;
-                    kern.unit(tmp)?
+                    Unit::parse(out.chars(), kern)?.0
                 } else {
-                    kern.unit(Unit::Str(out))?
+                    Unit::Str(out)
                 };
     
                 return Ok(Some(kern.msg(&msg.ath.name, u)?))
@@ -115,8 +115,8 @@ impl Serv for Term {
         let mut inst = Term::default();
 
         // config instance
-        if let Unit::Map(m) = msg.msg.deref() {
-            let mut it = m.iter().filter_map(|p| Some((p.0.deref().as_str()?, p.1.deref())));
+        if let Unit::Map(ref m) = msg.msg {
+            let mut it = m.iter().filter_map(|p| Some((p.0.as_str()?, p.1.clone())));
             let mut bool_it = it.clone().filter_map(|(s, u)| Some((s, u.as_bool()?)));
 
             bool_it.clone().find(|(s, _)| s == "trc").map(|(_, v)| inst.trc = v);
@@ -129,16 +129,17 @@ impl Serv for Term {
                 })
             });
 
-            it.clone().filter_map(|(s, u)| Some((s, u.as_int()?))).find(|(s, _)| s == "fill").map(|(_, v)| {
-                inst.gfx = Some(GFXMng {
-                    fill: Some(v as u32)
-                });
+            it.clone().filter_map(|(s, u)| Some((s, u.as_vec()?))).find(|(s, _)| s == "img").map(|(_, lst)| {
+                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+                inst.img = Some(Img {
+                    img
+                })
             });
 
             let msg = it.find(|(s, _)| s == "msg").map(|(_, u)| u);
 
             if let Some(u) = msg {
-                let mut s = String::<256>::new();
+                let mut s = String::new();
                 write!(s, "{}", u).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
                 inst.msg = Some(s);
@@ -153,8 +154,8 @@ impl Serv for Term {
             writeln!(kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
         } else {
             // gfx
-            if self.gfx.is_some() {
-                if let Some(msg) = self.gfx_hlr(kern)? {
+            if self.img.is_some() {
+                if let Some(msg) = self.img_hlr(kern)? {
                     return Ok(Some(msg));
                 }
 

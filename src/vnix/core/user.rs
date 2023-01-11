@@ -1,11 +1,11 @@
-use heapless::String;
+use alloc::string::String;
 use core::fmt::{Display, Formatter};
 
 use super::kern::KernErr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Usr {
-    pub name: String<256>,
+    pub name: String,
     // pub key: [u8; 256]
 }
 

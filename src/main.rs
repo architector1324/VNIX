@@ -2,6 +2,8 @@
 #![no_main]
 #![feature(abi_efiapi)]
 
+extern crate alloc;
+
 pub mod vnix;
 pub mod driver;
 
@@ -12,7 +14,6 @@ pub use uefi_services::println;
 
 use vnix::vnix_entry;
 use vnix::core::kern::Kern;
-
 
 #[entry]
 fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {

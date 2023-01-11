@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 uefi = "0.18"
 uefi-services = "0.15"
-heapless = "0.7.16"
+# heapless = "0.7.16"
 # p256 = {version = "0.11.1", default-features = false, features=["ecdsa"]}
 rand = {version = "0.8.5", default-features = false}
 sha3 = {version = "0.10.6", default-features = false}

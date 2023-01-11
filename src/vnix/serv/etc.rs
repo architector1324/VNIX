@@ -24,8 +24,8 @@ impl Serv for Chrono {
         let mut inst = Chrono::default();
 
         // config instance
-        if let Unit::Map(m) = msg.msg.deref() {
-            let mut it = m.iter().filter_map(|p| Some((p.0.deref().as_str()?, p.1.deref().as_int()?)));
+        if let Unit::Map(ref m) = msg.msg {
+            let mut it = m.iter().filter_map(|p| Some((p.0.as_str()?, p.1.as_int()?)));
             it.find(|(s, _)| s == "wait").map(|(_, mcs)| inst.wait.replace(mcs as usize));
         }
 

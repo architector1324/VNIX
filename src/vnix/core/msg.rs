@@ -1,5 +1,5 @@
-use heapless::pool::Box;
-use heapless::String;
+use alloc::string::String;
+
 use core::fmt::{Display, Formatter, Write};
 
 use sha3::{Digest, Sha3_256};
@@ -11,9 +11,9 @@ use super::user::Usr;
 
 #[derive(Debug)]
 pub struct Msg {
-    pub msg: Box<Unit>,
+    pub msg: Unit,
     pub ath: Usr,
-    pub hash: String<256>
+    pub hash: String
 }
 
 impl Display for Msg {
@@ -23,8 +23,8 @@ impl Display for Msg {
 }
 
 impl Msg {
-    pub fn new(ath: Usr, msg: Box<Unit>) -> Result<Self, KernErr> {
-        let mut s = String::<256>::new();
+    pub fn new(ath: Usr, msg: Unit) -> Result<Self, KernErr> {
+        let mut s = String::new();
         write!(s, "{}", msg).map_err(|_| KernErr::MemoryOut)?;
 
         let h = Sha3_256::digest(s.as_bytes());
