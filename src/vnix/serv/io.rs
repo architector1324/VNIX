@@ -159,6 +159,8 @@ impl Serv for Term {
                 // wait for key
                 kern.cli.get_key().map_err(|e| KernErr::CLIErr(e))?;
                 kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+
+                return Ok(None);
             }
 
             // cli

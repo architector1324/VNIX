@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 
 use super::msg::Msg;
 use super::serv::Serv;
+use super::serv::ServErr;
 use super::unit::Unit;
 use super::unit::UnitParseErr;
 
@@ -20,7 +21,8 @@ pub enum KernErr {
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
     DispErr(DispErr),
-    TimeErr(TimeErr)
+    TimeErr(TimeErr),
+    ServErr(ServErr)
 }
 
 pub struct Kern<'a> {
