@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use uefi::Handle;
 use uefi::proto::console::gop::GraphicsOutput;
-use uefi::proto::console::text::{Output, Input, Key, ScanCode};
+use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
 use uefi::prelude::{SystemTable, Boot};
 use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes};
 

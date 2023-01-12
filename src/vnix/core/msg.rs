@@ -1,6 +1,7 @@
+use alloc::format;
 use alloc::string::String;
 
-use core::fmt::{Display, Formatter, Write};
+use core::fmt::{Display, Formatter};
 
 use sha3::{Digest, Sha3_256};
 use base64ct::{Base64, Encoding};
@@ -24,8 +25,7 @@ impl Display for Msg {
 
 impl Msg {
     pub fn new(ath: Usr, msg: Unit) -> Result<Self, KernErr> {
-        let mut s = String::new();
-        write!(s, "{}", msg).map_err(|_| KernErr::MemoryOut)?;
+        let s = format!("{}", msg);
 
         let h = Sha3_256::digest(s.as_bytes());
         let mut buf = [0; 256];

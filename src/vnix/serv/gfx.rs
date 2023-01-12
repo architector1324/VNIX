@@ -1,5 +1,3 @@
-use core::ops::Deref;
-
 use alloc::vec::Vec;
 use alloc::vec;
 
@@ -23,7 +21,7 @@ impl Default for GFX2D {
 }
 
 impl Serv for GFX2D {
-    fn inst(msg: Msg, kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
+    fn inst(msg: Msg, _kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
         let mut inst = GFX2D::default();
 
         // config instance

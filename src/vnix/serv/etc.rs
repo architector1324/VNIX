@@ -1,5 +1,3 @@
-use core::ops::Deref;
-
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 

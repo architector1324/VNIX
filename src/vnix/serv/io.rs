@@ -1,6 +1,6 @@
-use core::ops::Deref;
 use core::fmt::Write;
 
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -139,10 +139,7 @@ impl Serv for Term {
             let msg = it.find(|(s, _)| s == "msg").map(|(_, u)| u);
 
             if let Some(u) = msg {
-                let mut s = String::new();
-                write!(s, "{}", u).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-                inst.msg = Some(s);
+                inst.msg = Some(format!("{}", u));
             }
         }
 

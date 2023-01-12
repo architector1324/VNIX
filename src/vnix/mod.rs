@@ -29,7 +29,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
         // run
         while let Some(_msg) = kern.task(msg)? {
-            // writeln!(kern.cli, "INFO vnix:kern: {}", _msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            // writeln!(kern.cli, "DEBG vnix:kern: {:?}", _msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             msg = _msg;
         }
     }
