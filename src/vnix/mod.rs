@@ -22,10 +22,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     loop {
         // prepare message
         // λ
-        let s = "{prs:t inp:`$ ` msg:`Hello, vnix!` task:`io.term`}";
+        let s = "{prs:t inp:`$ ` msg:`Hello, vnix!` a:123 b:@a task:`io.term`}";
 
         let u = Unit::parse(s.chars(), &mut kern)?.0;
         let mut msg = kern.msg("super", u)?;
+
+        writeln!(kern.cli, "DEBG vnix:kern: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         // run
         while let Some(_msg) = kern.task(msg)? {

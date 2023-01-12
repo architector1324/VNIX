@@ -25,23 +25,20 @@ impl Serv for GFX2D {
         let mut inst = GFX2D::default();
 
         // config instance
-        if let Unit::Map(ref m) = msg.msg {
-            let mut it = m.iter().filter_map(|p| Some((p.0.as_str()?, p.1.as_str()?)));
-            let e = it.find(|(s, _)| s == "fill").map(|(_, col)| {
-                if col.starts_with("#") {
-                    let v = <u32>::from_str_radix(&col[1..7], 16)
-                        .map_err(|_| KernErr::ServErr(ServErr::NotValidUnit))?
-                        .to_le();
+        let e = msg.msg.find_str(&mut vec!["fill".into()].iter()).map(|col| {
+            if col.starts_with("#") {
+                let v = <u32>::from_str_radix(&col[1..7], 16)
+                    .map_err(|_| KernErr::ServErr(ServErr::NotValidUnit))?
+                    .to_le();
 
-                    inst.fill.replace(v);
-                    return Ok(());
-                }
-                Err(KernErr::ServErr(ServErr::NotValidUnit))
-            });
-
-            if let Some(e) = e {
-                e?;
+                inst.fill.replace(v);
+                return Ok(());
             }
+            Err(KernErr::ServErr(ServErr::NotValidUnit))
+        });
+
+        if let Some(e) = e {
+            e?;
         }
 
         Ok((inst, msg))

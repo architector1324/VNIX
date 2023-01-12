@@ -1,3 +1,5 @@
+use alloc::vec;
+
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 
@@ -22,10 +24,7 @@ impl Serv for Chrono {
         let mut inst = Chrono::default();
 
         // config instance
-        if let Unit::Map(ref m) = msg.msg {
-            let mut it = m.iter().filter_map(|p| Some((p.0.as_str()?, p.1.as_int()?)));
-            it.find(|(s, _)| s == "wait").map(|(_, mcs)| inst.wait.replace(mcs as usize));
-        }
+        msg.msg.find_int(&mut vec!["wait".into()].iter()).map(|mcs| inst.wait.replace(mcs as usize));
 
         Ok((inst, msg))
     }

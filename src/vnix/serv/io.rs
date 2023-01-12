@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use alloc::format;
+use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -115,33 +115,27 @@ impl Serv for Term {
         let mut inst = Term::default();
 
         // config instance
-        if let Unit::Map(ref m) = msg.msg {
-            let mut it = m.iter().filter_map(|p| Some((p.0.as_str()?, p.1.clone())));
-            let mut bool_it = it.clone().filter_map(|(s, u)| Some((s, u.as_bool()?)));
+        msg.msg.find_bool(&mut vec!["trc".into()].iter()).map(|v| inst.trc = v);
+        msg.msg.find_bool(&mut vec!["nl".into()].iter()).map(|v| inst.nl = v);
+        msg.msg.find_bool(&mut vec!["prs".into()].iter()).map(|v| inst.prs = v);
 
-            bool_it.clone().find(|(s, _)| s == "trc").map(|(_, v)| inst.trc = v);
-            bool_it.clone().find(|(s, _)| s == "nl").map(|(_, v)| inst.nl = v);
-            bool_it.find(|(s, _)| s == "prs").map(|(_, v)| inst.prs = v);
+        msg.msg.find_str(&mut vec!["inp".into()].iter()).map(|s| {
+            inst.inp = Some(Inp {
+                pmt: s
+            })
+        });
 
-            it.clone().filter_map(|(s, u)| Some((s, u.as_str()?))).find(|(s, _)| s == "inp").map(|(_, s)| {
-                inst.inp = Some(Inp {
-                    pmt: s
-                })
-            });
+        msg.msg.find_vec(&mut vec!["img".into()].iter()).map(|lst| {
+            let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
 
-            it.clone().filter_map(|(s, u)| Some((s, u.as_vec()?))).find(|(s, _)| s == "img").map(|(_, lst)| {
-                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
-                inst.img = Some(Img {
-                    img
-                })
-            });
+            inst.img = Some(Img {
+                img
+            })
+        });
 
-            let msg = it.find(|(s, _)| s == "msg").map(|(_, u)| u);
-
-            if let Some(u) = msg {
-                inst.msg = Some(format!("{}", u));
-            }
-        }
+        msg.msg.find_unit(&mut vec!["msg".into()].iter()).map(|u| {
+            inst.msg = Some(format!("{}", u));
+        });
 
         Ok((inst, msg))
     }

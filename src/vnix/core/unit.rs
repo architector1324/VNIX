@@ -1,10 +1,10 @@
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
 
-use alloc::format;
+use alloc::{format, vec};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 
 use super::kern::{Kern, KernErr};
 
@@ -17,6 +17,7 @@ pub enum UnitParseErr {
     NotInt,
     NotDec,
     NotStr,
+    NotRef,
     NotPair,
     NotList,
     NotMap,
@@ -26,7 +27,9 @@ pub enum UnitParseErr {
     MissedSeparator,
     UnexpectedEnd,
     MissedDot,
-    MissedPartAfterDot
+    MissedPartAfterDot,
+    RefNotString,
+    RefInvalidPath
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -37,6 +40,7 @@ pub enum Unit {
     Int(i32),
     Dec(f32),
     Str(String),
+    Ref(Vec<String>),
     Pair((Box<Unit>, Box<Unit>)),
     Lst(Vec<Unit>),
     Map(Vec<(Unit, Unit)>)
@@ -65,6 +69,7 @@ impl Display for Unit {
                     write!(f, "`{}`", s)
                 }
             },
+            Unit::Ref(path) => write!(f, "@{}", path.join(".")),
             Unit::Pair(p) => write!(f, "({} {})", p.0, p.1),
             Unit::Lst(lst) => {
                 write!(f, "[")?;
@@ -270,6 +275,31 @@ impl Unit {
         Err(KernErr::ParseErr(UnitParseErr::NotStr))
     }
 
+    fn parse_ref<'a>(mut it: Chars<'a>, _kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+        let (ok, tmp) = Unit::parse_ch('@', it);
+
+        if !ok {
+            return Err(KernErr::ParseErr(UnitParseErr::NotRef));
+        }
+
+        it = tmp;
+
+        let tmp = Unit::parse_str(it)?;
+
+        if let Unit::Str(path) = tmp.0 {
+            let path = path.split(".").map(|s| s.to_string()).collect::<Vec<_>>();
+
+            for p in &path {
+                if !p.chars().all(|c| c.is_alphanumeric()) {
+                    return Err(KernErr::ParseErr(UnitParseErr::RefInvalidPath));
+                }
+            }
+
+            return Ok((Unit::Ref(path), tmp.1));
+        }
+        return Err(KernErr::ParseErr(UnitParseErr::RefNotString));
+    }
+
     fn parse_pair<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
         let (ok, tmp) = Unit::parse_ch('(', it);
 
@@ -434,6 +464,10 @@ impl Unit {
             return Ok((u, it));
         }
 
+        if let Ok((u, it)) = Unit::parse_ref(it.clone(), kern) {
+            return Ok((u, it));
+        }
+
         // list
         if let Ok((u, it)) = Unit::parse_list(it.clone(), kern) {
             return Ok((u, it));
@@ -445,6 +479,51 @@ impl Unit {
         }
 
         Err(KernErr::ParseErr(UnitParseErr::NotUnit))
+    }
+
+    pub fn find_unit<'a, I>(&self, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
+        let curr = path.next()?;
+
+        if let Unit::Map(m) = self {
+            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == *curr).map(|(_, u)| u.clone());
+        }
+        None
+    }
+
+    pub fn find_bool<'a, I>(&self, path: &mut I) -> Option<bool> where I: Iterator<Item = &'a String> {
+        let curr = path.next()?;
+
+        if let Unit::Map(m) = self {
+            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_bool()?))).find(|(s, _)| *s == *curr).map(|(_, v)| v);
+        }
+        None
+    }
+
+    pub fn find_int<'a, I>(&self, path: &mut I) -> Option<i32> where I: Iterator<Item = &'a String> {
+        let curr = path.next()?;
+
+        if let Unit::Map(m) = self {
+            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_int()?))).find(|(s, _)| *s == *curr).map(|(_, v)| v);
+        }
+        None
+    }
+
+    pub fn find_str<'a, I>(&self, path: &mut I) -> Option<String> where I: Iterator<Item = &'a String> {
+        let curr = path.next()?;
+
+        if let Unit::Map(m) = self {
+            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_str()?))).find(|(s, _)| *s == *curr).map(|(_, s)| s);
+        }
+        None
+    }
+
+    pub fn find_vec<'a, I>(&self, path: &mut I) -> Option<Vec<Unit>> where I: Iterator<Item = &'a String> {
+        let curr = path.next()?;
+
+        if let Unit::Map(m) = self {
+            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_vec()?))).find(|(s, _)| *s == *curr).map(|(_, lst)| lst);
+        }
+        None
     }
 
     pub fn as_none(&self) -> Option<()> {
@@ -485,6 +564,13 @@ impl Unit {
     pub fn as_str(&self) -> Option<String> {
         if let Unit::Str(s) = self {
             return Some(s.clone())
+        }
+        None
+    }
+
+    pub fn as_ref(&self) -> Option<Vec<String>> {
+        if let Unit::Ref(path) = self {
+            return Some(path.clone());
         }
         None
     }

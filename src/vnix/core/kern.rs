@@ -1,3 +1,4 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use super::msg::Msg;
@@ -58,12 +59,8 @@ impl<'a> Kern<'a> {
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        if let Unit::Map(ref m) = msg.msg {
-            let serv = m.iter().filter_map(|p| Some((p.0.as_str()?, p.1.as_str()?))).find(|(u, _)| u == "task").map(|(_, s)| s);
-
-            if let Some(serv) = serv {
-                return self.send(serv.as_str(), msg);
-            }
+        if let Some(serv) = msg.msg.find_str(&mut vec!["task".into()].iter()) {
+            return self.send(serv.as_str(), msg);
         }
 
         Ok(None)
