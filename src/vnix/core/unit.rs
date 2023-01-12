@@ -482,12 +482,17 @@ impl Unit {
     }
 
     pub fn find_unit<'a, I>(&self, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
-        let curr = path.next()?;
-
-        if let Unit::Map(m) = self {
-            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == *curr).map(|(_, u)| u.clone());
+        if let Some(curr) = path.next() {
+            if let Unit::Map(m) = self {
+                return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1)))
+                        .find(|(s, _)| *s == *curr)
+                        .map(|(_, u)| u.find_unit(path)).flatten();
+            } else {
+                return None;
+            }
+        } else {
+            return Some(self.clone());
         }
-        None
     }
 
     pub fn find_bool<'a, I>(&self, path: &mut I) -> Option<bool> where I: Iterator<Item = &'a String> {
