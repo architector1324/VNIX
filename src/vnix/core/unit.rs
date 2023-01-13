@@ -64,7 +64,7 @@ impl Display for Unit {
             Unit::Int(i) => write!(f, "{}", i),
             Unit::Dec(d) => write!(f, "{}", d),
             Unit::Str(s) => {
-                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.') {
+                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#') {
                     write!(f, "{}", s)
                 } else {
                     write!(f, "`{}`", s)
@@ -254,15 +254,15 @@ impl Unit {
                 }
             }
 
-            // abc.123
-            if c.is_alphanumeric() || c == '.'{
+            // abc.123#
+            if c.is_alphanumeric() || c == '.' || c == '#' {
                 let mut s = String::new();
                 let mut tmp = it.clone();
 
                 s.push(c);
 
                 while let Some(c) = it.next() {
-                    if !(c.is_alphanumeric() || c == '.') {
+                    if !(c.is_alphanumeric() || c == '.' || c == '#') {
                         break;
                     }
 
