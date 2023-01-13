@@ -1,8 +1,6 @@
 pub mod core;
 pub mod serv;
 
-use alloc::vec;
-
 use crate::driver::CLIErr;
 
 use self::core::unit::Unit;
@@ -28,8 +26,6 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
         let u = Unit::parse(s.chars(), &mut kern)?.0;
         let mut msg = kern.msg("super", u)?;
-
-        writeln!(kern.cli, "DEBG vnix:kern: {} {:?}", msg, msg.msg.find_unit(&mut vec!["a".into(), "1".into(), "c".into()].iter())).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         // run
         while let Some(_msg) = kern.task(msg)? {
