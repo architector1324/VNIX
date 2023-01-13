@@ -38,4 +38,14 @@ impl Msg {
             hash: hash.into()
         })
     }
+
+    pub fn merge(self, msg: Unit) -> Result<Self, KernErr> {
+        if let Unit::Map(mut m) = self.msg {
+            if let Some(tmp) = msg.as_map() {
+                m.extend(tmp);
+                return Msg::new(self.ath, Unit::Map(m));
+            }
+        }
+        Msg::new(self.ath, msg)
+    }
 }

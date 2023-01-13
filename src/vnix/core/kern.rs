@@ -70,8 +70,11 @@ impl<'a> Kern<'a> {
 
             let mut msg = msg;
             for serv in net {
+                let u = msg.msg.clone();
+                // let ath = msg.ath.clone();
+
                 if let Some(_msg) = self.send(serv.as_str(), msg)? {
-                    msg = _msg;
+                    msg = _msg.merge(u)?;
                 } else {
                     return Ok(None);
                 }

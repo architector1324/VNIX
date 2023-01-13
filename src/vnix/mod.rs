@@ -22,7 +22,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     loop {
         // prepare message
         // λ
-        let s = "{prs:t inp:`$ ` msg:`Hello, vnix!` c:@d d:123 a:[- @c abc] b:@`a.1` task:`io.term`}";
+        let s = "{prs:t inp:`$ ` msg:`Hello, vnix!` task:io.term}";
 
         let u = Unit::parse(s.chars(), &mut kern)?.0;
         let mut msg = kern.msg("super", u)?;
