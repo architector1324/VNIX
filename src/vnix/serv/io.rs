@@ -25,6 +25,7 @@ pub struct Term {
     inp: Option<Inp>,
     img: Option<Img>,
     nl: bool,
+    cls: bool,
     msg: Option<String>,
     trc: bool,
     prs: bool
@@ -36,6 +37,7 @@ impl Default for Term {
             inp: None,
             img: None,
             nl: true,
+            cls: false,
             msg: None,
             trc: false,
             prs: false
@@ -57,13 +59,17 @@ impl Term {
     }
 
     fn cli_hlr(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+        if self.cls {
+            kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+        }
+
         if let Some(ref s) = self.msg {
             if self.nl {
                 writeln!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {
                 write!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
-        } else if self.inp.is_none() {
+        } else if self.inp.is_none() && !self.cls {
             if self.nl {
                 writeln!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {
@@ -96,13 +102,16 @@ impl Term {
             }
 
             if !out.is_empty() {
-                let u = if self.prs {
-                    Unit::parse(out.chars(), kern)?.0
+                if self.prs {
+                    let u = Unit::parse(out.chars(), kern)?.0;
+                    return Ok(Some(kern.msg(&msg.ath.name, u)?))
                 } else {
-                    Unit::Str(out)
-                };
+                    let _msg = vec![
+                        (Unit::Str("msg".into()), Unit::Str(out))
+                    ];
     
-                return Ok(Some(kern.msg(&msg.ath.name, u)?))
+                    return Ok(Some(kern.msg(&msg.ath.name, Unit::Map(_msg))?))
+                };
             }
         } else {
             return Ok(Some(msg));
@@ -118,6 +127,7 @@ impl Serv for Term {
 
         // config instance
         msg.msg.find_bool(&mut vec!["trc".into()].iter()).map(|v| inst.trc = v);
+        msg.msg.find_bool(&mut vec!["cls".into()].iter()).map(|v| inst.cls = v);
         msg.msg.find_bool(&mut vec!["nl".into()].iter()).map(|v| inst.nl = v);
         msg.msg.find_bool(&mut vec!["prs".into()].iter()).map(|v| inst.prs = v);
 
