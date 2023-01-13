@@ -11,7 +11,7 @@ use crate::vnix::core::serv::Serv;
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct EventTableOut {
     state: Unit,
     msg: Unit
@@ -53,12 +53,12 @@ impl Serv for FSM {
         let mut inst = FSM::default();
 
         // config instance
+        msg.msg.find_unit(&mut vec!["state".into()].iter()).map(|u| {
+            inst.state = u;
+        });
+
         msg.msg.find_map(&mut vec!["fsm".into()].iter()).map(|m| {
             let u = Unit::Map(m);
-
-            u.find_unit(&mut vec!["state".into()].iter()).map(|u| {
-                inst.state = u;
-            });
 
             if let Unit::Map(m) = u {
                 inst.table = m.iter().filter_map(|(u0, u1)| Some((u0, u1.as_map()?)))
@@ -90,6 +90,23 @@ impl Serv for FSM {
     }
 
     fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+        let out = msg.msg.find_unit(&mut vec!["msg".into()].iter()).map(|msg| {
+            self.table.iter().find(|e| e.state == self.state).map(|t| {
+                t.table.iter().find(|e| e.ev == msg).map(|e| e.out.clone())
+            }).flatten()
+        }).flatten();
+
+        writeln!(kern.cli, "DEBG vnix:fsm: {:?}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
+        if let Some(out) = out {
+            let m = vec![
+                (Unit::Str("state".into()), out.state),
+                (Unit::Str("msg".into()), out.msg),
+            ];
+
+            return Ok(Some(kern.msg(&msg.ath.name, Unit::Map(m))?))
+        }
+
         Ok(None)
     }
 }
