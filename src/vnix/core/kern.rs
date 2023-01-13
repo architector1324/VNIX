@@ -92,7 +92,11 @@ impl<'a> Kern<'a> {
                 inst.handle(msg, self)
             },
             "etc.chrono" => {
-                let (inst, msg) = etc::Chrono::inst(msg, self)?;
+                let (inst, msg) = etc::chrono::Chrono::inst(msg, self)?;
+                inst.handle(msg, self)
+            },
+            "etc.fsm" => {
+                let (inst, msg) = etc::fsm::FSM::inst(msg, self)?;
                 inst.handle(msg, self)
             },
             "gfx.2d" => {

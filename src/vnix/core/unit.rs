@@ -539,6 +539,10 @@ impl Unit {
         self.find_unit(path).map(|u| u.as_vec()).flatten()
     }
 
+    pub fn find_map<'a, I>(&self, path: &mut I) -> Option<Vec<(Unit, Unit)>> where I: Iterator<Item = &'a String> {
+        self.find_unit(path).map(|u| u.as_map()).flatten()
+    }
+
     pub fn as_none(&self) -> Option<()> {
         if let Unit::None = self {
             return Some(())
