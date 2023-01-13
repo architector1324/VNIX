@@ -1,17 +1,17 @@
-# Vnix pre-alpha v0.1
+# Vnix alpha v0.1
 
-Progress: 15%
+Progress: 28%
 
 ## Features
 
-1. [ ] Simple units type system:
-    - [ ] basic (`none`, `bool`, `byte`, `int`, `dec`, `str`)
-    - [ ] collections (`pair`, `list`, `msg`)
-    - [ ] complex (`ref`)
-2. [ ] Vnix units notation [vnux] (`{<unit>:<unit> ...}`)
+1. [x] Simple units type system:
+    - [x] basic (`none`, `bool`, `byte`, `int`, `dec`, `str`)
+    - [x] collections (`pair`, `list`, `msg`)
+    - [x] complex (`ref`)
+2. [x] Vnix units notation [vxun] (`{<unit>:<unit> ...}`)
 3. [ ] Service:
-    - [ ] send/recv msg communication
-    - [ ] message handling
+    - [x] send/recv msg communication
+    - [x] message handling
     - [ ] logging
 4. [ ] Users and security:
     - [ ] **user** is and abstraction over messages and services instances, represents as 2 crypto-key pairs (for encryption and signing)
@@ -20,14 +20,14 @@ Progress: 15%
     - [ ] messages are encrypted outside kernel reach (on disk or external network)
     - [ ] services policy (determines service instance behaviour with messages from another user)
 5. [ ] Services network:
-    - [ ] internal (communication with messages inside kernel)
+    - [x] internal (communication with messages inside kernel)
     - [ ] external (communication with messages outside kernel by the internet using **ipv6**)
 6. [ ] Powerful integer math (with `math.int` service)
 7. [ ] Simple tensor generation (with services `math.int`, `math.dec`)
 8. [ ] Simple user interface (**ui** on `io.term`)
 9. [ ] System-wide k/v database (`io.store`)
 10. [ ] Powerful parsing system (with `etc.parser` and `etc.ast`)
-11. [ ] State machines (with `etc.fsm`)
+11. [x] State machines (with `etc.fsm`)
 12. [ ] Time control (with `etc.chrono`)
 
 ## Services
