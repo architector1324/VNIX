@@ -1,7 +1,8 @@
+use core::ops::Deref;
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
 
-use alloc::{format, vec};
+use alloc::format;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -481,54 +482,61 @@ impl Unit {
         Err(KernErr::ParseErr(UnitParseErr::NotUnit))
     }
 
-    pub fn find_unit<'a, I>(&self, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
+    fn find_unit_loc<'a, I>(&self, glob: &Unit, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
         if let Some(curr) = path.next() {
+            if let Unit::Ref(n_path) = self {
+                return glob.find_unit(&mut n_path.iter());
+            }
+
+            if let Unit::Pair(p) = self {
+                if curr == "0" {
+                    return p.0.deref().find_unit_loc(glob, path);
+                } else if curr == "1" {
+                    return p.1.deref().find_unit_loc(glob, path);
+                }
+            }
+
+            if let Unit::Lst(lst) = self {
+                let idx = curr.parse::<usize>().ok()?;
+                if let Some(u) = lst.get(idx) {
+                    return u.find_unit_loc(glob, path);
+                }
+            }
+
             if let Unit::Map(m) = self {
                 return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1)))
                         .find(|(s, _)| *s == *curr)
-                        .map(|(_, u)| u.find_unit(path)).flatten();
-            } else {
-                return None;
+                        .map(|(_, u)| u.find_unit_loc(glob, path)).flatten();
             }
+
+            return None;
         } else {
+            if let Unit::Ref(n_path) = self {
+                return glob.find_unit(&mut n_path.iter());
+            }
+
             return Some(self.clone());
         }
     }
 
-    pub fn find_bool<'a, I>(&self, path: &mut I) -> Option<bool> where I: Iterator<Item = &'a String> {
-        let curr = path.next()?;
+    pub fn find_unit<'a, I>(&self, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
+        self.find_unit_loc(self, path)
+    }
 
-        if let Unit::Map(m) = self {
-            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_bool()?))).find(|(s, _)| *s == *curr).map(|(_, v)| v);
-        }
-        None
+    pub fn find_bool<'a, I>(&self, path: &mut I) -> Option<bool> where I: Iterator<Item = &'a String> {
+        self.find_unit(path).map(|u| u.as_bool()).flatten()
     }
 
     pub fn find_int<'a, I>(&self, path: &mut I) -> Option<i32> where I: Iterator<Item = &'a String> {
-        let curr = path.next()?;
-
-        if let Unit::Map(m) = self {
-            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_int()?))).find(|(s, _)| *s == *curr).map(|(_, v)| v);
-        }
-        None
+        self.find_unit(path).map(|u| u.as_int()).flatten()
     }
 
     pub fn find_str<'a, I>(&self, path: &mut I) -> Option<String> where I: Iterator<Item = &'a String> {
-        let curr = path.next()?;
-
-        if let Unit::Map(m) = self {
-            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_str()?))).find(|(s, _)| *s == *curr).map(|(_, s)| s);
-        }
-        None
+        self.find_unit(path).map(|u| u.as_str()).flatten()
     }
 
     pub fn find_vec<'a, I>(&self, path: &mut I) -> Option<Vec<Unit>> where I: Iterator<Item = &'a String> {
-        let curr = path.next()?;
-
-        if let Unit::Map(m) = self {
-            return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_vec()?))).find(|(s, _)| *s == *curr).map(|(_, lst)| lst);
-        }
-        None
+        self.find_unit(path).map(|u| u.as_vec()).flatten()
     }
 
     pub fn as_none(&self) -> Option<()> {
