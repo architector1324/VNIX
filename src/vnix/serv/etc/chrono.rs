@@ -29,10 +29,10 @@ impl Serv for Chrono {
         Ok((inst, msg))
     }
 
-    fn handle(&self, _msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(mcs) = self.wait {
             kern.time.wait(mcs).map_err(|e| KernErr::TimeErr(e))?;
         }
-        Ok(None)
+        Ok(Some(msg))
     }
 }

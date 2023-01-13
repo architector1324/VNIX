@@ -40,10 +40,15 @@ impl Msg {
     }
 
     pub fn merge(self, msg: Unit) -> Result<Self, KernErr> {
-        if let Unit::Map(mut m) = self.msg {
-            if let Some(tmp) = msg.as_map() {
-                m.extend(tmp);
-                return Msg::new(self.ath, Unit::Map(m));
+        if let Unit::Map(m) = self.msg {
+            if let Some(mut tmp) = msg.as_map() {
+                tmp.retain(|(u, _)| {
+                    m.iter().find(|(n, _)| u == n).is_none()
+                });
+
+                tmp.extend(m);
+
+                return Msg::new(self.ath, Unit::Map(tmp));
             }
         }
         Msg::new(self.ath, msg)

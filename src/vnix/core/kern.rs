@@ -68,10 +68,21 @@ impl<'a> Kern<'a> {
         if let Some(lst) = msg.msg.find_list(&mut path.iter()) {
             let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
 
+            if net.is_empty() {
+                return Ok(None);
+            }
+
             let mut msg = msg;
+            let u = msg.msg.clone();
+
+            if let Some(_msg) = self.send(net.first().unwrap().as_str(), msg)? {
+                msg = _msg.merge(u)?;
+            } else {
+                return Ok(None);
+            }
 
             loop {
-                for (i, serv) in net.iter().enumerate() {
+                for (i, serv) in net.iter().skip(1).enumerate() {
                     let u = msg.msg.clone();
                     // let ath = msg.ath.clone();
     
@@ -81,7 +92,7 @@ impl<'a> Kern<'a> {
                         return Ok(None);
                     }
 
-                    if net.len() == 1 || (i == net.len() - 1 && net.first().unwrap() != net.last().unwrap()) {
+                    if net.len() - 1 == 1 || (i == net.len() - 2 && net.first().unwrap() != net.last().unwrap()) {
                         return Ok(Some(msg));
                     }
                 }

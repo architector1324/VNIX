@@ -136,7 +136,7 @@ impl Serv for FSM {
             }
         });
 
-        writeln!(kern.cli, "DEBG vnix:fsm: {:?}", inst).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        // writeln!(kern.cli, "DEBG vnix:fsm: {:?}", inst).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         Ok((inst, msg))
     }
@@ -176,7 +176,7 @@ impl Serv for FSM {
             }
         });
 
-        writeln!(kern.cli, "DEBG vnix:fsm: {:?}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        // writeln!(kern.cli, "DEBG vnix:fsm: {:?}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         if let Some(out) = out {
             let mut m = vec![

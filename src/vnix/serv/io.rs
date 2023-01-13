@@ -44,7 +44,7 @@ impl Default for Term {
 }
 
 impl Term {
-    fn img_hlr(&self, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn img_hlr(&self, kern: &mut Kern) -> Result<(), KernErr> {
         if let Some(ref img) = self.img {
             let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
@@ -53,7 +53,7 @@ impl Term {
             }).map_err(|e| KernErr::DispErr(e))?;
         }
 
-        Ok(None)
+        Ok(())
     }
 
     fn cli_hlr(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
@@ -104,6 +104,8 @@ impl Term {
     
                 return Ok(Some(kern.msg(&msg.ath.name, u)?))
             }
+        } else {
+            return Ok(Some(msg));
         }
 
         Ok(None)
@@ -143,18 +145,17 @@ impl Serv for Term {
     fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if self.trc {
             writeln!(kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            return Ok(Some(msg))
         } else {
             // gfx
             if self.img.is_some() {
-                if let Some(msg) = self.img_hlr(kern)? {
-                    return Ok(Some(msg));
-                }
-
+                self.img_hlr(kern)?;
+ 
                 // wait for key
                 kern.cli.get_key().map_err(|e| KernErr::CLIErr(e))?;
                 kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
 
-                return Ok(None);
+                return Ok(Some(msg));
             }
 
             // cli
