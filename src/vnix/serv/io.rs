@@ -125,7 +125,7 @@ impl Serv for Term {
             })
         });
 
-        msg.msg.find_vec(&mut vec!["img".into()].iter()).map(|lst| {
+        msg.msg.find_list(&mut vec!["img".into()].iter()).map(|lst| {
             let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
 
             inst.img = Some(Img {

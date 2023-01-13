@@ -49,7 +49,6 @@ impl Serv for GFX2D {
             let img: Vec::<Unit> = (0..1920*1080).map(|_| Unit::Int(col as i32)).collect();
             let m = vec![
                 (Unit::Str("img".into()), Unit::Lst(img)),
-                (Unit::Str("task".into()), Unit::Str("io.term".into())) // FIXME: remove it!
             ];
 
             return Ok(Some(kern.msg(&msg.ath.name, Unit::Map(m))?))

@@ -59,8 +59,24 @@ impl<'a> Kern<'a> {
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        if let Some(serv) = msg.msg.find_str(&mut vec!["task".into()].iter()) {
+        let path = vec!["task".into()];
+
+        if let Some(serv) = msg.msg.find_str(&mut path.iter()) {
             return self.send(serv.as_str(), msg);
+        }
+
+        if let Some(lst) = msg.msg.find_list(&mut path.iter()) {
+            let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
+
+            let mut msg = msg;
+            for serv in net {
+                if let Some(_msg) = self.send(serv.as_str(), msg)? {
+                    msg = _msg;
+                } else {
+                    return Ok(None);
+                }
+            }
+            return Ok(Some(msg));
         }
 
         Ok(None)

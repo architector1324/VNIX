@@ -535,7 +535,7 @@ impl Unit {
         self.find_unit(path).map(|u| u.as_str()).flatten()
     }
 
-    pub fn find_vec<'a, I>(&self, path: &mut I) -> Option<Vec<Unit>> where I: Iterator<Item = &'a String> {
+    pub fn find_list<'a, I>(&self, path: &mut I) -> Option<Vec<Unit>> where I: Iterator<Item = &'a String> {
         self.find_unit(path).map(|u| u.as_vec()).flatten()
     }
 
