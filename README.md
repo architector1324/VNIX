@@ -50,6 +50,23 @@ rustup target add aarch64-unknown-uefi
 cargo build --target=aarch64-unknown-uefi
 ```
 
+## Run on QEMU
+1. Prepare boot folder:
+```bash
+mkdir -p ./boot/esp/efi/boot/
+mv target/x86_64-unknown-uefi/release/vnix.efi ./boot/esp/efi/boot/bootx64.efi
+
+cp /usr/share/OVMF/x64/OVMF_CODE.fd ./boot
+cp /usr/share/OVMF/x64/OVMF_VARS.fd ./boot
+```
+
+2. Run VM:
+```bash
+qemu-system-x86_64 -m 1024M -device virtio-rng-pci -drive if=pflash,format=raw,readonly=on,file=boot/OVMF_CODE.fd \
+    -drive if=pflash,format=raw,readonly=on,file=boot/OVMF_VARS.fd \
+    -drive format=raw,file=fat:rw:boot/esp
+```
+
 ## FAQ
 - [Current progress](./PROGRESS.md).
 - Take a look at draft [messages cookbook](./doc/message-cookbook.md).
