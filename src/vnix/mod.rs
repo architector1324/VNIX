@@ -14,10 +14,10 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.cli, "INFO vnix:kern: ok").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // register user
-    let _super = Usr::new("super")?;
+    let _super = Usr::new("super", &mut kern)?;
     kern.reg_usr(_super.clone())?;
 
-    writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super.name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     loop {
         // prepare message
@@ -29,7 +29,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
         // run
         if let Some(msg) = kern.task(msg)? {
-            // writeln!(kern.cli, "DEBG vnix:kern: {:?}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            writeln!(kern.cli, "DEBG vnix:kern: {:?}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             kern.task(msg)?;
         }
     }

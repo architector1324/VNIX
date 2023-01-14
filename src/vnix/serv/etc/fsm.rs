@@ -188,7 +188,7 @@ impl Serv for FSM {
                 );
             }
 
-            return Ok(Some(kern.msg(&msg.ath.name, Unit::Map(m))?))
+            return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))
         }
 
         Ok(None)

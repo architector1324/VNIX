@@ -51,7 +51,7 @@ impl Serv for GFX2D {
                 (Unit::Str("img".into()), Unit::Lst(img)),
             ];
 
-            return Ok(Some(kern.msg(&msg.ath.name, Unit::Map(m))?))
+            return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))
         }
 
         Ok(None)

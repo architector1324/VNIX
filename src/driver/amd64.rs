@@ -3,10 +3,11 @@ use core::fmt::Write;
 use uefi::Handle;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
+use uefi::proto::rng::{Rng, RngAlgorithmType};
 use uefi::prelude::{SystemTable, Boot};
 use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes};
 
-use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr};
+use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr};
 
 pub struct Amd64CLI {
     st: SystemTable<Boot>,
@@ -21,6 +22,11 @@ pub struct Amd64Disp {
 
 pub struct Amd64Time {
     st: SystemTable<Boot>,
+}
+
+pub struct Amd64Rnd {
+    st: SystemTable<Boot>,
+    rnd_hlr: Handle
 }
 
 impl Amd64CLI {
@@ -52,6 +58,16 @@ impl Amd64Time {
     pub fn new(st: SystemTable<Boot>) -> Result<Amd64Time, DrvErr> {
         Ok(Amd64Time {
             st
+        })
+    }
+}
+
+impl Amd64Rnd {
+    pub fn new(st: SystemTable<Boot>) -> Result<Amd64Rnd, DrvErr> {
+        let rnd_hlr = st.boot_services().get_handle_for_protocol::<Rng>().map_err(|_| DrvErr::HandleFault)?;
+        Ok(Amd64Rnd {
+            st,
+            rnd_hlr
         })
     }
 }
@@ -156,6 +172,15 @@ impl Disp for Amd64Disp {
 impl Time for Amd64Time {
     fn wait(&mut self, mcs: usize) -> Result<(), TimeErr> {
         self.st.boot_services().stall(mcs);
+        Ok(())
+    }
+}
+
+impl Rnd for Amd64Rnd {
+    fn get_bytes(&mut self, buf: &mut [u8]) -> Result<(), RndErr> {
+        let mut rng = self.st.boot_services().open_protocol_exclusive::<Rng>(self.rnd_hlr).map_err(|_| RndErr::GetBytes)?;
+        rng.get_rng(Some(RngAlgorithmType::ALGORITHM_RAW), buf).map_err(|_| RndErr::GetBytes)?;
+
         Ok(())
     }
 }

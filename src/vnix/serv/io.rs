@@ -104,13 +104,13 @@ impl Term {
             if !out.is_empty() {
                 if self.prs {
                     let u = Unit::parse(out.chars(), kern)?.0;
-                    return Ok(Some(kern.msg(&msg.ath.name, u)?))
+                    return Ok(Some(kern.msg(&msg.ath, u)?))
                 } else {
                     let _msg = vec![
                         (Unit::Str("msg".into()), Unit::Str(out))
                     ];
     
-                    return Ok(Some(kern.msg(&msg.ath.name, Unit::Map(_msg))?))
+                    return Ok(Some(kern.msg(&msg.ath, Unit::Map(_msg))?))
                 };
             }
         } else {

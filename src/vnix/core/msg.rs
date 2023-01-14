@@ -13,33 +13,36 @@ use super::user::Usr;
 #[derive(Debug)]
 pub struct Msg {
     pub msg: Unit,
-    pub ath: Usr,
-    pub hash: String
+    pub ath: String,
+    pub hash: String,
+    pub sign: String
 }
 
 impl Display for Msg {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{{ath:{} msg:{} hsh:{}}}", self.ath, self.msg, self.hash)
+        write!(f, "{{ath:{} msg:{} hsh:{} sign:{}}}", self.ath, self.msg, self.hash, self.sign)
     }
 }
 
 impl Msg {
-    pub fn new(ath: Usr, msg: Unit) -> Result<Self, KernErr> {
+    pub fn new(usr: Usr, msg: Unit) -> Result<Self, KernErr> {
         let s = format!("{}", msg);
 
         let h = Sha3_256::digest(s.as_bytes());
         let mut buf = [0; 256];
 
         let hash = Base64::encode(&h[..], &mut buf).map_err(|_| KernErr::EncodeFault)?;
+        let sign = usr.sign(&msg)?;
 
         Ok(Msg {
-            ath,
+            ath: usr.name,
             msg,
-            hash: hash.into()
+            hash: hash.into(),
+            sign
         })
     }
 
-    pub fn merge(self, msg: Unit) -> Result<Self, KernErr> {
+    pub fn merge(self, usr: Usr, msg: Unit) -> Result<Self, KernErr> {
         if let Unit::Map(m) = self.msg {
             if let Some(mut tmp) = msg.as_map() {
                 tmp.retain(|(u, _)| {
@@ -48,9 +51,9 @@ impl Msg {
 
                 tmp.extend(m);
 
-                return Msg::new(self.ath, Unit::Map(tmp));
+                return Msg::new(usr, Unit::Map(tmp));
             }
         }
-        Msg::new(self.ath, msg)
+        Msg::new(usr, msg)
     }
 }

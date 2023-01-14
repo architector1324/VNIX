@@ -11,18 +11,24 @@ use super::user::Usr;
 
 use crate::vnix::serv::{io, etc, gfx};
 
-use crate::driver::{CLIErr, DispErr, TimeErr, CLI, Disp, Time};
+use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
 
 #[derive(Debug)]
 pub enum KernErr {
     MemoryOut,
     EncodeFault,
+    DecodeFault,
+    CreatePrivKeyFault,
+    CreatePubKeyFault,
+    SignFault,
+    SignVerifyFault,
     UsrNotFound,
     ServNotFound,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
     DispErr(DispErr),
     TimeErr(TimeErr),
+    RndErr(RndErr),
     ServErr(ServErr)
 }
 
@@ -31,17 +37,19 @@ pub struct Kern<'a> {
     pub cli: &'a mut dyn CLI,
     pub disp: &'a mut dyn Disp,
     pub time: &'a mut dyn Time,
+    pub rnd: &'a mut dyn Rnd,
 
     // vnix
     users: Vec<Usr>
 }
 
 impl<'a> Kern<'a> {
-    pub fn new(cli: &'a mut dyn CLI, disp: &'a mut dyn Disp, time: &'a mut dyn Time) -> Self {
+    pub fn new(cli: &'a mut dyn CLI, disp: &'a mut dyn Disp, time: &'a mut dyn Time, rnd: &'a mut dyn Rnd) -> Self {
         let kern = Kern {
             cli,
             disp,
             time,
+            rnd,
             users: Vec::new(),
         };
 
@@ -59,6 +67,7 @@ impl<'a> Kern<'a> {
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
+        let usr = self.users.iter().find(|usr| usr.name == msg.ath).ok_or(KernErr::UsrNotFound).cloned()?;
         let path = vec!["task".into()];
 
         if let Some(serv) = msg.msg.find_str(&mut path.iter()) {
@@ -76,7 +85,7 @@ impl<'a> Kern<'a> {
             let u = msg.msg.clone();
 
             if let Some(_msg) = self.send(net.first().unwrap().as_str(), msg)? {
-                msg = _msg.merge(u)?;
+                msg = _msg.merge(usr.clone(), u)?;
             } else {
                 return Ok(None);
             }
@@ -87,7 +96,7 @@ impl<'a> Kern<'a> {
                     // let ath = msg.ath.clone();
     
                     if let Some(_msg) = self.send(serv.as_str(), msg)? {
-                        msg = _msg.merge(u)?;
+                        msg = _msg.merge(usr.clone(), u)?;
                     } else {
                         return Ok(None);
                     }
@@ -103,6 +112,9 @@ impl<'a> Kern<'a> {
     }
 
     pub fn send(&mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
+        let usr = self.users.iter().find(|usr| usr.name == msg.ath).ok_or(KernErr::UsrNotFound).cloned()?;
+        usr.verify(&msg.msg, &msg.sign)?;
+
         match serv {
             "io.term" => {
                 let (inst, msg) = io::Term::inst(msg, self)?;

@@ -21,11 +21,17 @@ pub enum TimeErr {
 }
 
 #[derive(Debug)]
+pub enum RndErr {
+    GetBytes
+}
+
+#[derive(Debug)]
 pub enum DrvErr {
     HandleFault,
     CLI(CLIErr),
     Disp(DispErr),
-    Time(TimeErr)
+    Time(TimeErr),
+    Rnd(RndErr)
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,6 +47,10 @@ pub trait Time {
 pub trait CLI: Write {
     fn get_key(&mut self) -> Result<Option<TermKey>, CLIErr>;
     fn clear(&mut self) -> Result<(), CLIErr>;
+}
+
+pub trait Rnd {
+    fn get_bytes(&mut self, buf: &mut [u8]) -> Result<(), RndErr>;
 }
 
 pub trait Disp {

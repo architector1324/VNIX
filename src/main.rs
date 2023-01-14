@@ -15,6 +15,7 @@ pub use uefi_services::println;
 use vnix::vnix_entry;
 use vnix::core::kern::Kern;
 
+
 #[entry]
 fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
     uefi_services::init(&mut st).unwrap();
@@ -41,9 +42,16 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
         }
     
         let mut time = time.unwrap();
+
+        let rnd = driver::amd64::Amd64Rnd::new(st.unsafe_clone());
+        if let Err(ref err) = rnd {
+            println!("ERR loader: {:?}", err);
+        }
+
+        let mut rnd = rnd.unwrap();
     
         // load kernel
-        let kern = Kern::new(&mut cli, &mut disp, &mut time);
+        let kern = Kern::new(&mut cli, &mut disp, &mut time, &mut rnd);
     
         writeln!(kern.cli, "INFO vnix: kernel running on `amd64` platform").unwrap();
     
