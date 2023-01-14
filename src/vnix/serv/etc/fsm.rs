@@ -6,8 +6,8 @@ use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 
-use crate::vnix::core::serv::Serv;
-use crate::vnix::core::kern::{KernErr, Kern};
+use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::kern::KernErr;
 
 
 #[derive(Debug, Clone)]
@@ -54,8 +54,8 @@ impl FSM {
 
 }
 
-impl Serv for FSM {
-    fn inst(msg: Msg, kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
+impl ServHlr for FSM {
+    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
         let mut inst = FSM::default();
 
         // config instance
@@ -140,7 +140,7 @@ impl Serv for FSM {
         Ok((inst, msg))
     }
 
-    fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
             match &t.table {
                 EventTableEntry::State(state) => {
@@ -188,7 +188,7 @@ impl Serv for FSM {
                 );
             }
 
-            return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))
+            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(m))?))
         }
 
         Ok(None)

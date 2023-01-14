@@ -8,8 +8,8 @@ use base64ct::{Base64, Encoding};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 
-use crate::vnix::core::serv::{Serv, ServErr};
-use crate::vnix::core::kern::{KernErr, Kern};
+use crate::vnix::core::serv::{Serv, ServHlr, ServErr};
+use crate::vnix::core::kern::KernErr;
 
 
 pub struct GFX2D {
@@ -24,8 +24,8 @@ impl Default for GFX2D {
     }
 }
 
-impl Serv for GFX2D {
-    fn inst(msg: Msg, _kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
+impl ServHlr for GFX2D {
+    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
         let mut inst = GFX2D::default();
 
         // config instance
@@ -48,9 +48,9 @@ impl Serv for GFX2D {
         Ok((inst, msg))
     }
 
-    fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(col) = self.fill {
-            let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+            let res = serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
             let img: Vec::<Unit> = (0..res.0*res.1).map(|_| Unit::Int(col as i32)).collect();
             let img_s = format!("{}", Unit::Lst(img));
@@ -64,7 +64,7 @@ impl Serv for GFX2D {
                 (Unit::Str("img".into()), Unit::Str(img_out.into())),
             ];
 
-            return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))
+            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(m))?))
         }
 
         Ok(None)

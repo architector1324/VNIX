@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use super::msg::Msg;
 use super::kern::{KernErr, Kern};
 
@@ -7,7 +9,12 @@ pub enum ServErr {
     NotValidUnit
 }
 
-pub trait Serv: Sized + Default {
-    fn inst(msg: Msg, kern: &mut Kern) -> Result<(Self, Msg), KernErr>;
-    fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr>;
+pub struct Serv<'a, 'b> {
+    pub name: String,
+    pub kern: &'b mut Kern<'a>,
+}
+
+pub trait ServHlr: Sized + Default {
+    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr>;
+    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr>;
 }

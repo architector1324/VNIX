@@ -3,8 +3,8 @@ use alloc::vec;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 
-use crate::vnix::core::serv::Serv;
-use crate::vnix::core::kern::{KernErr, Kern};
+use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::kern::KernErr;
 
 
 pub struct Chrono {
@@ -19,8 +19,8 @@ impl Default for Chrono {
     }
 }
 
-impl Serv for Chrono {
-    fn inst(msg: Msg, _kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
+impl ServHlr for Chrono {
+    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
         let mut inst = Chrono::default();
 
         // config instance
@@ -29,9 +29,9 @@ impl Serv for Chrono {
         Ok((inst, msg))
     }
 
-    fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(mcs) = self.wait {
-            kern.time.wait(mcs).map_err(|e| KernErr::TimeErr(e))?;
+            serv.kern.time.wait(mcs).map_err(|e| KernErr::TimeErr(e))?;
         }
         Ok(Some(msg))
     }

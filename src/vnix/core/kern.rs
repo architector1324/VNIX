@@ -2,7 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::msg::Msg;
-use super::serv::Serv;
+use super::serv::{Serv, ServHlr};
 use super::serv::ServErr;
 use super::unit::Unit;
 use super::unit::UnitParseErr;
@@ -113,26 +113,42 @@ impl<'a> Kern<'a> {
         Ok(None)
     }
 
-    pub fn send(&mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
+    pub fn send<'b>(&'b mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
         let usr = self.users.iter().find(|usr| usr.name == msg.ath).ok_or(KernErr::UsrNotFound).cloned()?;
         usr.verify(&msg.msg, &msg.sign)?;
 
         match serv {
             "io.term" => {
-                let (inst, msg) = io::Term::inst(msg, self)?;
-                inst.handle(msg, self)
+                let mut serv = Serv {
+                    name: "io.term".into(),
+                    kern: self,
+                };
+                let (inst, msg) = io::Term::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
             },
             "etc.chrono" => {
-                let (inst, msg) = etc::chrono::Chrono::inst(msg, self)?;
-                inst.handle(msg, self)
+                let mut serv = Serv {
+                    name: "etc.chrono".into(),
+                    kern: self,
+                };
+                let (inst, msg) = etc::chrono::Chrono::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
             },
             "etc.fsm" => {
-                let (inst, msg) = etc::fsm::FSM::inst(msg, self)?;
-                inst.handle(msg, self)
+                let mut serv = Serv {
+                    name: "etc.fsm".into(),
+                    kern: self,
+                };
+                let (inst, msg) = etc::fsm::FSM::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
             },
             "gfx.2d" => {
-                let (inst, msg) = gfx::GFX2D::inst(msg, self)?;
-                inst.handle(msg, self)
+                let mut serv = Serv {
+                    name: "gfx.2d".into(),
+                    kern: self,
+                };
+                let (inst, msg) = gfx::GFX2D::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
             }
             _ => Err(KernErr::ServNotFound)
         }
