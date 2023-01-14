@@ -4,10 +4,13 @@ use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use base64ct::{Base64, Encoding};
+use compression::prelude::{GZipDecoder, DecodeExt};
+
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, UnitParseErr};
 
 use crate::vnix::core::serv::Serv;
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -51,7 +54,11 @@ impl Term {
             let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
             kern.disp.fill(&|x, y| {
-                img.img[x + w * y]
+                if let Some(px) = img.img.get(x + w * y) {
+                    *px
+                } else {
+                    0
+                }
             }).map_err(|e| KernErr::DispErr(e))?;
         }
 
@@ -122,7 +129,7 @@ impl Term {
 }
 
 impl Serv for Term {
-    fn inst(msg: Msg, _kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
+    fn inst(msg: Msg, kern: &mut Kern) -> Result<(Self, Msg), KernErr> {
         let mut inst = Term::default();
 
         // config instance
@@ -144,6 +151,32 @@ impl Serv for Term {
                 img
             })
         });
+
+        let e = msg.msg.find_str(&mut vec!["img".into()].iter()).map(|s| {
+            let mut dec = GZipDecoder::new();
+
+            let img_v = Base64::decode_vec(s.as_str()).map_err(|_| KernErr::DecodeFault)?;
+            let decompressed = img_v.iter().cloned().decode(&mut dec).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::DecompressionFault)?;
+
+            let img_s = String::from_utf8(decompressed).map_err(|_| KernErr::DecodeFault)?;
+            let img_u = Unit::parse(img_s.chars(), kern)?.0;
+
+            if let Unit::Lst(lst) = img_u {
+                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+
+                inst.img = Some(Img {
+                    img
+                })
+            } else {
+                return Err(KernErr::ParseErr(UnitParseErr::NotList));
+            }
+
+            Ok(())
+        });
+
+        if let Some(e) = e {
+            e?;
+        }
 
         msg.msg.find_unit(&mut vec!["msg".into()].iter()).map(|u| {
             inst.msg = Some(format!("{}", u));

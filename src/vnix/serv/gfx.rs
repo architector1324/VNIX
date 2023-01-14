@@ -1,5 +1,9 @@
 use alloc::vec::Vec;
 use alloc::vec;
+use alloc::format;
+
+use compression::prelude::{GZipEncoder, Action, EncodeExt};
+use base64ct::{Base64, Encoding};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
@@ -46,9 +50,18 @@ impl Serv for GFX2D {
 
     fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(col) = self.fill {
-            let img: Vec::<Unit> = (0..1920*1080).map(|_| Unit::Int(col as i32)).collect();
+            let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+            let img: Vec::<Unit> = (0..res.0*res.1).map(|_| Unit::Int(col as i32)).collect();
+            let img_s = format!("{}", Unit::Lst(img));
+
+            let mut enc = GZipEncoder::new();
+            let compressed = img_s.as_bytes().into_iter().cloned().encode(&mut enc, Action::Finish).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::CompressionFault)?;
+
+            let img_out = Base64::encode_string(&compressed);
+
             let m = vec![
-                (Unit::Str("img".into()), Unit::Lst(img)),
+                (Unit::Str("img".into()), Unit::Str(img_out.into())),
             ];
 
             return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))

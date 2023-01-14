@@ -40,10 +40,8 @@ impl Usr {
         let pub_key_b: [u8; 33] = v.to_encoded_point(true).as_bytes().try_into().map_err(|_| KernErr::CreatePubKeyFault)?;
 
         // encode base64
-        let mut buf = [0; 256];
-
-        let priv_key = Base64::encode(&priv_key_b, &mut buf).map_err(|_| KernErr::EncodeFault)?.to_string(); 
-        let pub_key = Base64::encode(&pub_key_b, &mut buf).map_err(|_| KernErr::EncodeFault)?.to_string();
+        let priv_key = Base64::encode_string(&priv_key_b); 
+        let pub_key = Base64::encode_string(&pub_key_b);
 
         Ok(Usr {
             name: name.into(),
@@ -70,15 +68,13 @@ impl Usr {
 
     pub fn sign(&self, u: &Unit) -> Result<String, KernErr> {
         if let Some(priv_key_s) = &self.priv_key {
-            let mut buf = [0; 256];
-
-            let priv_key_b = Base64::decode(priv_key_s.as_bytes(), &mut buf).map_err(|_| KernErr::DecodeFault)?;
-            let priv_key = SigningKey::from_bytes(priv_key_b).map_err(|_| KernErr::CreatePrivKeyFault)?;
+            let priv_key_b = Base64::decode_vec(priv_key_s.as_str()).map_err(|_| KernErr::DecodeFault)?;
+            let priv_key = SigningKey::from_bytes(priv_key_b.as_slice()).map_err(|_| KernErr::CreatePrivKeyFault)?;
 
             let msg = format!("{}", u);
 
             let sign_b = priv_key.sign(msg.as_bytes());
-            let sign = Base64::encode(&sign_b.as_bytes(), &mut buf).map_err(|_| KernErr::EncodeFault)?.to_string(); 
+            let sign = Base64::encode_string(&sign_b.as_bytes());
 
             return Ok(sign)
         }
@@ -86,13 +82,11 @@ impl Usr {
     }
 
     pub fn verify(&self, u: &Unit, sign: &String) -> Result<(), KernErr> {
-        let mut buf = [0; 256];
+        let sign_b = Base64::decode_vec(sign.as_str()).map_err(|_| KernErr::DecodeFault)?;
+        let sign = Signature::from_bytes(&sign_b.as_slice()).map_err(|_| KernErr::SignVerifyFault)?;
 
-        let sign_b = Base64::decode(&sign.as_bytes(), &mut buf).map_err(|_| KernErr::DecodeFault)?;
-        let sign = Signature::from_bytes(&sign_b).map_err(|_| KernErr::SignVerifyFault)?;
-
-        let pub_key_b = Base64::decode(&self.pub_key.as_bytes(), &mut buf).map_err(|_| KernErr::DecodeFault)?;
-        let pub_key = VerifyingKey::from_sec1_bytes(&pub_key_b).map_err(|_| KernErr::CreatePubKeyFault)?;
+        let pub_key_b = Base64::decode_vec(self.pub_key.as_str()).map_err(|_| KernErr::DecodeFault)?;
+        let pub_key = VerifyingKey::from_sec1_bytes(&pub_key_b.as_slice()).map_err(|_| KernErr::CreatePubKeyFault)?;
 
         let msg = format!("{}", u);
 

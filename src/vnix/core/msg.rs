@@ -29,9 +29,8 @@ impl Msg {
         let s = format!("{}", msg);
 
         let h = Sha3_256::digest(s.as_bytes());
-        let mut buf = [0; 256];
 
-        let hash = Base64::encode(&h[..], &mut buf).map_err(|_| KernErr::EncodeFault)?;
+        let hash = Base64::encode_string(&h[..]);
         let sign = usr.sign(&msg)?;
 
         Ok(Msg {

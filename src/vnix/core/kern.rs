@@ -18,6 +18,8 @@ pub enum KernErr {
     MemoryOut,
     EncodeFault,
     DecodeFault,
+    CompressionFault,
+    DecompressionFault,
     CreatePrivKeyFault,
     CreatePubKeyFault,
     SignFault,
