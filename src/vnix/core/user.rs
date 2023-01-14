@@ -52,6 +52,22 @@ impl Usr {
         })
     }
 
+    pub fn guest(name: &str, pub_key: &str) -> Result<Self, KernErr> {
+        Ok(Usr {
+            name: name.to_string(),
+            priv_key: None,
+            pub_key: pub_key.to_string()
+        })
+    }
+
+    pub fn login(name: &str, priv_key:&str, pub_key: &str) -> Result<Self, KernErr> {
+        Ok(Usr {
+            name: name.to_string(),
+            priv_key: Some(priv_key.to_string()),
+            pub_key: pub_key.to_string()
+        })
+    }
+
     pub fn sign(&self, u: &Unit) -> Result<String, KernErr> {
         if let Some(priv_key_s) = &self.priv_key {
             let mut buf = [0; 256];

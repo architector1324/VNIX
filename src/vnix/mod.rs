@@ -19,6 +19,11 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
+    let arch_u = Usr::guest("arch1324", "AoaHgZNb2bv8ftQLvVtdghXATGUJjSOdSfIy31DB9EHU")?;
+    kern.reg_usr(arch_u.clone())?;
+
+    writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", arch_u).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
     loop {
         // prepare message
         // λ
@@ -28,9 +33,18 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         let msg = kern.msg("super", u)?;
 
         // run
-        if let Some(msg) = kern.task(msg)? {
-            writeln!(kern.cli, "DEBG vnix:kern: {:?}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-            kern.task(msg)?;
+        let go = kern.task(msg);
+
+        if let Err(e) = go {
+            writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        } else if let Ok(msg) = go {
+            if let Some(msg) = msg {
+                // writeln!(kern.cli, "DEBG vnix:kern: {:?}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    
+                if let Err(e) = kern.task(msg) {
+                    writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+            }
         }
     }
 }
