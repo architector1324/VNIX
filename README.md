@@ -1,3 +1,6 @@
+[![Donate](http://img.shields.io/liberapay/receives/Architector1324.svg?logo=liberapay)](https://ru.liberapay.com/Architector1324/)
+
+
 ![](./doc/vnix_logo.png)
 
 This operating system is a proof of concept, i made it just for fun. Now it has a very draft kernel written in [Rust](https://www.rust-lang.org/).
@@ -43,11 +46,11 @@ cd vnix
 2. Build vnix kernel for target arch (using [UEFI](https://uefi.org/) now):
 ```bash
 rustup target add x86_64-unknown-uefi
-cargo build --target=x86_64-unknown-uefi
+cargo build --release --target=x86_64-unknown-uefi
 ```
 ```bash
 rustup target add aarch64-unknown-uefi
-cargo build --target=aarch64-unknown-uefi
+cargo build --release --target=aarch64-unknown-uefi
 ```
 
 ## Run on QEMU
