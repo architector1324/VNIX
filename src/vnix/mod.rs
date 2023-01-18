@@ -9,8 +9,6 @@ use self::core::kern::{Kern, KernErr};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
-    kern.cli.clear().map_err(|e| KernErr::CLIErr(e))?;
-
     writeln!(kern.cli, "INFO vnix:kern: ok").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // register user

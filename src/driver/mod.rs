@@ -58,3 +58,30 @@ pub trait Disp {
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
 }
+
+
+// stub drivers
+pub struct StubDisp;
+
+impl Disp for StubDisp {
+    fn res(&self) -> Result<(usize, usize), DispErr> {
+        Ok((0, 0))
+    }
+
+    fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr> {
+        Ok(())
+    }
+
+    fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
+        Ok(())
+    }
+}
+
+pub struct PRng;
+
+impl Rnd for PRng {
+    fn get_bytes(&mut self, buf: &mut [u8]) -> Result<(), RndErr> {
+        buf.iter_mut().enumerate().for_each(|(i, b)| *b = i as u8);
+        Ok(())
+    }
+}
