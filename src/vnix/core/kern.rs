@@ -9,7 +9,7 @@ use super::unit::UnitParseErr;
 
 use super::user::Usr;
 
-use crate::vnix::serv::{io, etc, gfx};
+use crate::vnix::serv::{io, etc, gfx, math};
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
 
@@ -149,7 +149,15 @@ impl<'a> Kern<'a> {
                 };
                 let (inst, msg) = gfx::GFX2D::inst(msg, &mut serv)?;
                 inst.handle(msg, &mut serv)
-            }
+            },
+            "math.int" => {
+                let mut serv = Serv {
+                    name: "math.int".into(),
+                    kern: self
+                };
+                let (inst, msg) = math::Int::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
+            },
             _ => Err(KernErr::ServNotFound)
         }
     }
