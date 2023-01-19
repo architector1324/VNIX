@@ -144,16 +144,27 @@ impl Term {
             }
 
             if !out.is_empty() {
-                if self.prs {
-                    let u = Unit::parse(out.chars(), serv.kern)?.0;
-                    return Ok(Some(serv.kern.msg(&msg.ath, u)?))
-                } else {
+                if !self.prs {
                     let _msg = vec![
                         (Unit::Str("msg".into()), Unit::Str(out))
                     ];
     
                     return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
                 };
+            }
+
+            if self.prs {
+                let u = if !out.is_empty() {
+                    Unit::parse(out.chars(), serv.kern)?.0
+                } else {
+                    Unit::None
+                };
+
+                let _msg = vec![
+                    (Unit::Str("msg".into()), u)
+                ];
+
+                return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
             }
         } else {
             return Ok(Some(msg));

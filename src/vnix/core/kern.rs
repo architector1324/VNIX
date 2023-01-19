@@ -9,7 +9,7 @@ use super::unit::UnitParseErr;
 
 use super::user::Usr;
 
-use crate::vnix::serv::{io, etc, gfx, math};
+use crate::vnix::serv::{io, etc, gfx, math, sys};
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
 
@@ -156,6 +156,14 @@ impl<'a> Kern<'a> {
                     kern: self
                 };
                 let (inst, msg) = math::Int::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
+            },
+            "sys.task" => {
+                let mut serv = Serv {
+                    name: "sys.task".into(),
+                    kern: self
+                };
+                let (inst, msg) = sys::SysTask::inst(msg, &mut serv)?;
                 inst.handle(msg, &mut serv)
             },
             _ => Err(KernErr::ServNotFound)
