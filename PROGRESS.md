@@ -22,7 +22,7 @@ Progress: 28%
 5. [ ] Services network:
     - [x] internal (communication with messages inside kernel)
     - [ ] external (communication with messages outside kernel by the internet using **ipv6**)
-6. [ ] Powerful integer math (with `math.int` service)
+6. [x] Powerful integer math (with `math.int` service)
 7. [ ] Simple tensor generation (with services `math.int`, `math.dec`)
 8. [ ] Simple user interface (**ui** on `io.term`)
 9. [ ] System-wide k/v database (`io.store`)
@@ -36,7 +36,7 @@ Progress: 28%
     - [ ] `io.term` - interacting user with terminal
     - [ ] `io.store` - store messages on disk
 2. [ ] Math:
-    - [ ] `math.int`
+    - [x] `math.int`
     - [ ] `math.dec`
 3. [ ] System:
     - [ ] `sys.user` - users control

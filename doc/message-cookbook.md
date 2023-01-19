@@ -15,7 +15,7 @@ Request1:
 ```
 {
     val: {
-        <neg | abs | inc | dec | sqr | sqrt | fac : str>:<value: int | map>
+        <neg | abs | inc | dec | sqr | sqrt | fac | log : str>:<value: int | map>
     }
 }
 ```
@@ -40,7 +40,10 @@ Examples:
 {sqrt:5} # sqrt(5) = 2
 
 {fac:5} # 5! = 120
+
+{log:1024} # log(1024) = 6
 ```
+
 ```
 # -(5! ^ 2) = -14400
 {
@@ -106,10 +109,11 @@ Examples:
 ```
 
 ```
-# (5 ^ 7) ^ 2 mod 3 = 1
+# (7 ^ 4) ^ 2 mod 3 = 1
 {
     val:{
-        mod:({pow:[5 7 2]} 3)
+        mod:({pow:[7 4 2]} 3)
     }
 }
+
 ```
