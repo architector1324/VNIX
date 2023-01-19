@@ -133,6 +133,9 @@ impl Term {
     
                             if c == '\u{8}' {
                                 out.pop();
+                            } else if c == '\u{3}' {
+                                writeln!(serv.kern.cli, "\r{}{out} ", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                                return Ok(None);
                             } else {
                                 write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                             }
