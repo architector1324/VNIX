@@ -56,7 +56,7 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mut rnd = driver::amd64::Amd64Rnd::new(st.unsafe_clone());
         if rnd.is_err() {
             println!("ERR loader:rnd not available");
-            println!("WARN loader:rnd: using pseudo random generator -> security threat");
+            println!("WARN loader:rnd: using pseudo random generator");
         }
 
         let mut prng = driver::PRng;
@@ -68,7 +68,7 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
             &mut time,
             rnd.as_mut().map(|p| p as &mut dyn Rnd).unwrap_or(&mut prng)
         );
-    
+
         writeln!(kern.cli, "INFO vnix: kernel running on `amd64` platform").unwrap();
     
         // run

@@ -1,6 +1,7 @@
 pub mod amd64;
 
 use core::fmt::Write;
+use rand::{rngs::StdRng, SeedableRng, RngCore};
 
 #[derive(Debug)]
 pub enum CLIErr {
@@ -81,7 +82,9 @@ pub struct PRng;
 
 impl Rnd for PRng {
     fn get_bytes(&mut self, buf: &mut [u8]) -> Result<(), RndErr> {
-        buf.iter_mut().enumerate().for_each(|(i, b)| *b = i as u8);
+        let mut rng = StdRng::from_seed([1; 32]);
+
+        rng.fill_bytes(buf);
         Ok(())
     }
 }
