@@ -28,7 +28,7 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
         // load drivers
 
         // cli
-        let cli = driver::amd64::Amd64CLI::new(st.unsafe_clone());
+        let cli = driver::uefi::UefiCLI::new(st.unsafe_clone());
         if cli.is_err() {
             println!("ERR loader:cli: not available");
         }
@@ -36,16 +36,16 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mut cli = cli.unwrap();
     
         // disp
-        let mut disp = driver::amd64::Amd64Disp::new(st.unsafe_clone());
+        let mut disp = driver::uefi::UefiDisp::new(st.unsafe_clone());
         if disp.is_err() {
             println!("ERR loader:disp: not available");
             println!("WARN loader:disp: using stub driver");
         }
 
-        let mut disp_stub = driver::StubDisp;
+        let mut disp_stub = driver::stub::StubDisp;
     
         // time
-        let time = driver::amd64::Amd64Time::new(st.unsafe_clone());
+        let time = driver::uefi::UefiTime::new(st.unsafe_clone());
         if time.is_err() {
             println!("ERR loader:time: not available");
         }
@@ -53,14 +53,14 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mut time = time.unwrap();
 
         // rnd
-        let mut rnd = driver::amd64::Amd64Rnd::new(st.unsafe_clone());
+        let mut rnd = driver::uefi::UefiRnd::new(st.unsafe_clone());
         if rnd.is_err() {
             println!("ERR loader:rnd not available");
             println!("WARN loader:rnd: using pseudo random generator");
         }
 
-        let mut prng = driver::PRng;
-    
+        let mut prng = driver::stub::PRng;
+
         // load kernel
         let kern = Kern::new(
             &mut cli,
@@ -69,8 +69,8 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
             rnd.as_mut().map(|p| p as &mut dyn Rnd).unwrap_or(&mut prng)
         );
 
-        writeln!(kern.cli, "INFO vnix: kernel running on `amd64` platform").unwrap();
-    
+        writeln!(kern.cli, "INFO vnix: kernel running on `uefi` platform").unwrap();
+
         // run
         if let Err(err) = vnix_entry(kern) {
             writeln!(cli, "ERR vnix: {:?}", err).unwrap();

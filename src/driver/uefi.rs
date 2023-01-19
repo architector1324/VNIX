@@ -9,33 +9,33 @@ use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes};
 
 use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr};
 
-pub struct Amd64CLI {
+pub struct UefiCLI {
     st: SystemTable<Boot>,
     cli_out_hlr: Handle,
     // cli_in_hlr: Handle,
 }
 
-pub struct Amd64Disp {
+pub struct UefiDisp {
     st: SystemTable<Boot>,
     disp_hlr: Handle
 }
 
-pub struct Amd64Time {
+pub struct UefiTime {
     st: SystemTable<Boot>,
 }
 
-pub struct Amd64Rnd {
+pub struct UefiRnd {
     st: SystemTable<Boot>,
     rnd_hlr: Handle
 }
 
-impl Amd64CLI {
-    pub fn new(st: SystemTable<Boot>) -> Result<Amd64CLI, DrvErr> {
+impl UefiCLI {
+    pub fn new(st: SystemTable<Boot>) -> Result<UefiCLI, DrvErr> {
         let bt = st.boot_services();
         let cli_out_hlr = bt.get_handle_for_protocol::<Output>().map_err(|_| DrvErr::HandleFault)?;
         // let cli_in_hlr = bt.get_handle_for_protocol::<Input>().map_err(|_| DrvErr::HandleFault)?;
 
-        Ok(Amd64CLI {
+        Ok(UefiCLI {
             st,
             cli_out_hlr,
             // cli_in_hlr,
@@ -43,43 +43,43 @@ impl Amd64CLI {
     }
 }
 
-impl Amd64Disp {
-    pub fn new(st: SystemTable<Boot>) -> Result<Amd64Disp, DrvErr> {
+impl UefiDisp {
+    pub fn new(st: SystemTable<Boot>) -> Result<UefiDisp, DrvErr> {
         let disp_hlr = st.boot_services().get_handle_for_protocol::<GraphicsOutput>().map_err(|_| DrvErr::HandleFault)?;
 
-        Ok(Amd64Disp {
+        Ok(UefiDisp {
             st,
             disp_hlr
         })
     }
 }
 
-impl Amd64Time {
-    pub fn new(st: SystemTable<Boot>) -> Result<Amd64Time, DrvErr> {
-        Ok(Amd64Time {
+impl UefiTime {
+    pub fn new(st: SystemTable<Boot>) -> Result<UefiTime, DrvErr> {
+        Ok(UefiTime {
             st
         })
     }
 }
 
-impl Amd64Rnd {
-    pub fn new(st: SystemTable<Boot>) -> Result<Amd64Rnd, DrvErr> {
+impl UefiRnd {
+    pub fn new(st: SystemTable<Boot>) -> Result<UefiRnd, DrvErr> {
         let rnd_hlr = st.boot_services().get_handle_for_protocol::<Rng>().map_err(|_| DrvErr::HandleFault)?;
-        Ok(Amd64Rnd {
+        Ok(UefiRnd {
             st,
             rnd_hlr
         })
     }
 }
 
-impl Write for Amd64CLI {
+impl Write for UefiCLI {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| core::fmt::Error)?;
         write!(cli, "{}", s)
     }
 }
 
-impl CLI for Amd64CLI {
+impl CLI for UefiCLI {
     fn get_key(&mut self) -> Result<Option<crate::driver::TermKey>, CLIErr> {
         // let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 
@@ -109,7 +109,7 @@ impl CLI for Amd64CLI {
     }
 }
 
-impl Disp for Amd64Disp {
+impl Disp for UefiDisp {
     fn res(&self) -> Result<(usize, usize), DispErr> {
         unsafe {
             let disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
@@ -169,14 +169,14 @@ impl Disp for Amd64Disp {
     }
 }
 
-impl Time for Amd64Time {
+impl Time for UefiTime {
     fn wait(&mut self, mcs: usize) -> Result<(), TimeErr> {
         self.st.boot_services().stall(mcs);
         Ok(())
     }
 }
 
-impl Rnd for Amd64Rnd {
+impl Rnd for UefiRnd {
     fn get_bytes(&mut self, buf: &mut [u8]) -> Result<(), RndErr> {
         let mut rng = self.st.boot_services().open_protocol_exclusive::<Rng>(self.rnd_hlr).map_err(|_| RndErr::GetBytes)?;
         rng.get_rng(Some(RngAlgorithmType::ALGORITHM_RAW), buf).map_err(|_| RndErr::GetBytes)?;

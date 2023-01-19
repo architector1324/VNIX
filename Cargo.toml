@@ -11,7 +11,7 @@ uefi-services = "0.15"
 # heapless = "0.7.16"
 sha2 = {version = "0.10.6", default-features = false, features = ["force-soft"]}
 p256 = {version = "0.11.1", default-features = false, features=["ecdsa"]}
-rand = {version = "0.8.5", default-features = false}
+rand = {version = "0.8.5", default-features = false, features = ["std_rng"]}
 sha3 = {version = "0.10.6", default-features = false}
 lazy_static = {version = "1.4.0", default-features = false, features = ["spin_no_std"]}
 compression = {version = "0.1.5", default-features = false, features = ["gzip"]}
