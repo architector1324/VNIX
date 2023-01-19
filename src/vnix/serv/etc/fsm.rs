@@ -2,7 +2,6 @@ use core::ops::Deref;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 
@@ -55,7 +54,7 @@ impl FSM {
 }
 
 impl ServHlr for FSM {
-    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
         let mut inst = FSM::default();
 
         // config instance

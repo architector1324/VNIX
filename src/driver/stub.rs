@@ -10,11 +10,11 @@ impl Disp for StubDisp {
         Ok((0, 0))
     }
 
-    fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr> {
+    fn px(&mut self, _px: u32, _x: usize, _y: usize) -> Result<(), DispErr> {
         Ok(())
     }
 
-    fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
+    fn fill(&mut self, _f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
         Ok(())
     }
 }

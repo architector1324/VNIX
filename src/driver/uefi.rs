@@ -80,6 +80,13 @@ impl Write for UefiCLI {
 }
 
 impl CLI for UefiCLI {
+    fn res(&self) -> Result<(usize, usize), CLIErr> {
+        let cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| CLIErr::GetResolution)?;
+        let out = cli.current_mode().map_err(|_| CLIErr::GetResolution)?.ok_or(CLIErr::GetResolution)?;
+
+        Ok((out.columns(), out.rows()))
+    }
+
     fn get_key(&mut self, block: bool) -> Result<Option<crate::driver::TermKey>, CLIErr> {
         // let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 

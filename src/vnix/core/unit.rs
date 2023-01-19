@@ -535,6 +535,10 @@ impl Unit {
         self.find_unit(path).map(|u| u.as_str()).flatten()
     }
 
+    pub fn find_pair<'a, I>(&self, path: &mut I) -> Option<(Unit, Unit)> where I: Iterator<Item = &'a String> {
+        self.find_unit(path).map(|u| u.as_pair()).flatten().map(|p| (p.0.deref().clone(), p.1.deref().clone()))
+    }
+
     pub fn find_list<'a, I>(&self, path: &mut I) -> Option<Vec<Unit>> where I: Iterator<Item = &'a String> {
         self.find_unit(path).map(|u| u.as_vec()).flatten()
     }

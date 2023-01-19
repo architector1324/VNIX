@@ -25,7 +25,7 @@ impl Default for GFX2D {
 }
 
 impl ServHlr for GFX2D {
-    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
         let mut inst = GFX2D::default();
 
         // config instance

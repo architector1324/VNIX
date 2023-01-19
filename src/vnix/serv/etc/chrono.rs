@@ -1,7 +1,6 @@
 use alloc::vec;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::Unit;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
@@ -20,7 +19,7 @@ impl Default for Chrono {
 }
 
 impl ServHlr for Chrono {
-    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
         let mut inst = Chrono::default();
 
         // config instance

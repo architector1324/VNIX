@@ -24,9 +24,15 @@ struct Img {
     img: Vec<u32>
 }
 
+struct PutChar {
+    pos: (usize, usize),
+    ch: String
+}
+
 pub struct Term {
     inp: Option<Inp>,
     img: Option<Img>,
+    put: Option<PutChar>,
     nl: bool,
     cls: bool,
     msg: Option<String>,
@@ -39,6 +45,7 @@ impl Default for Term {
         Term {
             inp: None,
             img: None,
+            put: None,
             nl: true,
             cls: false,
             msg: None,
@@ -82,6 +89,24 @@ impl Term {
             } else {
                 write!(serv.kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
+        }
+
+        if let Some(put) = &self.put {
+            let res = serv.kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+
+            let offs = put.pos.0 + res.0 * (put.pos.1 + 1);
+
+            let mut out = ".".repeat(res.0 * res.1);
+            out.replace_range(offs..offs + 1, &put.ch);
+
+            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+            write!(serv.kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
+            // wait for key
+            serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
+            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+
+            return Ok(Some(msg));
         }
 
         if let Some(inp) = &self.inp {
@@ -147,6 +172,20 @@ impl ServHlr for Term {
         msg.msg.find_bool(&mut vec!["cls".into()].iter()).map(|v| inst.cls = v);
         msg.msg.find_bool(&mut vec!["nl".into()].iter()).map(|v| inst.nl = v);
         msg.msg.find_bool(&mut vec!["prs".into()].iter()).map(|v| inst.prs = v);
+
+        msg.msg.find_pair(&mut vec!["put".into()].iter())
+            .filter(|(u0, _)| u0.as_str().is_some())
+            .filter(|(_, u1)| u1.as_pair().is_some() && u1.as_pair().unwrap().0.as_int().is_some() && u1.as_pair().unwrap().1.as_int().is_some())
+            .map(|(u0, u1)| {
+                let pos = u1.as_pair().unwrap();
+                inst.put = Some(PutChar {
+                    pos: (
+                        pos.0.as_int().unwrap() as usize,
+                        pos.1.as_int().unwrap() as usize
+                    ),
+                    ch: u0.as_str().unwrap()
+                })
+            });
 
         msg.msg.find_str(&mut vec!["inp".into()].iter()).map(|s| {
             inst.inp = Some(Inp {
