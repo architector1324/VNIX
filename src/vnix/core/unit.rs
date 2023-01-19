@@ -190,7 +190,7 @@ impl Unit {
         let mut tmp = it.clone();
 
         while let Some(c) = it.next() {
-            if !c.is_numeric() {
+            if !(c.is_numeric() || c == '-') {
                 break;
             }
 
@@ -430,11 +430,6 @@ impl Unit {
     }
 
     pub fn parse<'a>(it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
-        // none
-        if let Ok((u, it)) = Unit::parse_none(it.clone()) {
-            return Ok((u, it));
-        }
-
         // bool
         if let Ok((u, it)) = Unit::parse_bool(it.clone()) {
             return Ok((u, it));
@@ -452,6 +447,11 @@ impl Unit {
 
         // int
         if let Ok((u, it)) = Unit::parse_int(it.clone()) {
+            return Ok((u, it));
+        }
+
+        // none
+        if let Ok((u, it)) = Unit::parse_none(it.clone()) {
             return Ok((u, it));
         }
 
