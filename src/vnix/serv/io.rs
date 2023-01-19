@@ -87,23 +87,33 @@ impl Term {
         if let Some(inp) = &self.inp {
             let mut out = String::new();
 
-            write!(serv.kern.cli, "\r{}", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-            loop {
-                if let Some(key) = serv.kern.cli.get_key().map_err(|e| KernErr::CLIErr(e))? {
-                    if let TermKey::Char(c) = key {
-                        if c == '\r' || c == '\n' {
-                            writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                            break;
+            if inp.pmt == "key" {
+                if let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+                    write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+            } else if inp.pmt == "key#async" {
+                if let Some(key) = serv.kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
+                    write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+            } else {
+                write!(serv.kern.cli, "\r{}", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    
+                loop {
+                    if let Some(key) = serv.kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
+                        if let TermKey::Char(c) = key {
+                            if c == '\r' || c == '\n' {
+                                writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                                break;
+                            }
+    
+                            if c == '\u{8}' {
+                                out.pop();
+                            } else {
+                                write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                            }
+    
+                            write!(serv.kern.cli, "\r{}{out} ", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                         }
-
-                        if c == '\u{8}' {
-                            out.pop();
-                        } else {
-                            write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                        }
-
-                        write!(serv.kern.cli, "\r{}{out} ", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     }
                 }
             }
@@ -195,7 +205,7 @@ impl ServHlr for Term {
                 self.img_hlr(serv)?;
  
                 // wait for key
-                serv.kern.cli.get_key().map_err(|e| KernErr::CLIErr(e))?;
+                serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
                 serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
 
                 return Ok(Some(msg));

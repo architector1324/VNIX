@@ -80,13 +80,15 @@ impl Write for UefiCLI {
 }
 
 impl CLI for UefiCLI {
-    fn get_key(&mut self) -> Result<Option<crate::driver::TermKey>, CLIErr> {
+    fn get_key(&mut self, block: bool) -> Result<Option<crate::driver::TermKey>, CLIErr> {
         // let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 
-        unsafe {
-            let cli = self.st.stdin();
-            let e = cli.wait_for_key_event().unsafe_clone();
-            self.st.boot_services().wait_for_event(&mut [e]).map_err(|_| CLIErr::GetKey)?;
+        if block {
+            unsafe {
+                let cli = self.st.stdin();
+                let e = cli.wait_for_key_event().unsafe_clone();
+                self.st.boot_services().wait_for_event(&mut [e]).map_err(|_| CLIErr::GetKey)?;
+            }
         }
 
         let cli = self.st.stdin();
@@ -95,6 +97,10 @@ impl CLI for UefiCLI {
             match key {
                 Key::Special(scan) => match scan {
                     ScanCode::ESCAPE => return Ok(Some(TermKey::Esc)),
+                    ScanCode::UP => return Ok(Some(TermKey::Up)),
+                    ScanCode::DOWN => return Ok(Some(TermKey::Down)),
+                    ScanCode::LEFT => return Ok(Some(TermKey::Left)),
+                    ScanCode::RIGHT => return Ok(Some(TermKey::Right)),
                     _ => ()
                 },
                 Key::Printable(c) => return Ok(Some(TermKey::Char(c.into())))
