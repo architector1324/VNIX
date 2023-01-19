@@ -24,7 +24,8 @@ pub enum SingleOpAct {
     Dec,
     Sqr,
     Sqrt,
-    Fac
+    Fac,
+    Log
 }
 
 #[derive(Debug)]
@@ -105,7 +106,8 @@ impl Int {
             (vec!["dec".into()], SingleOpAct::Dec),
             (vec!["sqr".into()], SingleOpAct::Sqr),
             (vec!["sqrt".into()], SingleOpAct::Sqrt),
-            (vec!["fac".into()], SingleOpAct::Fac)
+            (vec!["fac".into()], SingleOpAct::Fac),
+            (vec!["log".into()], SingleOpAct::Log),
         ];
 
         ops.iter().find_map(|(path, act)| Int::find_single_op_with(path.clone(), act.clone(), u))
@@ -199,7 +201,8 @@ impl Int {
             SingleOpAct::Dec => v - 1,
             SingleOpAct::Sqr => v * v,
             SingleOpAct::Sqrt => libm::truncf(libm::sqrtf(v as f32)) as i32,
-            SingleOpAct::Fac => (1..=v).product()
+            SingleOpAct::Fac => (1..=v).product(),
+            SingleOpAct::Log => libm::truncf(libm::logf(v as f32)) as i32
         }
     }
 
