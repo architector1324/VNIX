@@ -1,5 +1,6 @@
 use core::fmt::Write;
 
+use alloc::boxed::Box;
 use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -16,26 +17,38 @@ use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
 
 
+#[derive(Debug)]
 struct Inp {
     pmt: String
 }
 
+#[derive(Debug)]
 struct Img {
     img: Vec<u32>
 }
 
+#[derive(Debug)]
 struct PutChar {
     pos: (usize, usize),
     ch: String
 }
 
+#[derive(Debug)]
+enum Get {
+    CliRes,
+    GfxRes
+}
+
+#[derive(Debug)]
 pub struct Term {
     inp: Option<Inp>,
     img: Option<Img>,
     put: Option<Vec<PutChar>>,
+    get: Option<Get>,
+    msg: Option<String>,
+
     nl: bool,
     cls: bool,
-    msg: Option<String>,
     trc: bool,
     prs: bool
 }
@@ -46,9 +59,11 @@ impl Default for Term {
             inp: None,
             img: None,
             put: None,
+            get: None,
+            msg: None,
+
             nl: true,
             cls: false,
-            msg: None,
             trc: false,
             prs: false
         }
@@ -59,11 +74,11 @@ impl Inp {
     fn msg(prs:bool, s: String, msg: &Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if !s.is_empty() {
             if !prs {
-                let _msg = vec![
+                let _msg = Unit::Map(vec![
                     (Unit::Str("msg".into()), Unit::Str(s))
-                ];
+                ]);
 
-                return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
+                return Ok(Some(serv.kern.msg(&msg.ath, _msg)?))
             };
         }
 
@@ -74,11 +89,11 @@ impl Inp {
                 Unit::None
             };
 
-            let _msg = vec![
+            let _msg = Unit::Map(vec![
                 (Unit::Str("msg".into()), u)
-            ];
+            ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
+            return Ok(Some(serv.kern.msg(&msg.ath, _msg)?))
         }
 
         return Ok(None)
@@ -131,6 +146,27 @@ impl Inp {
     }
 }
 
+impl Get {
+    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {        
+        let res = match self {
+            Get::CliRes => serv.kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+            Get::GfxRes => serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))? 
+        };
+
+        let _msg = Unit::Map(vec![
+            (
+                Unit::Str("msg".into()),
+                Unit::Pair((
+                    Box::new(Unit::Int(res.0 as i32)),
+                    Box::new(Unit::Int(res.1 as i32))
+                ))
+            )
+        ]);
+
+        return Ok(Some(serv.kern.msg(&msg.ath, _msg)?));
+    }
+}
+
 impl Term {
     fn img_hlr(&self, serv: &mut Serv) -> Result<(), KernErr> {
         if let Some(ref img) = self.img {
@@ -162,7 +198,7 @@ impl Term {
             } else {
                 write!(serv.kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
-        } else if self.inp.is_none() && !self.cls {
+        } else if self.inp.is_none() && self.get.is_none() && !self.cls {
             if self.nl {
                 writeln!(serv.kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {
@@ -200,9 +236,13 @@ impl Term {
     fn cli_hlr(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         self.cls(serv)?;
         self.print_msg(&msg, serv)?;
-        
+
         if self.put_char(serv)? {
             return Ok(Some(msg));
+        }
+
+        if let Some(get) = &self.get {
+            return get.handle(msg, serv);
         }
 
         if let Some(inp) = &self.inp {
@@ -260,6 +300,14 @@ impl ServHlr for Term {
             })
         });
 
+        msg.msg.find_str(&mut vec!["get".into()].iter()).map(|s| {
+            match s.as_ref() {
+                "cli.res" => inst.get.replace(Get::CliRes),
+                "gfx.res" => inst.get.replace(Get::GfxRes),
+                _ => None
+            }
+        });
+
         let e = msg.msg.find_str(&mut vec!["img".into()].iter()).map(|s| {
             let mut dec = GZipDecoder::new();
 
@@ -297,22 +345,22 @@ impl ServHlr for Term {
         if self.trc {
             writeln!(serv.kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             return Ok(Some(msg))
-        } else {
-            // gfx
-            if self.img.is_some() {
-                self.img_hlr(serv)?;
- 
-                // wait for key
-                serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
-                serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+        }
 
-                return Ok(Some(msg));
-            }
+        // gfx
+        if self.img.is_some() {
+            self.img_hlr(serv)?;
 
-            // cli
-            if let Some(msg) = self.cli_hlr(msg, serv)? {
-                return Ok(Some(msg));
-            }
+            // wait for key
+            serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
+            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+
+            return Ok(Some(msg));
+        }
+
+        // cli
+        if let Some(msg) = self.cli_hlr(msg, serv)? {
+            return Ok(Some(msg));
         }
 
         Ok(None)

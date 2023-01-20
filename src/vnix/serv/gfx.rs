@@ -60,11 +60,11 @@ impl ServHlr for GFX2D {
 
             let img_out = Base64::encode_string(&compressed);
 
-            let m = vec![
+            let m = Unit::Map(vec![
                 (Unit::Str("img".into()), Unit::Str(img_out.into())),
-            ];
+            ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(m))?))
+            return Ok(Some(serv.kern.msg(&msg.ath, m)?))
         }
 
         Ok(None)

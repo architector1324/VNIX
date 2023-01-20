@@ -32,7 +32,7 @@ impl ServHlr for Task {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(u) = &self.task {
             let task = serv.kern.msg(&msg.ath, u.clone())?;
-            serv.kern.task(task)?;
+            return serv.kern.task(task);
         }
 
         Ok(Some(msg))

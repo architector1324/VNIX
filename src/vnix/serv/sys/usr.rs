@@ -80,11 +80,11 @@ impl ServHlr for User {
             if !out.is_empty() {
                 writeln!(serv.kern.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-                let m = vec![
+                let m = Unit::Map(vec![
                     (Unit::Str("msg".into()), Unit::parse(out.chars(), serv.kern)?.0),
-                ];
+                ]);
     
-                return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(m))?))
+                return Ok(Some(serv.kern.msg(&msg.ath, m)?))
             }
         }
 

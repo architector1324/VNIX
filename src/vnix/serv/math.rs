@@ -241,11 +241,11 @@ impl ServHlr for Int {
         if let Some(ref op) = self.op {
             let out = Int::calc_op(op);
 
-            let m = vec![
+            let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), Unit::Int(out)),
-            ];
+            ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(m))?))
+            return Ok(Some(serv.kern.msg(&msg.ath, m)?))
         }
 
         return Ok(Some(msg))
