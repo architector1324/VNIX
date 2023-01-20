@@ -1,6 +1,6 @@
 # Vnix alpha v0.1
 
-Progress: 28%
+Progress: 30%
 
 ## Features
 
@@ -39,12 +39,13 @@ Progress: 28%
     - [x] `math.int`
     - [ ] `math.dec`
 3. [ ] System:
-    - [ ] `sys.user` - users control
+    - [ ] `sys.usr` - users control
+    - [x] `sys.task` - run task from message
     - [ ] `sys.kern` - kernel control
 4. [ ] Other:
     - [ ] `etc.parser` - parser generator
     - [ ] `etc.ast` - tree transformer
-    - [ ] `etc.fsm` - finite state machine
+    - [x] `etc.fsm` - finite state machine
     - [ ] `etc.chrono` - time control
 
 

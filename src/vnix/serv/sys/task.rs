@@ -7,21 +7,21 @@ use crate::vnix::core::kern::KernErr;
 use crate::vnix::core::unit::Unit;
 
 
-pub struct SysTask {
+pub struct Task {
     task: Option<Unit>
 }
 
-impl Default for SysTask {
+impl Default for Task {
     fn default() -> Self {
-        SysTask {
+        Task {
             task: None
         }
     }
 }
 
-impl ServHlr for SysTask {
+impl ServHlr for Task {
     fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
-        let mut inst = SysTask::default();
+        let mut inst = Task::default();
 
         // config instance
         msg.msg.find_unit(&mut vec!["msg".into()].iter()).map(|u| inst.task.replace(u));

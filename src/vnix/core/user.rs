@@ -28,7 +28,7 @@ impl Display for Usr {
 }
 
 impl Usr {
-    pub fn new(name: &str, kern: &mut Kern) -> Result<Self, KernErr> {
+    pub fn new(name: &str, kern: &mut Kern) -> Result<(Self, String), KernErr> {
         // gen private key
         let mut priv_key_b: [u8; 32] = [0; 32];
         kern.rnd.get_bytes(&mut priv_key_b).map_err(|e| KernErr::RndErr(e))?;
@@ -43,11 +43,16 @@ impl Usr {
         let priv_key = Base64::encode_string(&priv_key_b); 
         let pub_key = Base64::encode_string(&pub_key_b);
 
-        Ok(Usr {
-            name: name.into(),
-            priv_key: Some(priv_key),
-            pub_key
-        })
+        let out = format!("{{ath:`{}` pub:`{}` priv:`{}`}}", name, pub_key, priv_key);
+
+        Ok((
+            Usr {
+                name: name.into(),
+                priv_key: Some(priv_key),
+                pub_key
+            },
+            out
+        ))
     }
 
     pub fn guest(name: &str, pub_key: &str) -> Result<Self, KernErr> {

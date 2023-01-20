@@ -177,7 +177,15 @@ impl<'a> Kern<'a> {
                     name: "sys.task".into(),
                     kern: self
                 };
-                let (inst, msg) = sys::SysTask::inst(msg, &mut serv)?;
+                let (inst, msg) = sys::task::Task::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
+            },
+            "sys.usr" => {
+                let mut serv = Serv {
+                    name: "sys.usr".into(),
+                    kern: self
+                };
+                let (inst, msg) = sys::usr::User::inst(msg, &mut serv)?;
                 inst.handle(msg, &mut serv)
             },
             _ => Err(KernErr::ServNotFound)
