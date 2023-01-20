@@ -32,7 +32,7 @@ struct PutChar {
 pub struct Term {
     inp: Option<Inp>,
     img: Option<Img>,
-    put: Option<PutChar>,
+    put: Option<Vec<PutChar>>,
     nl: bool,
     cls: bool,
     msg: Option<String>,
@@ -55,6 +55,82 @@ impl Default for Term {
     }
 }
 
+impl Inp {
+    fn msg(prs:bool, s: String, msg: &Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+        if !s.is_empty() {
+            if !prs {
+                let _msg = vec![
+                    (Unit::Str("msg".into()), Unit::Str(s))
+                ];
+
+                return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
+            };
+        }
+
+        if prs {
+            let u = if !s.is_empty() {
+                Unit::parse(s.chars(), serv.kern)?.0
+            } else {
+                Unit::None
+            };
+
+            let _msg = vec![
+                (Unit::Str("msg".into()), u)
+            ];
+
+            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
+        }
+
+        return Ok(None)
+    }
+
+    fn handle(&self, prs:bool, msg: &Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+        let mut out = String::new();
+
+        match self.pmt.as_str() {
+            "key" => {
+                if let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+                    write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+                return Inp::msg(prs, out, msg, serv);
+            },
+            "key#async" => {
+                if let Some(key) = serv.kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
+                    write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+                return Inp::msg(prs, out, msg, serv);
+            }
+            _ => ()
+        }
+
+        // input str
+        write!(serv.kern.cli, "\r{}", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
+        while let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+            if let TermKey::Char(c) = key {
+                if c == '\r' || c == '\n' {
+                    writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    break;
+                }
+
+                if c == '\u{8}' {
+                    out.pop();
+                } else if c == '\u{3}' {
+                    writeln!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    return Ok(None);
+                } else {
+                    write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+
+                write!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            }
+        }
+
+        // create msg
+        return Inp::msg(prs, out, msg, serv);
+    }
+}
+
 impl Term {
     fn img_hlr(&self, serv: &mut Serv) -> Result<(), KernErr> {
         if let Some(ref img) = self.img {
@@ -72,11 +148,14 @@ impl Term {
         Ok(())
     }
 
-    fn cli_hlr(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn cls(&self, serv: &mut Serv) -> Result<(), KernErr> {
         if self.cls {
             serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
         }
+        Ok(())
+    }
 
+    fn print_msg(&self, msg: &Msg, serv: &mut Serv) -> Result<(), KernErr> {
         if let Some(ref s) = self.msg {
             if self.nl {
                 writeln!(serv.kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
@@ -91,89 +170,46 @@ impl Term {
             }
         }
 
+        Ok(())
+    }
+
+    fn put_char(&self, serv: &mut Serv) -> Result<bool, KernErr> {
         if let Some(put) = &self.put {
             let res = serv.kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
 
-            let offs = put.pos.0 + res.0 * (put.pos.1 + 1);
-
             let mut out = ".".repeat(res.0 * res.1);
-            out.replace_range(offs..offs + 1, &put.ch);
-
             serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
-            write!(serv.kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
+            for ch in put {
+                let offs = ch.pos.0 + res.0 * (ch.pos.1 + 1);
+                out.replace_range(offs..offs + 1, &ch.ch);
+
+                write!(serv.kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            }
 
             // wait for key
             serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
             serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
 
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn cli_hlr(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+        self.cls(serv)?;
+        self.print_msg(&msg, serv)?;
+        
+        if self.put_char(serv)? {
             return Ok(Some(msg));
         }
 
         if let Some(inp) = &self.inp {
-            let mut out = String::new();
-
-            if inp.pmt == "key" {
-                if let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
-                    write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                }
-            } else if inp.pmt == "key#async" {
-                if let Some(key) = serv.kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
-                    write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                }
-            } else {
-                write!(serv.kern.cli, "\r{}", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-    
-                loop {
-                    if let Some(key) = serv.kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
-                        if let TermKey::Char(c) = key {
-                            if c == '\r' || c == '\n' {
-                                writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                                break;
-                            }
-    
-                            if c == '\u{8}' {
-                                out.pop();
-                            } else if c == '\u{3}' {
-                                writeln!(serv.kern.cli, "\r{}{out} ", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                                return Ok(None);
-                            } else {
-                                write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                            }
-    
-                            write!(serv.kern.cli, "\r{}{out} ", inp.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                        }
-                    }
-                }
-            }
-
-            if !out.is_empty() {
-                if !self.prs {
-                    let _msg = vec![
-                        (Unit::Str("msg".into()), Unit::Str(out))
-                    ];
-    
-                    return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
-                };
-            }
-
-            if self.prs {
-                let u = if !out.is_empty() {
-                    Unit::parse(out.chars(), serv.kern)?.0
-                } else {
-                    Unit::None
-                };
-
-                let _msg = vec![
-                    (Unit::Str("msg".into()), u)
-                ];
-
-                return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(_msg))?))
-            }
-        } else {
-            return Ok(Some(msg));
+            return inp.handle(self.prs, &msg, serv);
         }
 
-        Ok(None)
+        return Ok(Some(msg));
     }
 }
 
@@ -187,22 +223,31 @@ impl ServHlr for Term {
         msg.msg.find_bool(&mut vec!["nl".into()].iter()).map(|v| inst.nl = v);
         msg.msg.find_bool(&mut vec!["prs".into()].iter()).map(|v| inst.prs = v);
 
-        msg.msg.find_pair(&mut vec!["put".into()].iter())
-            .filter(|(u0, _)| u0.as_str().is_some())
-            .filter(|(_, u1)| u1.as_pair().is_some() && u1.as_pair().unwrap().0.as_int().is_some() && u1.as_pair().unwrap().1.as_int().is_some())
-            .map(|(u0, u1)| {
-                let pos = u1.as_pair().unwrap();
-                inst.put = Some(PutChar {
-                    pos: (
-                        pos.0.as_int().unwrap() as usize,
-                        pos.1.as_int().unwrap() as usize
-                    ),
-                    ch: u0.as_str().unwrap()
-                })
-            });
+        msg.msg.find_pair(&mut vec!["put".into()].iter()).iter()
+            .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
+            .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
+            .map(|(ch, (x, y))| {
+                let ch = PutChar {
+                    pos: (x as usize, y as usize),
+                    ch
+                };
+                inst.put.replace(vec![ch]);
+            }).for_each(drop);
+
+        msg.msg.find_list(&mut vec!["put".into()].iter()).map(|lst| {
+            inst.put = lst.iter().filter_map(|u| u.as_pair())
+                .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
+                .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
+                .map(|(ch, (x, y))| {
+                    Some(PutChar {
+                        pos: (x as usize, y as usize),
+                        ch
+                    })
+            }).collect::<Option<Vec<_>>>();
+        });
 
         msg.msg.find_str(&mut vec!["inp".into()].iter()).map(|s| {
-            inst.inp = Some(Inp {
+            inst.inp.replace(Inp {
                 pmt: s
             })
         });
@@ -210,7 +255,7 @@ impl ServHlr for Term {
         msg.msg.find_list(&mut vec!["img".into()].iter()).map(|lst| {
             let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
 
-            inst.img = Some(Img {
+            inst.img.replace(Img {
                 img
             })
         });
@@ -229,7 +274,7 @@ impl ServHlr for Term {
 
                 inst.img = Some(Img {
                     img
-                })
+                });
             } else {
                 return Err(KernErr::ParseErr(UnitParseErr::NotList));
             }
@@ -242,7 +287,7 @@ impl ServHlr for Term {
         }
 
         msg.msg.find_unit(&mut vec!["msg".into()].iter()).map(|u| {
-            inst.msg = Some(format!("{}", u));
+            inst.msg.replace(format!("{}", u))
         });
 
         Ok((inst, msg))

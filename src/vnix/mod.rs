@@ -23,7 +23,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // login task
     let mut ath: String = "super".into();
 
-    loop {
+    'login: loop {
         let s = "{prs:t inp:`login:` msg:`Hello, vnix!` prs:t mrg:t task:[io.term sys.usr]}";
 
         let u = Unit::parse(s.chars(), &mut kern)?.0;
@@ -31,13 +31,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     
         let go = kern.task(msg);
 
-        if let Err(e) = go {
-            writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-        } else if let Ok(msg) = go {
-            if let Some(msg) = msg {
-                if let Some(tmp) = msg.msg.find_str(&mut vec!["ath".into()].iter()) {
-                    ath = tmp;
-                    break;
+        match go {
+            Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+            Ok(msg) => {
+                if let Some(s) = msg.map(|msg| msg.msg.find_str(&mut vec!["ath".into()].iter())).flatten() {
+                    ath = s;
+                    break 'login;
                 }
             }
         }
