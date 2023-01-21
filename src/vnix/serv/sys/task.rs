@@ -31,8 +31,20 @@ impl ServHlr for Task {
 
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(u) = &self.task {
-            let task = serv.kern.msg(&msg.ath, u.clone())?;
-            return serv.kern.task(task);
+            let ath = msg.ath.clone();
+
+            let task = serv.kern.msg(&ath, u.clone())?;
+            let msg = serv.kern.task(task)?;
+
+            if let Some(out) = msg.map(|msg| msg.msg.find_unit(&mut vec!["msg".into()].iter())).flatten() {
+                let msg = Unit::Map(vec![
+                    (Unit::Str("msg".into()), out)
+                ]);
+
+                return serv.kern.msg(&ath, msg).map(|msg| Some(msg));
+            }
+
+            return Ok(None);
         }
 
         Ok(Some(msg))

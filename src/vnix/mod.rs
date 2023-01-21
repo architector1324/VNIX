@@ -24,7 +24,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let mut ath: String = "super".into();
 
     'login: loop {
-        let s = "{prs:t inp:`login:` msg:`Hello, vnix!` prs:t mrg:t task:[io.term sys.usr]}";
+        let s = "{prs:t inp:`login:` msg:`Hello, vnix!` prs:t ath:@msg.ath pub:@msg.pub priv:@msg.priv task:[io.term sys.usr]}";
 
         let u = Unit::parse(s.chars(), &mut kern)?.0;
         let msg = kern.msg("super", u)?;
@@ -46,7 +46,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // prepare message
         // λ
         let s = "{prs:t inp:`$ ` msg:`Welcome to lambda shell!` task:[io.term sys.task io.term]}";
-    
+
         let u = Unit::parse(s.chars(), &mut kern)?.0;
         let msg = kern.msg(&ath, u)?;
 
