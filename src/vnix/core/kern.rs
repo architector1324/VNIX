@@ -109,17 +109,9 @@ impl<'a> Kern<'a> {
             }
 
             let mut msg = msg;
-            let u = msg.msg.clone();
-
-            if let Some(mut _msg) = self.send(net.first().unwrap().as_str(), msg)? {
-                let usr = self.get_usr(&_msg.ath)?;
-                msg = _msg.merge(usr, u)?;
-            } else {
-                return Ok(None);
-            }
 
             loop {
-                for (i, serv) in net.iter().skip(1).enumerate() {
+                for (i, serv) in net.iter().enumerate() {
                     let u = msg.msg.clone();
     
                     if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
@@ -129,7 +121,7 @@ impl<'a> Kern<'a> {
                         return Ok(None);
                     }
 
-                    if net.len() - 1 == 1 || (i == net.len() - 2 && net.first().unwrap() != net.last().unwrap()) {
+                    if (net.len() - 1 == 1 || i == net.len() - 1) && net.first().unwrap() != net.last().unwrap() {
                         return Ok(Some(msg));
                     }
                 }

@@ -71,7 +71,7 @@ impl Default for Term {
 }
 
 impl Inp {
-    fn msg(prs:bool, s: String, msg: &Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn msg(prs:bool, s: String, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if !s.is_empty() {
             if !prs {
                 let _msg = Unit::Map(vec![
@@ -99,7 +99,7 @@ impl Inp {
         return Ok(None)
     }
 
-    fn handle(&self, prs:bool, msg: &Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, prs:bool, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         let mut out = String::new();
 
         match self.pmt.as_str() {
@@ -245,7 +245,7 @@ impl Term {
         }
 
         if let Some(inp) = &self.inp {
-            return inp.handle(self.prs, &msg, serv);
+            return inp.handle(self.prs, msg, serv);
         }
 
         return Ok(Some(msg));
