@@ -87,11 +87,18 @@ impl<'a> Kern<'a> {
         Msg::new(usr, u)
     }
 
-    fn msg_hlr(&self, msg: Msg, usr: Usr) -> Result<Msg, KernErr> {
+    fn msg_hlr(&self, msg: Msg, usr: Usr) -> Result<Option<Msg>, KernErr> {
         if let Some(_msg) = msg.msg.find_unit(&mut vec!["mrg".into()].iter()) {
-            return self.msg(&usr.name, msg.msg.merge(_msg));
+            return Ok(Some(self.msg(&usr.name, msg.msg.merge(_msg))?));
         }
-        Ok(msg)
+
+        if let Some(b) = msg.msg.find_bool(&mut vec!["abt".into()].iter()) {
+            if b {
+                return Ok(None)
+            }
+        }
+
+        Ok(Some(msg))
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
@@ -135,11 +142,15 @@ impl<'a> Kern<'a> {
         Ok(None)
     }
 
-    pub fn send<'b>(&'b mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
+    pub fn send<'b>(&'b mut self, serv: &str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
         let usr = self.get_usr(&msg.ath)?;
         usr.verify(&msg.msg, &msg.sign)?;
 
-        let msg = self.msg_hlr(msg, usr)?;
+        if let Some(_msg) = self.msg_hlr(msg, usr)? {
+            msg = _msg;
+        } else {
+            return Ok(None);
+        }
 
         match serv {
             "io.term" => {
