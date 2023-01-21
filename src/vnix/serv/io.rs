@@ -219,9 +219,8 @@ impl Term {
             for ch in put {
                 let offs = ch.pos.0 + res.0 * (ch.pos.1 + 1);
                 out.replace_range(offs..offs + 1, &ch.ch);
-
-                write!(serv.kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
+            write!(serv.kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
             // wait for key
             serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
