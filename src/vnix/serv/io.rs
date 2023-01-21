@@ -22,6 +22,7 @@ struct Inp {
 
 #[derive(Debug)]
 struct Img {
+    size: (usize, usize),
     img: Vec<u32>
 }
 
@@ -158,15 +159,13 @@ impl Get {
 impl Term {
     fn img_hlr(&self, serv: &mut Serv) -> Result<(), KernErr> {
         if let Some(ref img) = self.img {
-            let (w, _) = serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-
-            serv.kern.disp.fill(&|x, y| {
-                if let Some(px) = img.img.get(x + w * y) {
-                    *px
-                } else {
-                    0
+            for x in 0..img.size.0 {
+                for y in 0..img.size.1 {
+                    if let Some(px) = img.img.get(x + img.size.0 * y) {
+                        serv.kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
+                    }
                 }
-            }).map_err(|e| KernErr::DispErr(e))?;
+            }
         }
 
         Ok(())
@@ -279,14 +278,6 @@ impl ServHlr for Term {
             })
         });
 
-        msg.msg.find_list(&mut vec!["img".into()].iter()).map(|lst| {
-            let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
-
-            inst.img.replace(Img {
-                img
-            })
-        });
-
         msg.msg.find_str(&mut vec!["get".into()].iter()).map(|s| {
             match s.as_ref() {
                 "cli.res" => inst.get.replace(Get::CliRes),
@@ -295,28 +286,40 @@ impl ServHlr for Term {
             }
         });
 
-        let e = msg.msg.find_str(&mut vec!["img".into()].iter()).map(|s| {
-            let img0 = utils::decompress(s.as_str())?;
-            let img_s = utils::decompress(img0.as_str())?;
-
-            let img_u = Unit::parse(img_s.chars(), serv.kern)?.0;
-
-            if let Unit::Lst(lst) = img_u {
+        msg.msg.find_pair(&mut vec!["img".into()].iter()).iter()
+            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_vec()?)))
+            .filter_map(|((w, h), lst)| Some(((w.as_int()?, h.as_int()?), lst)))
+            .map(|((w, h), lst)| {
                 let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
 
-                inst.img = Some(Img {
+                inst.img.replace(Img {
+                    size: (w as usize, h as usize),
                     img
                 });
-            } else {
-                return Err(KernErr::ParseErr(UnitParseErr::NotList));
-            }
+            }).for_each(drop);
 
-            Ok(())
-        });
+        let e = msg.msg.find_pair(&mut vec!["img".into()].iter()).iter()
+            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_str()?)))
+            .filter_map(|((w, h), s)| Some(((w.as_int()?, h.as_int()?), s)))
+            .map(|((w, h), s)| {
+                let img0 = utils::decompress(s.as_str())?;
+                let img_s = utils::decompress(img0.as_str())?;
 
-        if let Some(e) = e {
-            e?;
-        }
+                let img_u = Unit::parse(img_s.chars(), serv.kern)?.0;
+
+                if let Unit::Lst(lst) = img_u {
+                    let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+
+                    inst.img = Some(Img {
+                        size: (w as usize, h as usize),
+                        img
+                    });
+                } else {
+                    return Err(KernErr::ParseErr(UnitParseErr::NotList));
+                }
+
+                Ok(())
+            }).collect::<Result<(), KernErr>>()?;
 
         msg.msg.find_unit(&mut vec!["msg".into()].iter()).filter(|u| u.as_none().is_none()).map(|u| {
             match u {

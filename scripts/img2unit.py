@@ -27,7 +27,7 @@ def convert(size, dim, dat, zip):
 
     for px in dat:
         b = struct.pack('<BBB', px[0], px[1], px[2])
-        v = int.from_bytes(b, 'little')
+        v = int.from_bytes(b, 'big')
         img.append(v)
 
     img_s = f'[{" ".join([str(e) for e in img])}]'
@@ -38,9 +38,9 @@ def convert(size, dim, dat, zip):
 
         img_s = gzip.compress(bytes(img0, 'utf-8'))
         img_s = base64.b64encode(img_s).decode()
-        return f'{{img:`{img_s}`}}'
+        img_s = f'`{img_s}`'
 
-    return f'{{img:{img_s}}}'
+    return f'{{img:(({size[0]} {size[1]}) {img_s})}}'
 
 
 # parse args

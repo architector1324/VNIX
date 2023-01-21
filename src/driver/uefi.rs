@@ -150,6 +150,11 @@ impl Disp for UefiDisp {
             ).map_err(|_| DispErr::SetPixel)?;
 
             let res = disp.current_mode_info().resolution();
+
+            if x + res.0 * y >= res.0 * res.1 {
+                return Err(DispErr::SetPixel)
+            }
+
             let mut fb = disp.frame_buffer();
             fb.write_value(4 * (x + res.0 * y), px);
         }
