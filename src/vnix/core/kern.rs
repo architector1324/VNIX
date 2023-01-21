@@ -112,6 +112,10 @@ impl<'a> Kern<'a> {
 
             loop {
                 for (i, serv) in net.iter().enumerate() {
+                    if net.len() > 1 && i == net.len() - 1 && net.first().unwrap() == net.last().unwrap() {
+                        break;
+                    }
+
                     let u = msg.msg.clone();
     
                     if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
@@ -121,7 +125,7 @@ impl<'a> Kern<'a> {
                         return Ok(None);
                     }
 
-                    if (net.len() - 1 == 1 || i == net.len() - 1) && net.first().unwrap() != net.last().unwrap() {
+                    if i == net.len() - 1 && net.first().unwrap() != net.last().unwrap() {
                         return Ok(Some(msg));
                     }
                 }
