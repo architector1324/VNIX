@@ -72,31 +72,21 @@ impl Default for Term {
 
 impl Inp {
     fn msg(prs:bool, s: String, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
-        if !s.is_empty() {
-            if !prs {
-                let _msg = Unit::Map(vec![
-                    (Unit::Str("msg".into()), Unit::Str(s))
-                ]);
-
-                return Ok(Some(serv.kern.msg(&msg.ath, _msg)?))
-            };
-        }
-
-        if prs {
-            let u = if !s.is_empty() {
+        let u = if !s.is_empty() {
+            if prs {
                 Unit::parse(s.chars(), serv.kern)?.0
             } else {
-                Unit::None
-            };
+                Unit::Str(s)
+            }
+        } else {
+            Unit::None
+        };
 
-            let _msg = Unit::Map(vec![
-                (Unit::Str("msg".into()), u)
-            ]);
+        let _msg = Unit::Map(vec![
+            (Unit::Str("msg".into()), u)
+        ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, _msg)?))
-        }
-
-        return Ok(None)
+        return Ok(Some(serv.kern.msg(&msg.ath, _msg)?));
     }
 
     fn handle(&self, prs:bool, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
@@ -333,8 +323,11 @@ impl ServHlr for Term {
             e?;
         }
 
-        msg.msg.find_unit(&mut vec!["msg".into()].iter()).map(|u| {
-            inst.msg.replace(format!("{}", u))
+        msg.msg.find_unit(&mut vec!["msg".into()].iter()).filter(|u| u.as_none().is_none()).map(|u| {
+            match u {
+                Unit::Str(s) => inst.msg.replace(format!("{}", s)),
+                _ => inst.msg.replace(format!("{}", u))
+            }
         });
 
         Ok((inst, msg))
