@@ -5,9 +5,6 @@ use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use base64ct::{Base64, Encoding};
-use compression::prelude::{GZipDecoder, DecodeExt};
-
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
@@ -15,6 +12,7 @@ use crate::vnix::core::unit::{Unit, UnitParseErr};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
+use crate::vnix::utils;
 
 
 #[derive(Debug)]
@@ -298,12 +296,9 @@ impl ServHlr for Term {
         });
 
         let e = msg.msg.find_str(&mut vec!["img".into()].iter()).map(|s| {
-            let mut dec = GZipDecoder::new();
+            let img0 = utils::decompress(s.as_str())?;
+            let img_s = utils::decompress(img0.as_str())?;
 
-            let img_v = Base64::decode_vec(s.as_str()).map_err(|_| KernErr::DecodeFault)?;
-            let decompressed = img_v.iter().cloned().decode(&mut dec).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::DecompressionFault)?;
-
-            let img_s = String::from_utf8(decompressed).map_err(|_| KernErr::DecodeFault)?;
             let img_u = Unit::parse(img_s.chars(), serv.kern)?.0;
 
             if let Unit::Lst(lst) = img_u {

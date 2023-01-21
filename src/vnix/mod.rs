@@ -1,5 +1,6 @@
 pub mod core;
 pub mod serv;
+pub mod utils;
 
 use alloc::vec;
 use alloc::string::String;
