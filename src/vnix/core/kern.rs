@@ -25,7 +25,9 @@ pub enum KernErr {
     SignFault,
     SignVerifyFault,
     UsrNotFound,
+    UsrNameAlreadyReg,
     UsrAlreadyReg,
+    UsrRegWithAnotherName,
     ServNotFound,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
@@ -60,16 +62,28 @@ impl<'a> Kern<'a> {
     }
 
     pub fn reg_usr(&mut self, usr: Usr) -> Result<(), KernErr> {
-        if self.users.iter().find(|u| u.name == usr.name).is_some() {
+        if self.users.iter().find(|u| u.name == usr.name && u.pub_key != usr.pub_key).is_some() {
+            return Err(KernErr::UsrNameAlreadyReg);
+        }
+
+        if self.users.iter().find(|u| u.name == usr.name && u.pub_key == usr.pub_key).is_some() {
             return Err(KernErr::UsrAlreadyReg);
+        }
+
+        if self.users.iter().find(|u| u.name != usr.name && u.pub_key == usr.pub_key).is_some() {
+            return Err(KernErr::UsrRegWithAnotherName);
         }
 
         self.users.push(usr);
         Ok(())
     }
 
+    fn get_usr(&self, ath: &str) -> Result<Usr, KernErr> {
+        self.users.iter().find(|usr| usr.name == ath).ok_or(KernErr::UsrNotFound).cloned()
+    }
+
     pub fn msg(&self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
-        let usr = self.users.iter().find(|usr| usr.name == ath).ok_or(KernErr::UsrNotFound).cloned()?;
+        let usr = self.get_usr(ath)?;
         Msg::new(usr, u)
     }
 
@@ -81,7 +95,6 @@ impl<'a> Kern<'a> {
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        let usr = self.users.iter().find(|usr| usr.name == msg.ath).ok_or(KernErr::UsrNotFound).cloned()?;
         let path = vec!["task".into()];
 
         if let Some(serv) = msg.msg.find_str(&mut path.iter()) {
@@ -99,7 +112,8 @@ impl<'a> Kern<'a> {
             let u = msg.msg.clone();
 
             if let Some(mut _msg) = self.send(net.first().unwrap().as_str(), msg)? {
-                msg = _msg.merge(usr.clone(), u)?;
+                let usr = self.get_usr(&_msg.ath)?;
+                msg = _msg.merge(usr, u)?;
             } else {
                 return Ok(None);
             }
@@ -109,7 +123,8 @@ impl<'a> Kern<'a> {
                     let u = msg.msg.clone();
     
                     if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
-                        msg = _msg.merge(usr.clone(), u)?;
+                        let usr = self.get_usr(&_msg.ath)?;
+                        msg = _msg.merge(usr, u)?;
                     } else {
                         return Ok(None);
                     }
@@ -125,7 +140,7 @@ impl<'a> Kern<'a> {
     }
 
     pub fn send<'b>(&'b mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        let usr = self.users.iter().find(|usr| usr.name == msg.ath).ok_or(KernErr::UsrNotFound).cloned()?;
+        let usr = self.get_usr(&msg.ath)?;
         usr.verify(&msg.msg, &msg.sign)?;
 
         let msg = Kern::msg_hlr(msg, usr)?;

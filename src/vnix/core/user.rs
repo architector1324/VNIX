@@ -13,8 +13,8 @@ use super::unit::Unit;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Usr {
     pub name: String,
-    priv_key: Option<String>,
-    pub_key: String // sec1: elliptic curve
+    pub pub_key: String, // sec1: elliptic curve
+    priv_key: Option<String>
 }
 
 impl Display for Usr {

@@ -34,8 +34,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         match go {
             Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
             Ok(msg) => {
-                if let Some(s) = msg.map(|msg| msg.msg.find_str(&mut vec!["ath".into()].iter())).flatten() {
-                    ath = s;
+                if let Some(msg) = msg {
+                    ath = msg.ath;
                     break 'login;
                 }
             }

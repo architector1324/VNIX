@@ -66,10 +66,10 @@ impl ServHlr for User {
         Ok((inst, msg))
     }
 
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, mut msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(act) = &self.act {
             let (usr, out) = match act {
-                UserAct::Reg{ath} => Usr::new(ath, serv.kern)?,
+                UserAct::Reg {ath} => Usr::new(ath, serv.kern)?,
                 UserAct::Guest {ath, pub_key} => (Usr::guest(ath, pub_key)?, String::new()),
                 UserAct::Login {ath, pub_key, priv_key} => (Usr::login(ath, priv_key, pub_key)?, String::new())
             };
@@ -84,8 +84,10 @@ impl ServHlr for User {
                     (Unit::Str("msg".into()), Unit::parse(out.chars(), serv.kern)?.0),
                 ]);
     
-                return Ok(Some(serv.kern.msg(&msg.ath, m)?))
+                return Ok(Some(serv.kern.msg(&usr.name, m)?))
             }
+
+            msg = serv.kern.msg(&usr.name, msg.msg)?;
         }
 
         Ok(Some(msg))
