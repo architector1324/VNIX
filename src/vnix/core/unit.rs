@@ -616,4 +616,19 @@ impl Unit {
         }
         None
     }
+
+    pub fn merge(self, u: Unit) -> Unit {
+        if let Unit::Map(m) = u {
+            if let Some(mut tmp) = self.as_map() {
+                tmp.retain(|(u, _)| {
+                    m.iter().find(|(n, _)| u == n).is_none()
+                });
+
+                tmp.extend(m);
+
+                return Unit::Map(tmp);
+            }
+        }
+        self
+    }
 }

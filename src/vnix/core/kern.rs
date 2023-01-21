@@ -87,9 +87,9 @@ impl<'a> Kern<'a> {
         Msg::new(usr, u)
     }
 
-    fn msg_hlr(msg: Msg, usr: Usr) -> Result<Msg, KernErr> {
+    fn msg_hlr(&self, msg: Msg, usr: Usr) -> Result<Msg, KernErr> {
         if let Some(_msg) = msg.msg.find_unit(&mut vec!["mrg".into()].iter()) {
-            return msg.merge(usr, _msg)
+            return self.msg(&usr.name, msg.msg.merge(_msg));
         }
         Ok(msg)
     }
@@ -120,7 +120,7 @@ impl<'a> Kern<'a> {
     
                     if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
                         let usr = self.get_usr(&_msg.ath)?;
-                        msg = _msg.merge(usr, u)?;
+                        msg = self.msg(&usr.name, u.merge(_msg.msg))?;
                     } else {
                         return Ok(None);
                     }
@@ -139,7 +139,7 @@ impl<'a> Kern<'a> {
         let usr = self.get_usr(&msg.ath)?;
         usr.verify(&msg.msg, &msg.sign)?;
 
-        let msg = Kern::msg_hlr(msg, usr)?;
+        let msg = self.msg_hlr(msg, usr)?;
 
         match serv {
             "io.term" => {

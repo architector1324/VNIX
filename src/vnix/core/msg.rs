@@ -40,19 +40,4 @@ impl Msg {
             sign
         })
     }
-
-    pub fn merge(self, usr: Usr, msg: Unit) -> Result<Self, KernErr> {
-        if let Unit::Map(m) = self.msg.clone() {
-            if let Some(mut tmp) = msg.as_map() {
-                tmp.retain(|(u, _)| {
-                    m.iter().find(|(n, _)| u == n).is_none()
-                });
-
-                tmp.extend(m);
-
-                return Msg::new(usr, Unit::Map(tmp));
-            }
-        }
-        Msg::new(usr, self.msg)
-    }
 }
