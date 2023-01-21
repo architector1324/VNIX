@@ -25,6 +25,7 @@ pub enum KernErr {
     SignFault,
     SignVerifyFault,
     UsrNotFound,
+    UsrAlreadyReg,
     ServNotFound,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
@@ -59,6 +60,10 @@ impl<'a> Kern<'a> {
     }
 
     pub fn reg_usr(&mut self, usr: Usr) -> Result<(), KernErr> {
+        if self.users.iter().find(|u| u.name == usr.name).is_some() {
+            return Err(KernErr::UsrAlreadyReg);
+        }
+
         self.users.push(usr);
         Ok(())
     }
@@ -66,6 +71,13 @@ impl<'a> Kern<'a> {
     pub fn msg(&self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
         let usr = self.users.iter().find(|usr| usr.name == ath).ok_or(KernErr::UsrNotFound).cloned()?;
         Msg::new(usr, u)
+    }
+
+    fn msg_hlr(msg: Msg, usr: Usr) -> Result<Msg, KernErr> {
+        if let Some(_msg) = msg.msg.find_unit(&mut vec!["mrg".into()].iter()) {
+            return msg.merge(usr, _msg)
+        }
+        Ok(msg)
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
@@ -115,6 +127,8 @@ impl<'a> Kern<'a> {
     pub fn send<'b>(&'b mut self, serv: &str, msg: Msg) -> Result<Option<Msg>, KernErr> {
         let usr = self.users.iter().find(|usr| usr.name == msg.ath).ok_or(KernErr::UsrNotFound).cloned()?;
         usr.verify(&msg.msg, &msg.sign)?;
+
+        let msg = Kern::msg_hlr(msg, usr)?;
 
         match serv {
             "io.term" => {
