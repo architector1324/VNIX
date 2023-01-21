@@ -27,6 +27,12 @@ struct Img {
 }
 
 #[derive(Debug)]
+struct Sprite {
+    pos: (i32, i32),
+    img: Img
+}
+
+#[derive(Debug)]
 struct PutChar {
     pos: (usize, usize),
     ch: String
@@ -42,6 +48,7 @@ enum Get {
 pub struct Term {
     inp: Option<Inp>,
     img: Option<Img>,
+    spr: Option<Sprite>,
     put: Option<Vec<PutChar>>,
     get: Option<Get>,
     msg: Option<String>,
@@ -57,6 +64,7 @@ impl Default for Term {
         Term {
             inp: None,
             img: None,
+            spr: None,
             put: None,
             get: None,
             msg: None,
@@ -127,6 +135,7 @@ impl Inp {
                 }
 
                 write!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                // write!(serv.kern.cli, "{c}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
         }
 
@@ -156,6 +165,113 @@ impl Get {
     }
 }
 
+impl Img {
+    fn find_img(u: &Unit, serv: &mut Serv) -> Result<Option<Self>, KernErr> {
+        let mut _img = None;
+        
+        u.find_pair(&mut vec!["img".into()].iter()).iter()
+            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_vec()?)))
+            .filter_map(|((w, h), lst)| Some(((w.as_int()?, h.as_int()?), lst)))
+            .map(|((w, h), lst)| {
+                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+
+                _img = Some(Img {
+                    size: (w as usize, h as usize),
+                    img
+                });
+            }).for_each(drop);
+
+        if _img.is_some() {
+            return Ok(_img);
+        }
+
+        u.find_pair(&mut vec!["img".into()].iter()).iter()
+            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_str()?)))
+            .filter_map(|((w, h), s)| Some(((w.as_int()?, h.as_int()?), s)))
+            .map(|((w, h), s)| {
+                let img0 = utils::decompress(s.as_str())?;
+                let img_s = utils::decompress(img0.as_str())?;
+
+                let img_u = Unit::parse(img_s.chars(), serv.kern)?.0;
+
+                if let Unit::Lst(lst) = img_u {
+                    let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+
+                    _img = Some(Img {
+                        size: (w as usize, h as usize),
+                        img
+                    });
+                } else {
+                    return Err(KernErr::ParseErr(UnitParseErr::NotList));
+                }
+                Ok(())
+            }).collect::<Result<(), KernErr>>()?;
+
+        Ok(_img)
+    }
+}
+
+impl PutChar {
+    fn find_put(u: &Unit, _serv: &mut Serv) -> Result<Option<Vec<Self>>, KernErr> {
+        let mut put = None;
+        
+        u.find_pair(&mut vec!["put".into()].iter()).iter()
+            .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
+            .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
+            .map(|(ch, (x, y))| {
+                let ch = PutChar {
+                    pos: (x as usize, y as usize),
+                    ch
+                };
+                put.replace(vec![ch]);
+            }).for_each(drop);
+
+        if put.is_some() {
+            return Ok(put);
+        }
+
+        u.find_list(&mut vec!["put".into()].iter()).map(|lst| {
+            put = lst.iter().filter_map(|u| u.as_pair())
+                .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
+                .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
+                .map(|(ch, (x, y))| {
+                    Some(PutChar {
+                        pos: (x as usize, y as usize),
+                        ch
+                    })
+            }).collect::<Option<Vec<_>>>();
+        });
+
+        Ok(put)
+    }
+}
+
+impl Sprite {
+    fn find_spr(u: &Unit, serv: &mut Serv) -> Result<Option<Self>, KernErr> {
+        let mut spr = None;
+
+        u.find_map(&mut vec!["spr".into()].iter()).iter()
+            .filter_map(|m| {
+                let m = Unit::Map(m.clone());
+                Some((
+                    (
+                        m.find_int(&mut vec!["x".into()].iter())?,
+                        m.find_int(&mut vec!["y".into()].iter())?
+                    ),
+                    Img::find_img(&m, serv).ok()??
+                ))
+            })
+            .map(|((x, y), img)| {
+                spr.replace(Sprite {
+                    pos: (x, y),
+                    img
+                })
+            }).for_each(drop);
+
+        Ok(spr)
+    }
+}
+
 impl Term {
     fn img_hlr(&self, serv: &mut Serv) -> Result<(), KernErr> {
         if let Some(ref img) = self.img {
@@ -163,6 +279,22 @@ impl Term {
                 for y in 0..img.size.1 {
                     if let Some(px) = img.img.get(x + img.size.0 * y) {
                         serv.kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
+                    }
+                }
+            }
+        }
+
+        if let Some(ref spr) = self.spr {
+            let w = spr.img.size.0;
+            let h = spr.img.size.1;
+
+            for x in 0..w {
+                for y in 0..h {
+                    if let Some(px) = spr.img.img.get(x + w * y) {
+                        let x_offs = (spr.pos.0 - (w as i32 / 2)) as usize;
+                        let y_offs = (spr.pos.1 - (h as i32 / 2)) as usize;
+
+                        serv.kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
             }
@@ -249,28 +381,9 @@ impl ServHlr for Term {
         msg.msg.find_bool(&mut vec!["nl".into()].iter()).map(|v| inst.nl = v);
         msg.msg.find_bool(&mut vec!["prs".into()].iter()).map(|v| inst.prs = v);
 
-        msg.msg.find_pair(&mut vec!["put".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
-            .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
-            .map(|(ch, (x, y))| {
-                let ch = PutChar {
-                    pos: (x as usize, y as usize),
-                    ch
-                };
-                inst.put.replace(vec![ch]);
-            }).for_each(drop);
-
-        msg.msg.find_list(&mut vec!["put".into()].iter()).map(|lst| {
-            inst.put = lst.iter().filter_map(|u| u.as_pair())
-                .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
-                .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
-                .map(|(ch, (x, y))| {
-                    Some(PutChar {
-                        pos: (x as usize, y as usize),
-                        ch
-                    })
-            }).collect::<Option<Vec<_>>>();
-        });
+        if let Some(put) = PutChar::find_put(&msg.msg, serv)? {
+            inst.put.replace(put);
+        }
 
         msg.msg.find_str(&mut vec!["inp".into()].iter()).map(|s| {
             inst.inp.replace(Inp {
@@ -286,40 +399,13 @@ impl ServHlr for Term {
             }
         });
 
-        msg.msg.find_pair(&mut vec!["img".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_vec()?)))
-            .filter_map(|((w, h), lst)| Some(((w.as_int()?, h.as_int()?), lst)))
-            .map(|((w, h), lst)| {
-                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+        if let Some(img) = Img::find_img(&msg.msg, serv)? {
+            inst.img.replace(img);
+        }
 
-                inst.img.replace(Img {
-                    size: (w as usize, h as usize),
-                    img
-                });
-            }).for_each(drop);
-
-        let e = msg.msg.find_pair(&mut vec!["img".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_str()?)))
-            .filter_map(|((w, h), s)| Some(((w.as_int()?, h.as_int()?), s)))
-            .map(|((w, h), s)| {
-                let img0 = utils::decompress(s.as_str())?;
-                let img_s = utils::decompress(img0.as_str())?;
-
-                let img_u = Unit::parse(img_s.chars(), serv.kern)?.0;
-
-                if let Unit::Lst(lst) = img_u {
-                    let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
-
-                    inst.img = Some(Img {
-                        size: (w as usize, h as usize),
-                        img
-                    });
-                } else {
-                    return Err(KernErr::ParseErr(UnitParseErr::NotList));
-                }
-
-                Ok(())
-            }).collect::<Result<(), KernErr>>()?;
+        if let Some(spr) = Sprite::find_spr(&msg.msg, serv)? {
+            inst.spr.replace(spr);
+        }
 
         msg.msg.find_unit(&mut vec!["msg".into()].iter()).filter(|u| u.as_none().is_none()).map(|u| {
             match u {
@@ -338,7 +424,7 @@ impl ServHlr for Term {
         }
 
         // gfx
-        if self.img.is_some() {
+        if self.img.is_some() || self.spr.is_some() {
             self.img_hlr(serv)?;
 
             // wait for key

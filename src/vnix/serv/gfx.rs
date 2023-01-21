@@ -29,7 +29,7 @@ impl ServHlr for GFX2D {
         let mut inst = GFX2D::default();
 
         // config instance
-        let e = msg.msg.find_str(&mut vec!["fill".into()].iter()).map(|col| {
+        msg.msg.find_str(&mut vec!["fill".into()].iter()).map(|col| {
             if col.starts_with("#") {
                 let v = <u32>::from_str_radix(&col[1..7], 16)
                     .map_err(|_| KernErr::ServErr(ServErr::NotValidUnit))?
