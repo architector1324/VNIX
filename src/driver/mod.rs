@@ -14,7 +14,8 @@ pub enum CLIErr {
 #[derive(Debug)]
 pub enum DispErr {
     GetResolution,
-    SetPixel
+    SetPixel,
+    GetMouseState
 }
 
 #[derive(Debug)]
@@ -47,6 +48,12 @@ pub enum TermKey {
     Char(char)
 }
 
+#[derive(Debug)]
+pub struct Mouse {
+    pos: (i32, i32),
+    click: (bool, bool)
+}
+
 pub trait Time {
     fn wait(&mut self, mcs: usize) -> Result<(), TimeErr>;
 }
@@ -65,6 +72,7 @@ pub trait Disp {
     fn res(&self) -> Result<(usize, usize), DispErr>;
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
+    fn mouse(&mut self) -> Result<Option<Mouse>, DispErr>;
 }
 
 

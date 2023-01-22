@@ -2,12 +2,14 @@ use core::fmt::Write;
 
 use uefi::Handle;
 use uefi::proto::console::gop::GraphicsOutput;
+use uefi::proto::console::pointer::Pointer;
 use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
 use uefi::proto::rng::{Rng, RngAlgorithmType};
 use uefi::prelude::{SystemTable, Boot};
 use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes};
 
-use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr};
+use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mouse};
+
 
 pub struct UefiCLI {
     st: SystemTable<Boot>,
@@ -17,7 +19,8 @@ pub struct UefiCLI {
 
 pub struct UefiDisp {
     st: SystemTable<Boot>,
-    disp_hlr: Handle
+    disp_hlr: Handle,
+    mouse_hlr: Handle
 }
 
 pub struct UefiTime {
@@ -46,10 +49,12 @@ impl UefiCLI {
 impl UefiDisp {
     pub fn new(st: SystemTable<Boot>) -> Result<UefiDisp, DrvErr> {
         let disp_hlr = st.boot_services().get_handle_for_protocol::<GraphicsOutput>().map_err(|_| DrvErr::HandleFault)?;
+        let mouse_hlr = st.boot_services().get_handle_for_protocol::<Pointer>().map_err(|_| DrvErr::HandleFault)?;
 
         Ok(UefiDisp {
             st,
-            disp_hlr
+            disp_hlr,
+            mouse_hlr
         })
     }
 }
@@ -184,6 +189,25 @@ impl Disp for UefiDisp {
         }
 
         Ok(())
+    }
+
+    fn mouse(&mut self) -> Result<Option<Mouse>, DispErr> {
+        let mut mouse = self.st.boot_services().open_protocol_exclusive::<Pointer>(self.mouse_hlr).map_err(|_| DispErr::GetMouseState)?;
+
+        mouse.reset(false).map_err(|_| DispErr::GetMouseState)?;
+
+        unsafe {
+            let e = mouse.wait_for_input_event().unsafe_clone();
+            self.st.boot_services().wait_for_event(&mut [e]).map_err(|_| DispErr::GetMouseState)?;
+        }
+
+        let state = mouse.read_state().map_err(|_| DispErr::GetMouseState)?.map(|state| {
+            Mouse {
+                pos: (state.relative_movement.0, state.relative_movement.1),
+                click: (state.button.0, state.button.1)
+            }
+        });
+        return Ok(state);
     }
 }
 

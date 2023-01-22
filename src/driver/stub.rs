@@ -17,6 +17,10 @@ impl Disp for StubDisp {
     fn fill(&mut self, _f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
         Ok(())
     }
+
+    fn mouse(&mut self) -> Result<Option<super::Mouse>, DispErr> {
+        Ok(None)
+    }
 }
 
 pub struct PRng;
