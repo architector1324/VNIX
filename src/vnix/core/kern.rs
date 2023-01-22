@@ -12,6 +12,7 @@ use super::user::Usr;
 use crate::vnix::serv::{io, etc, gfx, math, sys};
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
+use crate::vnix::utils::RamDB;
 
 #[derive(Debug)]
 pub enum KernErr {
@@ -30,6 +31,8 @@ pub enum KernErr {
     UsrAlreadyReg,
     UsrRegWithAnotherName,
     ServNotFound,
+    DbLoadFault,
+    DbSaveFault,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
     DispErr(DispErr),
@@ -44,6 +47,7 @@ pub struct Kern<'a> {
     pub disp: &'a mut dyn Disp,
     pub time: &'a mut dyn Time,
     pub rnd: &'a mut dyn Rnd,
+    pub db_ram: RamDB,
 
     // vnix
     users: Vec<Usr>
@@ -56,6 +60,7 @@ impl<'a> Kern<'a> {
             disp,
             time,
             rnd,
+            db_ram: RamDB::default(),
             users: Vec::new(),
         };
 
@@ -159,7 +164,15 @@ impl<'a> Kern<'a> {
                     name: "io.term".into(),
                     kern: self,
                 };
-                let (inst, msg) = io::Term::inst(msg, &mut serv)?;
+                let (inst, msg) = io::term::Term::inst(msg, &mut serv)?;
+                inst.handle(msg, &mut serv)
+            },
+            "io.db" => {
+                let mut serv = Serv {
+                    name: "io.db".into(),
+                    kern: self,
+                };
+                let (inst, msg) = io::db::DB::inst(msg, &mut serv)?;
                 inst.handle(msg, &mut serv)
             },
             "etc.chrono" => {

@@ -1,8 +1,8 @@
 pub mod core;
 pub mod serv;
 pub mod utils;
+pub mod content;
 
-use alloc::vec;
 use alloc::string::String;
 
 use crate::driver::CLIErr;
@@ -21,13 +21,53 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
+    // prepare ram db
+    let s = content::task::LOGIN;
+    let u = Unit::parse(s.chars(), &mut kern)?.0;
+
+    kern.db_ram.save(
+        Unit::Str("task.login".into()),
+        u
+    );
+
+    let s = content::task::LAMBDA;
+    let u = Unit::parse(s.chars(), &mut kern)?.0;
+
+    kern.db_ram.save(
+        Unit::Str("task.lambda".into()),
+        u
+    );
+
+    let s = content::img::MINECRAFT_GRASS;
+    let u = Unit::parse(s.chars(), &mut kern)?.0;
+
+    kern.db_ram.save(
+        Unit::Str("img.minecraft.grass".into()),
+        u
+    );
+
+    let s = content::img::VNIX_LOGO;
+    let u = Unit::parse(s.chars(), &mut kern)?.0;
+
+    kern.db_ram.save(
+        Unit::Str("img.vnix.logo".into()),
+        u
+    );
+
+    let s = content::img::WALL_AI;
+
+    let u = Unit::parse(s.chars(), &mut kern)?.0;
+
+    kern.db_ram.save(
+        Unit::Str("img.wall.ai".into()),
+        u
+    );
+
     // login task
     let mut ath: String = "super".into();
 
     'login: loop {
-        let s = "{prs:t inp:`login:` msg:`Hello, vnix!` prs:t ath:@msg.ath pub:@msg.pub priv:@msg.priv task:[io.term sys.usr]}";
-
-        let u = Unit::parse(s.chars(), &mut kern)?.0;
+        let u = kern.db_ram.load(Unit::Str("task.login".into())).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg("super", u)?;
     
         let go = kern.task(msg);
@@ -46,9 +86,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     loop {
         // prepare message
         // λ
-        let s = "{prs:t inp:`$ ` msg:`Welcome to lambda shell!` task:[io.term sys.task io.term]}";
-
-        let u = Unit::parse(s.chars(), &mut kern)?.0;
+        let u = kern.db_ram.load(Unit::Str("task.lambda".into())).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg(&ath, u)?;
 
         // run

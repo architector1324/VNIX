@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use compression::prelude::{GZipEncoder, GZipDecoder, Action, EncodeExt, DecodeExt};
 use base64ct::{Base64, Encoding};
 
-use super::core::kern::KernErr;
+use super::core::{kern::KernErr, unit::Unit};
 
 
 pub fn compress(s: &str) -> Result<String, KernErr> {
@@ -21,4 +21,33 @@ pub fn decompress(s: &str) -> Result<String, KernErr> {
     let decompressed = v.iter().cloned().decode(&mut dec).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::DecompressionFault)?;
 
     String::from_utf8(decompressed).map_err(|_| KernErr::DecodeFault)
+}
+
+
+pub struct RamDB {
+    pub data: Vec<(Unit, Unit)>
+}
+
+impl Default for RamDB {
+    fn default() -> Self {
+        RamDB {
+            data: Vec::new()
+        }
+    }
+}
+
+impl RamDB {
+    pub fn load(&self, key: Unit) -> Option<Unit> {
+        self.data.iter().find_map(|(k, val)| {
+            if k.clone() == key {
+                return Some(val.clone())
+            }
+            None
+        })
+    }
+
+    pub fn save(&mut self, key: Unit, val: Unit) {
+        self.data.retain(|(k, _)| k.clone() != key);
+        self.data.push((key, val));
+    }
 }
