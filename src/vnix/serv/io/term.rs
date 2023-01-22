@@ -118,24 +118,26 @@ impl Inp {
         // input str
         write!(serv.kern.cli, "\r{}", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-        while let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
-            if let TermKey::Char(c) = key {
-                if c == '\r' || c == '\n' {
-                    writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                    break;
+        loop {
+            if let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+                if let TermKey::Char(c) = key {
+                    if c == '\r' || c == '\n' {
+                        writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        break;
+                    }
+    
+                    if c == '\u{8}' {
+                        out.pop();
+                    } else if c == '\u{3}' {
+                        writeln!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        return Ok(None);
+                    } else if !c.is_ascii_control() {
+                        write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    }
+    
+                    write!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    // write!(serv.kern.cli, "{c}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 }
-
-                if c == '\u{8}' {
-                    out.pop();
-                } else if c == '\u{3}' {
-                    writeln!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                    return Ok(None);
-                } else {
-                    write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                }
-
-                write!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                // write!(serv.kern.cli, "{c}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
         }
 

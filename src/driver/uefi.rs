@@ -108,7 +108,7 @@ impl CLI for UefiCLI {
                     ScanCode::DOWN => return Ok(Some(TermKey::Down)),
                     ScanCode::LEFT => return Ok(Some(TermKey::Left)),
                     ScanCode::RIGHT => return Ok(Some(TermKey::Right)),
-                    _ => ()
+                    _ => return Ok(Some(TermKey::Unknown)),
                 },
                 Key::Printable(c) => return Ok(Some(TermKey::Char(c.into())))
             }

@@ -43,6 +43,7 @@ pub enum TermKey {
     Down,
     Left,
     Right,
+    Unknown,
     Char(char)
 }
 
@@ -75,7 +76,8 @@ impl Display for TermKey {
             TermKey::Up => write!(f, "UP"),
             TermKey::Down => write!(f, "DOWN"),
             TermKey::Left => write!(f, "LEFT"),
-            TermKey::Right => write!(f, "RIGHT")
+            TermKey::Right => write!(f, "RIGHT"),
+            TermKey::Unknown => write!(f, "UNKNOWN")
         }
     }
 }
