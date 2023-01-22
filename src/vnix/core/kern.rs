@@ -24,6 +24,7 @@ pub enum KernErr {
     CreatePubKeyFault,
     SignFault,
     SignVerifyFault,
+    HashVerifyFault,
     UsrNotFound,
     UsrNameAlreadyReg,
     UsrAlreadyReg,
@@ -144,7 +145,7 @@ impl<'a> Kern<'a> {
 
     pub fn send<'b>(&'b mut self, serv: &str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
         let usr = self.get_usr(&msg.ath)?;
-        usr.verify(&msg.msg, &msg.sign)?;
+        usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
 
         if let Some(_msg) = self.msg_hlr(msg, usr)? {
             msg = _msg;

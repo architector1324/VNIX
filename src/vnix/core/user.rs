@@ -2,6 +2,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use core::fmt::{Display, Formatter};
 
+use sha3::{Digest, Sha3_256};
 use p256::ecdsa::{SigningKey, VerifyingKey};
 use p256::ecdsa::signature::{Signature, Signer, Verifier};
 
@@ -86,14 +87,21 @@ impl Usr {
         Err(KernErr::SignFault)
     }
 
-    pub fn verify(&self, u: &Unit, sign: &String) -> Result<(), KernErr> {
-        let sign_b = Base64::decode_vec(sign.as_str()).map_err(|_| KernErr::DecodeFault)?;
+    pub fn verify(&self, u: &Unit, sign: &str, hash: &str) -> Result<(), KernErr> {
+        let sign_b = Base64::decode_vec(sign).map_err(|_| KernErr::DecodeFault)?;
         let sign = Signature::from_bytes(&sign_b.as_slice()).map_err(|_| KernErr::SignVerifyFault)?;
 
         let pub_key_b = Base64::decode_vec(self.pub_key.as_str()).map_err(|_| KernErr::DecodeFault)?;
         let pub_key = VerifyingKey::from_sec1_bytes(&pub_key_b.as_slice()).map_err(|_| KernErr::CreatePubKeyFault)?;
 
         let msg = format!("{}", u);
+
+        let h = Sha3_256::digest(msg.as_bytes());
+        let _hash = Base64::encode_string(&h[..]);
+
+        if _hash != hash {
+            return Err(KernErr::HashVerifyFault);
+        }
 
         pub_key.verify(msg.as_bytes(), &sign).map_err(|_| KernErr::SignVerifyFault)
     }
