@@ -664,6 +664,17 @@ impl<'a> SchemaUnit<'a> {
                     return true;
                 }
             },
+            SchemaUnit::Str(ref mut s) => {
+                if let Unit::Str(v) = u {
+                    s.replace(v.clone());
+                    return true;
+                }
+            },
+            SchemaUnit::Pair(ref mut p) => {
+                if let Unit::Pair((u0, u1)) = u{
+                    return p.0.find(u0) && p.1.find(u1);
+                }
+            },
             SchemaUnit::Map(ref mut m) => {
                 if let Unit::Map(u_m) = u {
                     return u_m.iter().zip(m.iter_mut()).map(|(u_p, s_p)| {
@@ -685,7 +696,7 @@ impl<'a> Schema<'a> {
         match self {
             Schema::Unit(_u) => _u.find(u),
             Schema::Value(ref _u) => _u.clone() == u.clone(),
-            _ => unimplemented!()
+            Schema::Or((ref mut schm0, ref mut schm1)) => schm0.find(u) || schm1.find(u)
         }
     }
 }

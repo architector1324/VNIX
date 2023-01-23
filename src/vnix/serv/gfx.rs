@@ -3,6 +3,8 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::format;
 
+use crate::vnix::core::unit::Schema;
+use crate::vnix::core::unit::SchemaUnit;
 use crate::vnix::utils;
 
 use crate::vnix::core::msg::Msg;
@@ -29,34 +31,42 @@ impl ServHlr for GFX2D {
         let mut inst = GFX2D::default();
 
         // config instance
-        msg.msg.find_str(&mut vec!["fill".into()].iter()).map(|col| {
-            if col.starts_with("#") {
-                let v = <u32>::from_str_radix(&col[1..7], 16)
-                    .map_err(|_| KernErr::ServErr(ServErr::NotValidUnit))?
-                    .to_le();
+        let mut col_s = None;
 
+        let mut col_s2 = None;
+        let mut w = None;
+        let mut h = None;
+
+        let mut schm = Schema::Unit(
+            SchemaUnit::Map(vec![(
+                Schema::Value(Unit::Str("fill".into())),
+                Schema::Or((
+                    Box::new(Schema::Unit(SchemaUnit::Str(&mut col_s))),
+                    Box::new(Schema::Unit(SchemaUnit::Pair((
+                        Box::new(Schema::Unit(SchemaUnit::Pair((
+                            Box::new(Schema::Unit(SchemaUnit::Int(&mut w))),
+                            Box::new(Schema::Unit(SchemaUnit::Int(&mut h)))
+                        )))),
+                        Box::new(Schema::Unit(SchemaUnit::Str(&mut col_s2)))
+                    ))))
+                ))
+            )])
+        );
+
+        schm.find(&msg.msg);
+
+        if let Some(col) = col_s {
+                let v = utils::hex_to_u32(col.as_str()).map_or(Err(KernErr::ServErr(ServErr::NotValidUnit)), |v| Ok(v))?;
                 let res = serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
                 inst.fill.replace(((res.0, res.1), v));
-                return Ok(());
-            }
-            Err(KernErr::ServErr(ServErr::NotValidUnit))
-        }).map_or(Ok(None), |r| r.map(Some))?;
+        }
 
-        msg.msg.find_pair(&mut vec!["fill".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_str()?)))
-            .filter_map(|((w, h), col)| Some(((w.as_int()?, h.as_int()?), col)))
-            .map(|((w, h), col)| {
-                if col.starts_with("#") {
-                    let v = <u32>::from_str_radix(&col[1..7], 16)
-                        .map_err(|_| KernErr::ServErr(ServErr::NotValidUnit))?
-                        .to_le();
-    
-                    inst.fill.replace(((w as usize, h as usize), v));
-                    return Ok(());
-                }
-                Err(KernErr::ServErr(ServErr::NotValidUnit))
-            }).collect::<Result<(), KernErr>>()?;
+        if let Some(((w, h), col)) = w.iter().filter_map(|w| Some(((*w, h?), col_s2.clone()?))).next() {
+            let v = utils::hex_to_u32(col.as_str()).map_or(Err(KernErr::ServErr(ServErr::NotValidUnit)), |v| Ok(v))?;
+            inst.fill.replace(((w as usize, h as usize), v));
+        }
+
 
         Ok((inst, msg))
     }

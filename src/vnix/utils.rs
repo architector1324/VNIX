@@ -23,6 +23,15 @@ pub fn decompress(s: &str) -> Result<String, KernErr> {
     String::from_utf8(decompressed).map_err(|_| KernErr::DecodeFault)
 }
 
+pub fn hex_to_u32(s: &str) -> Option<u32> {
+    if s.starts_with("#") {
+        return Some(<u32>::from_str_radix(&s.get(1..7)?, 16)
+        .ok()?
+        .to_le())
+    }
+    None
+}
+
 
 pub struct RamDB {
     pub data: Vec<(Unit, Unit)>
