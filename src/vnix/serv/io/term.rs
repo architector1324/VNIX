@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, UnitParseErr};
+use crate::vnix::core::unit::{Unit, UnitParseErr, Schema, SchemaUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
@@ -378,28 +378,72 @@ impl ServHlr for Term {
         let mut inst = Term::default();
 
         // config instance
-        msg.msg.find_bool(&mut vec!["trc".into()].iter()).map(|v| inst.trc = v);
-        msg.msg.find_bool(&mut vec!["cls".into()].iter()).map(|v| inst.cls = v);
-        msg.msg.find_bool(&mut vec!["nl".into()].iter()).map(|v| inst.nl = v);
-        msg.msg.find_bool(&mut vec!["prs".into()].iter()).map(|v| inst.prs = v);
+        let mut trc = None;
+        let mut cls = None;
+        let mut nl = None;
+        let mut prs = None;
+        let mut inp = None;
+        let mut get = None;
+        let mut _msg = None;
 
-        if let Some(put) = PutChar::find_put(&msg.msg, serv)? {
-            inst.put.replace(put);
-        }
+        let mut schm = Schema::Unit(SchemaUnit::Map(vec![
+            (
+                Schema::Value(Unit::Str("trc".into())),
+                Schema::Unit(SchemaUnit::Bool(&mut trc))
+            ),
+            (
+                Schema::Value(Unit::Str("cls".into())),
+                Schema::Unit(SchemaUnit::Bool(&mut cls))
+            ),
+            (
+                Schema::Value(Unit::Str("nl".into())),
+                Schema::Unit(SchemaUnit::Bool(&mut nl))
+            ),
+            (
+                Schema::Value(Unit::Str("prs".into())),
+                Schema::Unit(SchemaUnit::Bool(&mut prs))
+            ),
+            (
+                Schema::Value(Unit::Str("inp".into())),
+                Schema::Unit(SchemaUnit::Str(&mut inp))
+            ),
+            (
+                Schema::Value(Unit::Str("get".into())),
+                Schema::Unit(SchemaUnit::Str(&mut get))
+            ),
+            (
+                Schema::Value(Unit::Str("msg".into())),
+                Schema::Unit(SchemaUnit::Unit(&mut _msg))
+            ),
+        ]));
 
-        msg.msg.find_str(&mut vec!["inp".into()].iter()).map(|s| {
-            inst.inp.replace(Inp {
-                pmt: s
-            })
-        });
+        schm.find(&msg.msg);
 
-        msg.msg.find_str(&mut vec!["get".into()].iter()).map(|s| {
+        trc.map(|v| inst.trc = v);
+        cls.map(|v| inst.cls = v);
+        nl.map(|v| inst.nl = v);
+        prs.map(|v| inst.prs = v);
+
+        inp.map(|s| inst.inp.replace(Inp{pmt: s}));
+
+        get.map(|s| {
             match s.as_ref() {
                 "cli.res" => inst.get.replace(Get::CliRes),
                 "gfx.res" => inst.get.replace(Get::GfxRes),
                 _ => None
             }
         });
+
+        _msg.map(|u| {
+            match u {
+                Unit::Str(s) => inst.msg.replace(format!("{}", s)),
+                _ => inst.msg.replace(format!("{}", u))
+            }
+        });
+
+        if let Some(put) = PutChar::find_put(&msg.msg, serv)? {
+            inst.put.replace(put);
+        }
 
         if let Some(img) = Img::find_img(&msg.msg, serv)? {
             inst.img.replace(img);
@@ -408,13 +452,6 @@ impl ServHlr for Term {
         if let Some(spr) = Sprite::find_spr(&msg.msg, serv)? {
             inst.spr.replace(spr);
         }
-
-        msg.msg.find_unit(&mut vec!["msg".into()].iter()).filter(|u| u.as_none().is_none()).map(|u| {
-            match u {
-                Unit::Str(s) => inst.msg.replace(format!("{}", s)),
-                _ => inst.msg.replace(format!("{}", u))
-            }
-        });
 
         Ok((inst, msg))
     }
