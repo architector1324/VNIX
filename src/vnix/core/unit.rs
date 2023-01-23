@@ -58,7 +58,8 @@ pub enum SchemaUnit<'a> {
     // Ref,
     Pair((Box<Schema<'a>>, Box<Schema<'a>>)),
     Lst(Vec<Schema<'a>>),
-    Map(Vec<(Schema<'a>, Schema<'a>)>)
+    Map(Vec<(Schema<'a>, Schema<'a>)>),
+    Unit(&'a mut Option<Unit>),
 }
 
 #[derive(Debug)]
@@ -658,9 +659,32 @@ impl Unit {
 impl<'a> SchemaUnit<'a> {
     pub fn find(&mut self, u: &Unit) -> bool {
         match self {
+            SchemaUnit::None(..) => {
+                if let Unit::None = u {
+                    return true;
+                }
+            }
+            SchemaUnit::Bool(ref mut b) => {
+                if let Unit::Bool(v) = u {
+                    b.replace(*v);
+                    return true;
+                }
+            },
+            SchemaUnit::Byte(ref mut b) => {
+                if let Unit::Byte(v) = u {
+                    b.replace(*v);
+                    return true;
+                }
+            },
             SchemaUnit::Int(ref mut i) => {
                 if let Unit::Int(v) = u {
                     i.replace(*v);
+                    return true;
+                }
+            },
+            SchemaUnit::Dec(ref mut f) => {
+                if let Unit::Dec(v) = u {
+                    f.replace(*v);
                     return true;
                 }
             },
@@ -675,6 +699,13 @@ impl<'a> SchemaUnit<'a> {
                     return p.0.find(u0) && p.1.find(u1);
                 }
             },
+            SchemaUnit::Lst(ref mut l) => {
+                if let Unit::Lst(u_lst) = u {
+                    return u_lst.iter().zip(l.iter_mut()).map(|(u, s)| {
+                        s.find(&u)
+                    }).fold(false, |a, b| a || b);
+                }
+            },
             SchemaUnit::Map(ref mut m) => {
                 if let Unit::Map(u_m) = u {
                     return u_m.iter().zip(m.iter_mut()).map(|(u_p, s_p)| {
@@ -684,8 +715,11 @@ impl<'a> SchemaUnit<'a> {
                         false
                     }).fold(false, |a, b| a || b);
                 }
+            },
+            SchemaUnit::Unit(_u) => {
+                _u.replace(u.clone());
+                return true;
             }
-            _ => unimplemented!()
         }
         return false;
     }
