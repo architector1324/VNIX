@@ -47,6 +47,27 @@ pub enum Unit {
     Map(Vec<(Unit, Unit)>)
 }
 
+#[derive(Debug)]
+pub enum SchemaUnit<'a> {
+    None(&'a mut Option<()>),
+    Bool(&'a mut Option<bool>),
+    Byte(&'a mut Option<u8>),
+    Int(&'a mut Option<i32>),
+    Dec(&'a mut Option<f32>),
+    Str(&'a mut Option<String>),
+    // Ref,
+    Pair((Box<Schema<'a>>, Box<Schema<'a>>)),
+    Lst(Vec<Schema<'a>>),
+    Map(Vec<(Schema<'a>, Schema<'a>)>)
+}
+
+#[derive(Debug)]
+pub enum Schema<'a> {
+    Value(Unit),
+    Unit(SchemaUnit<'a>),
+    Or((Box<Schema<'a>>, Box<Schema<'a>>))
+}
+
 impl Eq for Unit {}
 
 impl Display for Unit {
@@ -630,5 +651,41 @@ impl Unit {
             }
         }
         self
+    }
+}
+
+
+impl<'a> SchemaUnit<'a> {
+    pub fn find(&mut self, u: &Unit) -> bool {
+        match self {
+            SchemaUnit::Int(ref mut i) => {
+                if let Unit::Int(v) = u {
+                    i.replace(*v);
+                    return true;
+                }
+            },
+            SchemaUnit::Map(ref mut m) => {
+                if let Unit::Map(u_m) = u {
+                    return u_m.iter().zip(m.iter_mut()).map(|(u_p, s_p)| {
+                        if s_p.0.find(&u_p.0) {
+                            return s_p.1.find(&u_p.1);
+                        }
+                        false
+                    }).fold(false, |a, b| a || b);
+                }
+            }
+            _ => unimplemented!()
+        }
+        return false;
+    }
+}
+
+impl<'a> Schema<'a> {
+    pub fn find(&mut self, u: &Unit) -> bool {
+        match self {
+            Schema::Unit(_u) => _u.find(u),
+            Schema::Value(ref _u) => _u.clone() == u.clone(),
+            _ => unimplemented!()
+        }
     }
 }
