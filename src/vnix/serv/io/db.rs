@@ -1,7 +1,8 @@
+use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
@@ -26,13 +27,28 @@ impl ServHlr for DB {
         let mut db = DB::default();
         
         // config instance
-        msg.msg.find_unit(&mut vec!["load".into()].iter()).map(|u| {
-            db.load.replace(u)
-        });
+        let mut save_path = None;
+        let mut save_dat = None;
 
-        msg.msg.find_pair(&mut vec!["save".into()].iter()).map(|p| {
-            db.save.replace(p)
-        });
+        let mut schm = Schema::Unit(SchemaUnit::Map(vec![
+            (
+                Schema::Value(Unit::Str("load".into())),
+                Schema::Unit(SchemaUnit::Unit(&mut db.load))
+            ),
+            (
+                Schema::Value(Unit::Str("save".into())),
+                Schema::Unit(SchemaUnit::Pair((
+                    Box::new(Schema::Unit(SchemaUnit::Unit(&mut save_path))),
+                    Box::new(Schema::Unit(SchemaUnit::Unit(&mut save_dat))),
+                )))
+            ),
+        ]));
+
+        schm.find(&msg.msg);
+
+        if let Some((path, dat)) = save_path.iter().filter_map(|path| Some((path.clone(), save_dat.clone()?))).next() {
+            db.save.replace((path, dat));
+        }
 
         Ok((db, msg))
     }

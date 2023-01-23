@@ -657,7 +657,7 @@ impl Unit {
 
 
 impl<'a> SchemaUnit<'a> {
-    pub fn find(&mut self, u: &Unit) -> bool {
+    fn find(&mut self, glob:&Unit, u: &Unit) -> bool {
         match self {
             SchemaUnit::None(..) => {
                 if let Unit::None = u {
@@ -696,29 +696,39 @@ impl<'a> SchemaUnit<'a> {
             },
             SchemaUnit::Pair(ref mut p) => {
                 if let Unit::Pair((u0, u1)) = u{
-                    return p.0.find(u0) && p.1.find(u1);
+                    return p.0.find_loc(glob, u0) && p.1.find_loc(glob, u1);
                 }
             },
             SchemaUnit::Lst(ref mut l) => {
                 if let Unit::Lst(u_lst) = u {
                     return u_lst.iter().zip(l.iter_mut()).map(|(u, s)| {
-                        s.find(&u)
-                    }).fold(false, |a, b| a || b);
+                        s.find_loc(glob, &u)
+                    }).fold(true, |a, b| a && b);
                 }
             },
             SchemaUnit::Map(ref mut m) => {
                 if let Unit::Map(u_m) = u {
-                    return u_m.iter().zip(m.iter_mut()).map(|(u_p, s_p)| {
-                        if s_p.0.find(&u_p.0) {
-                            return s_p.1.find(&u_p.1);
-                        }
-                        false
-                    }).fold(false, |a, b| a || b);
+                    return u_m.iter().map(|u_p| {
+                        m.iter_mut().map(|s_p| {
+                            if s_p.0.find_loc(glob, &u_p.0) {
+                                return s_p.1.find_loc(glob, &u_p.1);
+                            }
+                            false
+                        }).fold(false, |a, b| a || b)
+                    }).fold(false, |a, b| a || b)
                 }
             },
-            SchemaUnit::Unit(_u) => {
-                _u.replace(u.clone());
-                return true;
+            SchemaUnit::Unit(_u) => match u {
+                Unit::Ref(path) => {
+                    if let Some(u) = glob.find_unit(&mut path.iter()) {
+                        _u.replace(u.clone());
+                        return true;
+                    }
+                },
+                _ => {
+                    _u.replace(u.clone());
+                    return true;
+                }
             }
         }
         return false;
@@ -726,11 +736,15 @@ impl<'a> SchemaUnit<'a> {
 }
 
 impl<'a> Schema<'a> {
-    pub fn find(&mut self, u: &Unit) -> bool {
+    pub fn find_loc(&mut self, glob:&Unit, u: &Unit) -> bool {
         match self {
-            Schema::Unit(_u) => _u.find(u),
+            Schema::Unit(_u) => _u.find(glob, u),
             Schema::Value(ref _u) => _u.clone() == u.clone(),
-            Schema::Or((ref mut schm0, ref mut schm1)) => schm0.find(u) || schm1.find(u)
+            Schema::Or((ref mut schm0, ref mut schm1)) => schm0.find_loc(glob, u) || schm1.find_loc(glob, u)
         }
+    }
+
+    pub fn find(&mut self, u: &Unit) -> bool {
+        self.find_loc(u, u)
     }
 }
