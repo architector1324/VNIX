@@ -6,7 +6,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit};
 use crate::vnix::core::user::Usr;
 
 
@@ -47,9 +47,22 @@ impl ServHlr for User {
         let mut priv_key = None;
 
         // config instance
-        msg.msg.find_str(&mut vec!["ath".into()].iter()).map(|s| ath.replace(s));
-        msg.msg.find_str(&mut vec!["pub".into()].iter()).map(|s| pub_key.replace(s));
-        msg.msg.find_str(&mut vec!["priv".into()].iter()).map(|s| priv_key.replace(s));
+        let mut schm = Schema::Unit(SchemaUnit::Map(vec![
+            (
+                Schema::Value(Unit::Str("ath".into())),
+                Schema::Unit(SchemaUnit::Str(&mut ath))
+            ),
+            (
+                Schema::Value(Unit::Str("pub".into())),
+                Schema::Unit(SchemaUnit::Str(&mut pub_key))
+            ),
+            (
+                Schema::Value(Unit::Str("priv".into())),
+                Schema::Unit(SchemaUnit::Str(&mut priv_key))
+            ),
+        ]));
+
+        schm.find(&msg.msg);
 
         if let Some(ath) = ath {
             if let Some(pub_key) = pub_key {
