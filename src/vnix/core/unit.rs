@@ -658,6 +658,12 @@ impl Unit {
 
 impl<'a> SchemaUnit<'a> {
     fn find(&mut self, glob:&Unit, u: &Unit) -> bool {
+        if let Unit::Ref(path) = u {
+            if let Some(u) = glob.find_unit(&mut path.iter()) {
+                return self.find(glob, &u);
+            }
+        }
+
         match self {
             SchemaUnit::None(..) => {
                 if let Unit::None = u {
@@ -695,7 +701,7 @@ impl<'a> SchemaUnit<'a> {
                 }
             },
             SchemaUnit::Pair(ref mut p) => {
-                if let Unit::Pair((u0, u1)) = u{
+                if let Unit::Pair((u0, u1)) = u {
                     return p.0.find_loc(glob, u0) && p.1.find_loc(glob, u1);
                 }
             },
@@ -718,17 +724,9 @@ impl<'a> SchemaUnit<'a> {
                     }).fold(false, |a, b| a || b)
                 }
             },
-            SchemaUnit::Unit(_u) => match u {
-                Unit::Ref(path) => {
-                    if let Some(u) = glob.find_unit(&mut path.iter()) {
-                        _u.replace(u.clone());
-                        return true;
-                    }
-                },
-                _ => {
-                    _u.replace(u.clone());
-                    return true;
-                }
+            SchemaUnit::Unit(_u) => {
+                _u.replace(u.clone());
+                return true;
             }
         }
         return false;
