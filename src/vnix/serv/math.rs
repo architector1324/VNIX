@@ -7,7 +7,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, FromUnit};
 
 
 #[derive(Debug)]
@@ -227,16 +227,18 @@ impl Int {
     }
 }
 
-impl ServHlr for Int {
-    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for Int {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Int::default();
 
         // config instance
-        inst.op = Int::find_op(&msg.msg);
+        inst.op = Int::find_op(u);
 
-        return Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for Int {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(ref op) = self.op {
             let out = Int::calc_op(op);

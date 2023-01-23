@@ -4,7 +4,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
-use crate::vnix::core::unit::{Schema, SchemaUnit, Unit};
+use crate::vnix::core::unit::{Schema, SchemaUnit, Unit, FromUnit};
 
 
 #[derive(Debug)]
@@ -20,8 +20,8 @@ impl Default for Chrono {
     }
 }
 
-impl ServHlr for Chrono {
-    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for Chrono {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Chrono::default();
 
         // config instance
@@ -32,11 +32,13 @@ impl ServHlr for Chrono {
             )])
         );
 
-        schm.find(&msg.msg);
+        schm.find(u);
 
-        Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for Chrono {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(mcs) = self.wait {
             serv.kern.time.wait(mcs as usize).map_err(|e| KernErr::TimeErr(e))?;

@@ -23,7 +23,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     // prepare ram db
     let s = content::task::LOGIN;
-    let u = Unit::parse(s.chars(), &mut kern)?.0;
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     kern.db_ram.save(
         Unit::Str("task.login".into()),
@@ -31,7 +31,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     );
 
     let s = content::task::LAMBDA;
-    let u = Unit::parse(s.chars(), &mut kern)?.0;
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     kern.db_ram.save(
         Unit::Str("task.lambda".into()),
@@ -39,7 +39,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     );
 
     let s = content::img::MINECRAFT_GRASS;
-    let u = Unit::parse(s.chars(), &mut kern)?.0;
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     kern.db_ram.save(
         Unit::Str("img.minecraft.grass".into()),
@@ -47,7 +47,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     );
 
     let s = content::img::VNIX_LOGO;
-    let u = Unit::parse(s.chars(), &mut kern)?.0;
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     kern.db_ram.save(
         Unit::Str("img.vnix.logo".into()),
@@ -56,7 +56,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     let s = content::img::WALL_AI;
 
-    let u = Unit::parse(s.chars(), &mut kern)?.0;
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     kern.db_ram.save(
         Unit::Str("img.wall.ai".into()),

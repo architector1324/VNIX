@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::format;
 
+use crate::vnix::core::unit::FromUnit;
 use crate::vnix::core::unit::Schema;
 use crate::vnix::core::unit::SchemaUnit;
 use crate::vnix::utils;
@@ -10,12 +11,17 @@ use crate::vnix::utils;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServErr};
+use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
 
 
+pub enum FillRes {
+    Custom(usize, usize),
+    Full
+}
+
 pub struct GFX2D {
-    fill: Option<((usize, usize), u32)>
+    fill: Option<(FillRes, u32)>
 }
 
 impl Default for GFX2D {
@@ -26,8 +32,17 @@ impl Default for GFX2D {
     }
 }
 
-impl ServHlr for GFX2D {
-    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FillRes {
+    fn get(&self, serv: &mut Serv) -> Result<(usize, usize), KernErr> {
+        match self {
+            FillRes::Custom(w, h) => Ok((*w, *h)),
+            FillRes::Full => serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))
+        }
+    }
+}
+
+impl FromUnit for GFX2D {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = GFX2D::default();
 
         // config instance
@@ -53,27 +68,28 @@ impl ServHlr for GFX2D {
             )])
         );
 
-        schm.find(&msg.msg);
+        schm.find(u);
 
         if let Some(col) = col_s {
-                let v = utils::hex_to_u32(col.as_str()).map_or(Err(KernErr::ServErr(ServErr::NotValidUnit)), |v| Ok(v))?;
-                let res = serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-
-                inst.fill.replace(((res.0, res.1), v));
+                let v = utils::hex_to_u32(col.as_str())?;
+                inst.fill.replace((FillRes::Full, v));
         }
 
         if let Some(((w, h), col)) = w.iter().filter_map(|w| Some(((*w, h?), col_s2.clone()?))).next() {
-            let v = utils::hex_to_u32(col.as_str()).map_or(Err(KernErr::ServErr(ServErr::NotValidUnit)), |v| Ok(v))?;
-            inst.fill.replace(((w as usize, h as usize), v));
+            let v = utils::hex_to_u32(col.as_str())?;
+            inst.fill.replace((FillRes::Custom(w as usize, h as usize), v));
         }
 
-
-        Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for GFX2D {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
-        if let Some(fill) = self.fill {
-            let img: Vec::<Unit> = (0..fill.0.0*fill.0.1).map(|_| Unit::Int(fill.1 as i32)).collect();
+        if let Some(fill) = &self.fill {
+            let res = fill.0.get(serv)?;
+
+            let img: Vec::<Unit> = (0..res.0*res.1).map(|_| Unit::Int(fill.1 as i32)).collect();
             let img_s = format!("{}", Unit::Lst(img));
 
             let img0 = utils::compress(img_s.as_str())?;
@@ -84,8 +100,8 @@ impl ServHlr for GFX2D {
                     Unit::Str("img".into()),
                     Unit::Pair((
                         Box::new(Unit::Pair((
-                            Box::new(Unit::Int(fill.0.0 as i32)),
-                            Box::new(Unit::Int(fill.0.1 as i32))
+                            Box::new(Unit::Int(res.0 as i32)),
+                            Box::new(Unit::Int(res.1 as i32))
                         ))),
                         Box::new(Unit::Str(img_out.into()))
                     ))

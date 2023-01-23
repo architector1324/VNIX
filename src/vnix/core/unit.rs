@@ -7,8 +7,6 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
-use super::kern::{Kern, KernErr};
-
 
 #[derive(Debug)]
 pub enum UnitParseErr {
@@ -67,6 +65,10 @@ pub enum Schema<'a> {
     Value(Unit),
     Unit(SchemaUnit<'a>),
     Or((Box<Schema<'a>>, Box<Schema<'a>>))
+}
+
+pub trait FromUnit: Sized {
+    fn from_unit(u: &Unit) -> Option<Self>;
 }
 
 impl Eq for Unit {}
@@ -159,17 +161,17 @@ impl Unit {
         (false, it)
     }
 
-    fn parse_none<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_none<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let (ok, tmp) = Unit::parse_ch('-', it);
 
         if ok {
             return Ok((Unit::None, tmp));
         }
 
-        Err(KernErr::ParseErr(UnitParseErr::NotNone))
+       Err(UnitParseErr::NotNone)
     }
 
-    fn parse_bool<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_bool<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let (ok_t, tmp_t) = Unit::parse_ch('t', it.clone());
         let (ok_f, tmp_f) = Unit::parse_ch('f', it);
 
@@ -177,7 +179,7 @@ impl Unit {
 
         if let Some(c) = tmp.next() {
             if c.is_alphanumeric() {
-                return Err(KernErr::ParseErr(UnitParseErr::NotBool));
+                return Err(UnitParseErr::NotBool);
             }
         }
 
@@ -189,10 +191,10 @@ impl Unit {
             return Ok((Unit::Bool(false), tmp_f))
         }
 
-        Err(KernErr::ParseErr(UnitParseErr::NotBool))
+        Err(UnitParseErr::NotBool)
     }
 
-    fn parse_byte<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_byte<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         if let Some(s) = it.as_str().get(0..4) {
             it.next().unwrap();
             it.next().unwrap();
@@ -204,10 +206,10 @@ impl Unit {
             }
         }
 
-        Err(KernErr::ParseErr(UnitParseErr::NotByte))
+        Err(UnitParseErr::NotByte)
     }
 
-    fn parse_int<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_int<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let mut s = String::new();
         let mut tmp = it.clone();
 
@@ -224,32 +226,32 @@ impl Unit {
             return Ok((Unit::Int(v), tmp));
         }
 
-        Err(KernErr::ParseErr(UnitParseErr::NotInt))
+        Err(UnitParseErr::NotInt)
     }
 
-    fn parse_dec<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_dec<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         if let Ok((fst, mut it)) = Unit::parse_int(it) {
             let (ok, tmp) = Unit::parse_ch('.', it);
 
             if !ok {
-                return Err(KernErr::ParseErr(UnitParseErr::MissedDot));
+                return Err(UnitParseErr::MissedDot);
             }
 
             it = tmp;
 
             if let Ok((scd, it)) = Unit::parse_int(it) {
                 let s = format!("{}.{}", fst, scd);
-                let out = s.parse::<f32>().map_err(|_| KernErr::ParseErr(UnitParseErr::NotDec))?;
+                let out = s.parse::<f32>().map_err(|_| UnitParseErr::NotDec)?;
 
                 return Ok((Unit::Dec(out), it));
             } else {
-                return Err(KernErr::ParseErr(UnitParseErr::MissedPartAfterDot));
+                return Err(UnitParseErr::MissedPartAfterDot);
             }
         }
-        Err(KernErr::ParseErr(UnitParseErr::NotDec))
+        Err(UnitParseErr::NotDec)
     }
 
-    fn parse_str<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_str<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         if let Some(c) = it.next() {
             // `complex string`
             if c == '`' {
@@ -269,10 +271,10 @@ impl Unit {
                     if c == '`' {
                         return Ok((Unit::Str(s), tmp));
                     } else {
-                        return Err(KernErr::ParseErr(UnitParseErr::NotClosedQuotes));
+                        return Err(UnitParseErr::NotClosedQuotes);
                     }
                 } else {
-                    return Err(KernErr::ParseErr(UnitParseErr::NotClosedQuotes));
+                    return Err(UnitParseErr::NotClosedQuotes);
                 }
             }
 
@@ -295,14 +297,14 @@ impl Unit {
                 return Ok((Unit::Str(s), tmp));
             }
         }
-        Err(KernErr::ParseErr(UnitParseErr::NotStr))
+        Err(UnitParseErr::NotStr)
     }
 
-    fn parse_ref<'a>(mut it: Chars<'a>, _kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_ref<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let (ok, tmp) = Unit::parse_ch('@', it);
 
         if !ok {
-            return Err(KernErr::ParseErr(UnitParseErr::NotRef));
+            return Err(UnitParseErr::NotRef);
         }
 
         it = tmp;
@@ -314,42 +316,42 @@ impl Unit {
 
             for p in &path {
                 if !p.chars().all(|c| c.is_alphanumeric()) {
-                    return Err(KernErr::ParseErr(UnitParseErr::RefInvalidPath));
+                    return Err(UnitParseErr::RefInvalidPath);
                 }
             }
 
             return Ok((Unit::Ref(path), tmp.1));
         }
-        return Err(KernErr::ParseErr(UnitParseErr::RefNotString));
+        return Err(UnitParseErr::RefNotString);
     }
 
-    fn parse_pair<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_pair<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let (ok, tmp) = Unit::parse_ch('(', it);
 
         if !ok {
-            return Err(KernErr::ParseErr(UnitParseErr::NotPair))
+            return Err(UnitParseErr::NotPair)
         }
 
         it = tmp;
 
-        let u0 = Unit::parse(it, kern)?;
+        let u0 = Unit::parse(it)?;
         it = u0.1;
 
         let (ok, tmp) = Unit::parse_ws(it);
 
         if !ok {
-            return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+            return Err(UnitParseErr::MissedSeparator);
         }
 
         it = tmp;
 
-        let u1 = Unit::parse(it, kern)?;
+        let u1 = Unit::parse(it)?;
         it = u1.1;
 
         let (ok, tmp) = Unit::parse_ch(')', it);
 
         if !ok {
-            return Err(KernErr::ParseErr(UnitParseErr::NotClosedBrackets));
+            return Err(UnitParseErr::NotClosedBrackets);
         }
 
         it = tmp;
@@ -363,11 +365,11 @@ impl Unit {
         ));
     }
 
-    fn parse_list<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_list<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let (ok, tmp) = Unit::parse_ch('[', it);
 
         if !ok {
-            return Err(KernErr::ParseErr(UnitParseErr::NotList));
+            return Err(UnitParseErr::NotList);
         }
 
         it = tmp;
@@ -378,7 +380,7 @@ impl Unit {
             let (_, tmp) = Unit::parse_ws(it);
             it = tmp;
 
-            let u = Unit::parse(it, kern)?;
+            let u = Unit::parse(it)?;
             lst.push(u.0);
             it = u.1;
 
@@ -391,18 +393,18 @@ impl Unit {
                 it = tmp;
                 return Ok((Unit::Lst(lst), it))
             } else if !ok_ws {
-                return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                return Err(UnitParseErr::MissedSeparator);
             }
 
             it = tmp;
         }
     }
 
-    fn parse_map<'a>(mut it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+    fn parse_map<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let (ok, tmp) = Unit::parse_ch('{', it);
 
         if !ok {
-            return Err(KernErr::ParseErr(UnitParseErr::NotMap));
+            return Err(UnitParseErr::NotMap);
         }
 
         it = tmp;
@@ -413,7 +415,7 @@ impl Unit {
             let (_, tmp) = Unit::parse_ws(it);
             it = tmp;
 
-            let u0 = Unit::parse(it, kern)?;
+            let u0 = Unit::parse(it)?;
             it = u0.1;
 
             let (_, tmp) = Unit::parse_ws(it);
@@ -422,7 +424,7 @@ impl Unit {
             let (ok, tmp) = Unit::parse_ch(':', it);
 
             if !ok {
-                return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                return Err(UnitParseErr::MissedSeparator);
             }
 
             it = tmp;
@@ -430,7 +432,7 @@ impl Unit {
             let (_, tmp) = Unit::parse_ws(it);
             it = tmp;
 
-            let u1 = Unit::parse(it, kern)?;
+            let u1 = Unit::parse(it)?;
             it = u1.1;
 
             map.push((u0.0, u1.0));
@@ -444,14 +446,14 @@ impl Unit {
                 it = tmp;
                 return Ok((Unit::Map(map), it))
             } else if !ok_ws {
-                return Err(KernErr::ParseErr(UnitParseErr::MissedSeparator));
+                return Err(UnitParseErr::MissedSeparator);
             }
 
             it = tmp;
         }
     }
 
-    pub fn parse<'a>(it: Chars<'a>, kern: &mut Kern) -> Result<(Self, Chars<'a>), KernErr> {
+    pub fn parse<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         // bool
         if let Ok((u, it)) = Unit::parse_bool(it.clone()) {
             return Ok((u, it));
@@ -483,25 +485,25 @@ impl Unit {
         }
 
         // pair
-        if let Ok((u, it)) = Unit::parse_pair(it.clone(), kern) {
+        if let Ok((u, it)) = Unit::parse_pair(it.clone()) {
             return Ok((u, it));
         }
 
-        if let Ok((u, it)) = Unit::parse_ref(it.clone(), kern) {
+        if let Ok((u, it)) = Unit::parse_ref(it.clone()) {
             return Ok((u, it));
         }
 
         // list
-        if let Ok((u, it)) = Unit::parse_list(it.clone(), kern) {
+        if let Ok((u, it)) = Unit::parse_list(it.clone()) {
             return Ok((u, it));
         }
 
         // map
-        if let Ok((u, it)) = Unit::parse_map(it.clone(), kern) {
+        if let Ok((u, it)) = Unit::parse_map(it.clone()) {
             return Ok((u, it));
         }
 
-        Err(KernErr::ParseErr(UnitParseErr::NotUnit))
+        Err(UnitParseErr::NotUnit)
     }
 
     fn find_unit_loc<'a, I>(&self, glob: &Unit, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
@@ -632,9 +634,30 @@ impl Unit {
         None
     }
 
+    pub fn as_vec_typed<A, B>(&self, f: B) -> Option<Vec<A>> where A: Clone, B: Fn(&Self) -> Option<A> {
+        if let Unit::Lst(lst) = self {
+            return Some(lst.iter().filter_map(|u| f(u)).collect());
+        }
+        None
+    }
+
     pub fn as_map(&self) -> Option<Vec<(Unit, Unit)>> {
         if let Unit::Map(m) = self {
             return Some(m.clone());
+        }
+        None
+    }
+
+    pub fn as_map_find(&self, sch: &str) -> Option<Unit> {
+        if let Unit::Map(m) = self {
+            return m.iter()
+                .filter_map(|(u0, u1)| Some((u0.as_str()?, u1)))
+                .map(|(s, u)| {
+                    if s == sch {
+                        return Some(u.clone());
+                    }
+                    None
+                }).next()?;
         }
         None
     }

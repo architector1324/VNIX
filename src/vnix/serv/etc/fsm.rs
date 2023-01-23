@@ -3,7 +3,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, FromUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
@@ -53,16 +53,16 @@ impl FSM {
 
 }
 
-impl ServHlr for FSM {
-    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for FSM {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = FSM::default();
 
         // config instance
-        msg.msg.find_unit(&mut vec!["state".into()].iter()).map(|u| {
+        u.find_unit(&mut vec!["state".into()].iter()).map(|u| {
             inst.state = u;
         });
 
-        msg.msg.find_map(&mut vec!["fsm".into()].iter()).map(|m| {
+        u.find_map(&mut vec!["fsm".into()].iter()).map(|m| {
             let u = Unit::Map(m);
 
             if let Unit::Map(m) = u {
@@ -134,11 +134,11 @@ impl ServHlr for FSM {
             }
         });
 
-        // writeln!(kern.cli, "DEBG vnix:fsm: {:?}", inst).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-        Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for FSM {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
             match &t.table {

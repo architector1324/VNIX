@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit};
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
@@ -22,8 +22,8 @@ impl Default for DB {
     }
 }
 
-impl ServHlr for DB {
-    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for DB {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut db = DB::default();
         
         // config instance
@@ -44,15 +44,17 @@ impl ServHlr for DB {
             ),
         ]));
 
-        schm.find(&msg.msg);
+        schm.find(u);
 
         if let Some((path, dat)) = save_path.iter().filter_map(|path| Some((path.clone(), save_dat.clone()?))).next() {
             db.save.replace((path, dat));
         }
 
-        Ok((db, msg))
+        Some(db)
     }
+}
 
+impl ServHlr for DB {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some((key, val)) = &self.save {
             serv.kern.db_ram.save(key.clone(), val.clone());

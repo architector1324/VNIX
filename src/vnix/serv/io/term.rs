@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, UnitParseErr, Schema, SchemaUnit};
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
@@ -81,7 +81,7 @@ impl Inp {
     fn msg(prs:bool, s: String, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         let u = if !s.is_empty() {
             if prs {
-                Unit::parse(s.chars(), serv.kern)?.0
+                Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0
             } else {
                 Unit::Str(s)
             }
@@ -167,56 +167,54 @@ impl Get {
     }
 }
 
-impl Img {
-    fn find_img(u: &Unit, serv: &mut Serv) -> Result<Option<Self>, KernErr> {
-        let mut _img = None;
-        
-        u.find_pair(&mut vec!["img".into()].iter()).iter()
+impl FromUnit for Img {
+    fn from_unit(u: &Unit) -> Option<Self> {
+        let tmp = u.find_pair(&mut vec!["img".into()].iter()).iter()
             .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_vec()?)))
             .filter_map(|((w, h), lst)| Some(((w.as_int()?, h.as_int()?), lst)))
             .map(|((w, h), lst)| {
-                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
+                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect::<Vec<_>>();
+                ((w as usize, h as usize), img)
+            }).next();
 
-                _img = Some(Img {
-                    size: (w as usize, h as usize),
-                    img
-                });
-            }).for_each(drop);
-
-        if _img.is_some() {
-            return Ok(_img);
+        if tmp.is_some() {
+            let tmp = tmp?;
+            return Some(Img {
+                size: tmp.0,
+                img: tmp.1
+            })
         }
 
-        u.find_pair(&mut vec!["img".into()].iter()).iter()
+        let tmp = u.find_pair(&mut vec!["img".into()].iter()).iter()
             .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_str()?)))
             .filter_map(|((w, h), s)| Some(((w.as_int()?, h.as_int()?), s)))
             .map(|((w, h), s)| {
-                let img0 = utils::decompress(s.as_str())?;
-                let img_s = utils::decompress(img0.as_str())?;
+                let img0 = utils::decompress(s.as_str()).ok()?;
+                let img_s = utils::decompress(img0.as_str()).ok()?;
 
-                let img_u = Unit::parse(img_s.chars(), serv.kern)?.0;
+                let img_u = Unit::parse(img_s.chars()).ok()?.0;
 
                 if let Unit::Lst(lst) = img_u {
                     let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
 
-                    _img = Some(Img {
-                        size: (w as usize, h as usize),
-                        img
-                    });
-                } else {
-                    return Err(KernErr::ParseErr(UnitParseErr::NotList));
+                    return Some(((w as usize, h as usize), img))
                 }
-                Ok(())
-            }).collect::<Result<(), KernErr>>()?;
+                None
+            }).next().flatten();
 
-        Ok(_img)
+        let tmp = tmp?;
+
+        return Some(Img {
+            size: tmp.0,
+            img: tmp.1
+        })
     }
 }
 
-impl PutChar {
-    fn find_put(u: &Unit, _serv: &mut Serv) -> Result<Option<Vec<Self>>, KernErr> {
+impl FromUnit for Vec<PutChar> {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut put = None;
-        
+
         u.find_pair(&mut vec!["put".into()].iter()).iter()
             .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
             .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
@@ -229,7 +227,7 @@ impl PutChar {
             }).for_each(drop);
 
         if put.is_some() {
-            return Ok(put);
+            return put;
         }
 
         u.find_list(&mut vec!["put".into()].iter()).map(|lst| {
@@ -244,12 +242,12 @@ impl PutChar {
             }).collect::<Option<Vec<_>>>();
         });
 
-        Ok(put)
+        put
     }
 }
 
-impl Sprite {
-    fn find_spr(u: &Unit, serv: &mut Serv) -> Result<Option<Self>, KernErr> {
+impl FromUnit for Sprite {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut spr = None;
 
         u.find_map(&mut vec!["spr".into()].iter()).iter()
@@ -260,7 +258,7 @@ impl Sprite {
                         m.find_int(&mut vec!["x".into()].iter())?,
                         m.find_int(&mut vec!["y".into()].iter())?
                     ),
-                    Img::find_img(&m, serv).ok()??
+                    Img::from_unit(&m)?
                 ))
             })
             .map(|((x, y), img)| {
@@ -270,7 +268,7 @@ impl Sprite {
                 })
             }).for_each(drop);
 
-        Ok(spr)
+        spr
     }
 }
 
@@ -373,8 +371,8 @@ impl Term {
     }
 }
 
-impl ServHlr for Term {
-    fn inst(msg: Msg, serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for Term {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Term::default();
 
         // config instance
@@ -417,7 +415,7 @@ impl ServHlr for Term {
             ),
         ]));
 
-        schm.find(&msg.msg);
+        schm.find(u);
 
         trc.map(|v| inst.trc = v);
         cls.map(|v| inst.cls = v);
@@ -441,21 +439,23 @@ impl ServHlr for Term {
             }
         });
 
-        if let Some(put) = PutChar::find_put(&msg.msg, serv)? {
+        if let Some(put) = Vec::<PutChar>::from_unit(u) {
             inst.put.replace(put);
         }
 
-        if let Some(img) = Img::find_img(&msg.msg, serv)? {
+        if let Some(img) = Img::from_unit(u) {
             inst.img.replace(img);
         }
 
-        if let Some(spr) = Sprite::find_spr(&msg.msg, serv)? {
+        if let Some(spr) = Sprite::from_unit(u) {
             inst.spr.replace(spr);
         }
 
-        Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for Term {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if self.trc {
             writeln!(serv.kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;

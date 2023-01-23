@@ -4,8 +4,7 @@ use alloc::vec::Vec;
 use super::msg::Msg;
 use super::serv::{Serv, ServHlr};
 use super::serv::ServErr;
-use super::unit::Unit;
-use super::unit::UnitParseErr;
+use super::unit::{Unit, UnitParseErr, FromUnit};
 
 use super::user::Usr;
 
@@ -158,70 +157,43 @@ impl<'a> Kern<'a> {
             return Ok(None);
         }
 
+        let mut _serv = Serv {
+            name: serv.into(),
+            kern: self,
+        };
+
         match serv {
             "io.term" => {
-                let mut serv = Serv {
-                    name: "io.term".into(),
-                    kern: self,
-                };
-                let (inst, msg) = io::term::Term::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = io::term::Term::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "io.db" => {
-                let mut serv = Serv {
-                    name: "io.db".into(),
-                    kern: self,
-                };
-                let (inst, msg) = io::db::DB::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = io::db::DB::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "etc.chrono" => {
-                let mut serv = Serv {
-                    name: "etc.chrono".into(),
-                    kern: self,
-                };
-                let (inst, msg) = etc::chrono::Chrono::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = etc::chrono::Chrono::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "etc.fsm" => {
-                let mut serv = Serv {
-                    name: "etc.fsm".into(),
-                    kern: self,
-                };
-                let (inst, msg) = etc::fsm::FSM::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = etc::fsm::FSM::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "gfx.2d" => {
-                let mut serv = Serv {
-                    name: "gfx.2d".into(),
-                    kern: self,
-                };
-                let (inst, msg) = gfx::GFX2D::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = gfx::GFX2D::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "math.int" => {
-                let mut serv = Serv {
-                    name: "math.int".into(),
-                    kern: self
-                };
-                let (inst, msg) = math::Int::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = math::Int::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "sys.task" => {
-                let mut serv = Serv {
-                    name: "sys.task".into(),
-                    kern: self
-                };
-                let (inst, msg) = sys::task::Task::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = sys::task::Task::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             "sys.usr" => {
-                let mut serv = Serv {
-                    name: "sys.usr".into(),
-                    kern: self
-                };
-                let (inst, msg) = sys::usr::User::inst(msg, &mut serv)?;
-                inst.handle(msg, &mut serv)
+                let inst = sys::usr::User::from_unit(&msg.msg);
+                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
             },
             _ => Err(KernErr::ServNotFound)
         }

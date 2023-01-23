@@ -4,7 +4,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit};
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
 
 pub struct Task {
@@ -19,8 +19,8 @@ impl Default for Task {
     }
 }
 
-impl ServHlr for Task {
-    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for Task {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Task::default();
 
         // config instance
@@ -29,11 +29,13 @@ impl ServHlr for Task {
             Schema::Unit(SchemaUnit::Unit(&mut inst.task))
         )]));
 
-        schm.find(&msg.msg);
+        schm.find(u);
 
-        Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for Task {
     fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(u) = &self.task {
             let ath = msg.ath.clone();

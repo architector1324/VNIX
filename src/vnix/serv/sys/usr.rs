@@ -6,7 +6,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::KernErr;
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit};
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 use crate::vnix::core::user::Usr;
 
 
@@ -37,9 +37,8 @@ impl Default for User {
     }
 }
 
-
-impl ServHlr for User {
-    fn inst(msg: Msg, _serv: &mut Serv) -> Result<(Self, Msg), KernErr> {
+impl FromUnit for User {
+    fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = User::default();
 
         let mut ath = None;
@@ -62,7 +61,7 @@ impl ServHlr for User {
             ),
         ]));
 
-        schm.find(&msg.msg);
+        schm.find(u);
 
         if let Some(ath) = ath {
             if let Some(pub_key) = pub_key {
@@ -75,10 +74,11 @@ impl ServHlr for User {
                 inst.act = Some(UserAct::Reg{ath})
             }
         }
-
-        Ok((inst, msg))
+        Some(inst)
     }
+}
 
+impl ServHlr for User {
     fn handle(&self, mut msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
         if let Some(act) = &self.act {
             let (usr, out) = match act {
@@ -94,7 +94,7 @@ impl ServHlr for User {
                 writeln!(serv.kern.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
                 let m = Unit::Map(vec![
-                    (Unit::Str("msg".into()), Unit::parse(out.chars(), serv.kern)?.0),
+                    (Unit::Str("msg".into()), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
                 ]);
     
                 return Ok(Some(serv.kern.msg(&usr.name, m)?))
