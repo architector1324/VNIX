@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaMapRequire};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -171,106 +171,94 @@ impl Get {
 
 impl FromUnit for Img {
     fn from_unit(u: &Unit) -> Option<Self> {
-        let tmp = u.find_pair(&mut vec!["img".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_vec()?)))
-            .filter_map(|((w, h), lst)| Some(((w.as_int()?, h.as_int()?), lst)))
-            .map(|((w, h), lst)| {
-                let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect::<Vec<_>>();
-                ((w as usize, h as usize), img)
-            }).next();
+        let schm = SchemaMapEntry(
+            Unit::Str("img".into()),
+            SchemaPair(
+                SchemaPair(SchemaInt, SchemaInt),
+                SchemaOr(
+                    SchemaStr,
+                    SchemaSeq(SchemaInt)
+                )
+            )
+        );
 
-        if tmp.is_some() {
-            let tmp = tmp?;
-            return Some(Img {
-                size: tmp.0,
-                img: tmp.1
+        schm.find(u).map(|((w, h), or)| {
+            let img = match or {
+                Or::First(s) => {
+                    let img0 = utils::decompress(s.as_str()).ok()?;
+                    let img_s = utils::decompress(img0.as_str()).ok()?;
+                    let img_u = Unit::parse(img_s.chars()).ok()?.0.as_vec()?;
+
+                    img_u.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect()
+                },
+                Or::Second(seq) => seq.into_iter().map(|e| e as u32).collect()
+            };
+
+            Some(Img {
+                size: (w as usize, h as usize),
+                img
             })
-        }
-
-        let tmp = u.find_pair(&mut vec!["img".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_pair()?, u1.as_str()?)))
-            .filter_map(|((w, h), s)| Some(((w.as_int()?, h.as_int()?), s)))
-            .map(|((w, h), s)| {
-                let img0 = utils::decompress(s.as_str()).ok()?;
-                let img_s = utils::decompress(img0.as_str()).ok()?;
-
-                let img_u = Unit::parse(img_s.chars()).ok()?.0;
-
-                if let Unit::Lst(lst) = img_u {
-                    let img = lst.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect();
-
-                    return Some(((w as usize, h as usize), img))
-                }
-                None
-            }).next().flatten();
-
-        let tmp = tmp?;
-
-        return Some(Img {
-            size: tmp.0,
-            img: tmp.1
-        })
+        }).flatten()
     }
 }
 
 impl FromUnit for Vec<PutChar> {
     fn from_unit(u: &Unit) -> Option<Self> {
-        let mut put = None;
+        let schm = SchemaMapEntry(
+            Unit::Str("put".into()),
+            SchemaOr(
+                SchemaPair(
+                    SchemaPair(SchemaInt, SchemaInt),
+                    SchemaStr
+                ),
+                SchemaSeq(
+                    SchemaPair(
+                        SchemaPair(SchemaInt, SchemaInt),
+                        SchemaStr
+                    )
+                )
+            )
+        );
 
-        u.find_pair(&mut vec!["put".into()].iter()).iter()
-            .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
-            .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
-            .map(|(ch, (x, y))| {
-                let ch = PutChar {
-                    pos: (x as usize, y as usize),
-                    ch
-                };
-                put.replace(vec![ch]);
-            }).for_each(drop);
-
-        if put.is_some() {
-            return put;
-        }
-
-        u.find_list(&mut vec!["put".into()].iter()).map(|lst| {
-            put = lst.iter().filter_map(|u| u.as_pair())
-                .filter_map(|(u0, u1)| Some((u0.as_str()?, u1.as_pair()?)))
-                .filter_map(|(ch, (x, y))| Some((ch, (x.as_int()?, y.as_int()?))))
-                .map(|(ch, (x, y))| {
-                    Some(PutChar {
+        schm.find(u).map(|or| {
+            match or {
+                Or::First(((x, y), ch)) => vec![
+                    PutChar {
                         pos: (x as usize, y as usize),
                         ch
-                    })
-            }).collect::<Option<Vec<_>>>();
-        });
-
-        put
+                    }
+                ],
+                Or::Second(seq) =>
+                    seq.iter().cloned().map(|((x, y), ch)| {
+                        PutChar {
+                            pos: (x as usize, y as usize),
+                            ch
+                        }
+                    }).collect()
+            }
+        })
     }
 }
 
 impl FromUnit for Sprite {
     fn from_unit(u: &Unit) -> Option<Self> {
-        let mut spr = None;
+        let schm = SchemaMapEntry(
+            Unit::Str("spr".into()),
+            SchemaMapRequire(
+                SchemaMapEntry(Unit::Str("x".into()), SchemaInt),
+                SchemaMapRequire(
+                    SchemaMapEntry(Unit::Str("y".into()), SchemaInt),
+                    SchemaUnit
+                )
+            )
+        );
 
-        u.find_map(&mut vec!["spr".into()].iter()).iter()
-            .filter_map(|m| {
-                let m = Unit::Map(m.clone());
-                Some((
-                    (
-                        m.find_int(&mut vec!["x".into()].iter())?,
-                        m.find_int(&mut vec!["y".into()].iter())?
-                    ),
-                    Img::from_unit(&m)?
-                ))
+        schm.find(u).map(|(x, (y, u))| {
+            Some(Sprite {
+                pos: (x, y),
+                img: Img::from_unit(&u)?
             })
-            .map(|((x, y), img)| {
-                spr.replace(Sprite {
-                    pos: (x, y),
-                    img
-                })
-            }).for_each(drop);
-
-        spr
+        }).flatten()
     }
 }
 

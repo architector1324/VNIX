@@ -67,6 +67,7 @@ pub struct SchemaMapEntry<A>(pub Unit, pub A) where A: Schema;
 pub struct SchemaMap<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 pub struct SchemaMapFirstRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 pub struct SchemaMapSecondRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+pub struct SchemaMapRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 
 pub enum Or<A, B> {
     First(A),
@@ -891,6 +892,18 @@ impl<A, B> Schema for SchemaMapSecondRequire<A, B> where A: Schema, B: Schema {
     fn find(&self, u: &Unit) -> Option<Self::Out> {
         if u.as_map().is_some() {
             return Some((self.0.find(u), self.1.find(u)?));
+        }
+
+        None
+    }
+}
+
+impl<A, B> Schema for SchemaMapRequire<A, B> where A: Schema, B: Schema {
+    type Out = (A::Out, B::Out);
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if u.as_map().is_some() {
+            return Some((self.0.find(u)?, self.1.find(u)?));
         }
 
         None
