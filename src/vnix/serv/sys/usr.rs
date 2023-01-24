@@ -5,7 +5,7 @@ use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
-use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 use crate::vnix::core::user::Usr;
 
@@ -79,28 +79,28 @@ impl FromUnit for User {
 }
 
 impl ServHlr for User {
-    fn handle(&self, mut msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, mut msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(act) = &self.act {
             let (usr, out) = match act {
-                UserAct::Reg {ath} => Usr::new(ath, serv.kern)?,
+                UserAct::Reg {ath} => Usr::new(ath, kern)?,
                 UserAct::Guest {ath, pub_key} => (Usr::guest(ath, pub_key)?, String::new()),
                 UserAct::Login {ath, pub_key, priv_key} => (Usr::login(ath, priv_key, pub_key)?, String::new())
             };
 
-            serv.kern.reg_usr(usr.clone())?;
-            writeln!(serv.kern.cli, "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            kern.reg_usr(usr.clone())?;
+            writeln!(kern.cli, "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
             if !out.is_empty() {
-                writeln!(serv.kern.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                writeln!(kern.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
                 let m = Unit::Map(vec![
                     (Unit::Str("msg".into()), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
                 ]);
     
-                return Ok(Some(serv.kern.msg(&usr.name, m)?))
+                return Ok(Some(kern.msg(&usr.name, m)?))
             }
 
-            msg = serv.kern.msg(&usr.name, msg.msg)?;
+            msg = kern.msg(&usr.name, msg.msg)?;
         }
 
         Ok(Some(msg))

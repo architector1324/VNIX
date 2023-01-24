@@ -11,7 +11,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
-use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::utils;
 
 
@@ -78,7 +78,7 @@ impl Default for Term {
 }
 
 impl Inp {
-    fn msg(prs:bool, s: String, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn msg(prs:bool, s: String, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         let u = if !s.is_empty() {
             if prs {
                 Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0
@@ -93,64 +93,64 @@ impl Inp {
             (Unit::Str("msg".into()), u)
         ]);
 
-        return Ok(Some(serv.kern.msg(&msg.ath, _msg)?));
+        return Ok(Some(kern.msg(&msg.ath, _msg)?));
     }
 
-    fn handle(&self, prs:bool, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, prs:bool, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         let mut out = String::new();
 
         match self.pmt.as_str() {
             "key" => {
-                if let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+                if let Some(key) = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
                     write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 }
-                return Inp::msg(prs, out, msg, serv);
+                return Inp::msg(prs, out, msg, kern);
             },
             "key#async" => {
-                if let Some(key) = serv.kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
+                if let Some(key) = kern.cli.get_key(false).map_err(|e| KernErr::CLIErr(e))? {
                     write!(out, "{}", key).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 }
-                return Inp::msg(prs, out, msg, serv);
+                return Inp::msg(prs, out, msg, kern);
             }
             _ => ()
         }
 
         // input str
-        write!(serv.kern.cli, "\r{}", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        write!(kern.cli, "\r{}", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         loop {
-            if let Some(key) = serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+            if let Some(key) = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
                 if let TermKey::Char(c) = key {
                     if c == '\r' || c == '\n' {
-                        writeln!(serv.kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        writeln!(kern.cli).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                         break;
                     }
     
                     if c == '\u{8}' {
                         out.pop();
                     } else if c == '\u{3}' {
-                        writeln!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        writeln!(kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                         return Ok(None);
                     } else if !c.is_ascii_control() {
                         write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     }
     
-                    write!(serv.kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                    // write!(serv.kern.cli, "{c}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    write!(kern.cli, "\r{}{out} ", self.pmt).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    // write!(kern.cli, "{c}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 }
             }
         }
 
         // create msg
-        return Inp::msg(prs, out, msg, serv);
+        return Inp::msg(prs, out, msg, kern);
     }
 }
 
 impl Get {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {        
+    fn handle(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {        
         let res = match self {
-            Get::CliRes => serv.kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
-            Get::GfxRes => serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))? 
+            Get::CliRes => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+            Get::GfxRes => kern.disp.res().map_err(|e| KernErr::DispErr(e))? 
         };
 
         let _msg = Unit::Map(vec![
@@ -163,7 +163,7 @@ impl Get {
             )
         ]);
 
-        return Ok(Some(serv.kern.msg(&msg.ath, _msg)?));
+        return Ok(Some(kern.msg(&msg.ath, _msg)?));
     }
 }
 
@@ -273,12 +273,12 @@ impl FromUnit for Sprite {
 }
 
 impl Term {
-    fn img_hlr(&self, serv: &mut Serv) -> Result<(), KernErr> {
+    fn img_hlr(&self, kern: &mut Kern) -> Result<(), KernErr> {
         if let Some(ref img) = self.img {
             for x in 0..img.size.0 {
                 for y in 0..img.size.1 {
                     if let Some(px) = img.img.get(x + img.size.0 * y) {
-                        serv.kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
+                        kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
             }
@@ -294,7 +294,7 @@ impl Term {
                         let x_offs = (spr.pos.0 - (w as i32 / 2)) as usize;
                         let y_offs = (spr.pos.1 - (h as i32 / 2)) as usize;
 
-                        serv.kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
+                        kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
             }
@@ -303,47 +303,47 @@ impl Term {
         Ok(())
     }
 
-    fn cls(&self, serv: &mut Serv) -> Result<(), KernErr> {
+    fn cls(&self, kern: &mut Kern) -> Result<(), KernErr> {
         if self.cls {
-            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+            kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
         }
         Ok(())
     }
 
-    fn print_msg(&self, msg: &Msg, serv: &mut Serv) -> Result<(), KernErr> {
+    fn print_msg(&self, msg: &Msg, kern: &mut Kern) -> Result<(), KernErr> {
         if let Some(ref s) = self.msg {
             if self.nl {
-                writeln!(serv.kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                writeln!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {
-                write!(serv.kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                write!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
         } else if self.inp.is_none() && self.get.is_none() && !self.cls {
             if self.nl {
-                writeln!(serv.kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                writeln!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             } else {
-                write!(serv.kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                write!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
         }
 
         Ok(())
     }
 
-    fn put_char(&self, serv: &mut Serv) -> Result<bool, KernErr> {
+    fn put_char(&self, kern: &mut Kern) -> Result<bool, KernErr> {
         if let Some(put) = &self.put {
-            let res = serv.kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+            let res = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
 
             let mut out = ".".repeat(res.0 * res.1);
-            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+            kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
 
             for ch in put {
                 let offs = ch.pos.0 + res.0 * (ch.pos.1 + 1);
                 out.replace_range(offs..offs + 1, &ch.ch);
             }
-            write!(serv.kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            write!(kern.cli, "{}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
             // wait for key
-            serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
-            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+            kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
+            kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
 
             return Ok(true);
         }
@@ -351,20 +351,20 @@ impl Term {
         Ok(false)
     }
 
-    fn cli_hlr(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
-        self.cls(serv)?;
-        self.print_msg(&msg, serv)?;
+    fn cli_hlr(&self, msg: Msg, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+        self.cls(kern)?;
+        self.print_msg(&msg, kern)?;
 
-        if self.put_char(serv)? {
+        if self.put_char(kern)? {
             return Ok(Some(msg));
         }
 
         if let Some(get) = &self.get {
-            return get.handle(msg, serv);
+            return get.handle(msg, kern);
         }
 
         if let Some(inp) = &self.inp {
-            return inp.handle(self.prs, msg, serv);
+            return inp.handle(self.prs, msg, kern);
         }
 
         return Ok(Some(msg));
@@ -456,25 +456,25 @@ impl FromUnit for Term {
 }
 
 impl ServHlr for Term {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if self.trc {
-            writeln!(serv.kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            writeln!(kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             return Ok(Some(msg))
         }
 
         // gfx
         if self.img.is_some() || self.spr.is_some() {
-            self.img_hlr(serv)?;
+            self.img_hlr(kern)?;
 
             // wait for key
-            serv.kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
-            serv.kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
+            kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
+            kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
 
             return Ok(Some(msg));
         }
 
         // cli
-        if let Some(msg) = self.cli_hlr(msg, serv)? {
+        if let Some(msg) = self.cli_hlr(msg, kern)? {
             return Ok(Some(msg));
         }
 

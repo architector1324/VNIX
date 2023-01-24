@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::format;
 
+use crate::vnix::core::kern::Kern;
 use crate::vnix::core::unit::FromUnit;
 use crate::vnix::core::unit::Schema;
 use crate::vnix::core::unit::SchemaUnit;
@@ -33,10 +34,10 @@ impl Default for GFX2D {
 }
 
 impl FillRes {
-    fn get(&self, serv: &mut Serv) -> Result<(usize, usize), KernErr> {
+    fn get(&self, kern: &mut Kern) -> Result<(usize, usize), KernErr> {
         match self {
             FillRes::Custom(w, h) => Ok((*w, *h)),
-            FillRes::Full => serv.kern.disp.res().map_err(|e| KernErr::DispErr(e))
+            FillRes::Full => kern.disp.res().map_err(|e| KernErr::DispErr(e))
         }
     }
 }
@@ -85,9 +86,9 @@ impl FromUnit for GFX2D {
 }
 
 impl ServHlr for GFX2D {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(fill) = &self.fill {
-            let res = fill.0.get(serv)?;
+            let res = fill.0.get(kern)?;
 
             let img: Vec::<Unit> = (0..res.0*res.1).map(|_| Unit::Int(fill.1 as i32)).collect();
             let img_s = format!("{}", Unit::Lst(img));
@@ -108,7 +109,7 @@ impl ServHlr for GFX2D {
                 ),
             ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, m)?))
+            return Ok(Some(kern.msg(&msg.ath, m)?))
         }
 
         Ok(None)

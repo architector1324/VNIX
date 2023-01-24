@@ -6,7 +6,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
-use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::kern::{KernErr, Kern};
 
 
 #[derive(Debug, Clone)]
@@ -139,7 +139,7 @@ impl FromUnit for FSM {
 }
 
 impl ServHlr for FSM {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
             match &t.table {
                 EventTableEntry::State(state) => {
@@ -187,7 +187,7 @@ impl ServHlr for FSM {
                 );
             }
 
-            return Ok(Some(serv.kern.msg(&msg.ath, Unit::Map(m))?))
+            return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))
         }
 
         Ok(None)

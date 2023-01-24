@@ -6,7 +6,7 @@ use alloc::string::String;
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
-use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit};
 
 
@@ -239,7 +239,7 @@ impl FromUnit for Int {
 }
 
 impl ServHlr for Int {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(ref op) = self.op {
             let out = Int::calc_op(op);
 
@@ -247,7 +247,7 @@ impl ServHlr for Int {
                 (Unit::Str("msg".into()), Unit::Int(out)),
             ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, m)?))
+            return Ok(Some(kern.msg(&msg.ath, m)?))
         }
 
         return Ok(Some(msg))

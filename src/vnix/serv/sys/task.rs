@@ -3,7 +3,7 @@ use alloc::vec;
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr};
-use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
 
@@ -36,19 +36,19 @@ impl FromUnit for Task {
 }
 
 impl ServHlr for Task {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(u) = &self.task {
             let ath = msg.ath.clone();
 
-            let task = serv.kern.msg(&ath, u.clone())?;
-            let msg = serv.kern.task(task)?;
+            let task = kern.msg(&ath, u.clone())?;
+            let msg = kern.task(task)?;
 
             if let Some(out) = msg.map(|msg| msg.msg.find_unit(&mut vec!["msg".into()].iter())).flatten() {
                 let msg = Unit::Map(vec![
                     (Unit::Str("msg".into()), out)
                 ]);
 
-                return serv.kern.msg(&ath, msg).map(|msg| Some(msg));
+                return kern.msg(&ath, msg).map(|msg| Some(msg));
             }
 
             return Ok(None);

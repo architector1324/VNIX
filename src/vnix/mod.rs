@@ -4,12 +4,14 @@ pub mod utils;
 pub mod content;
 
 use alloc::string::String;
+use alloc::vec;
 
 use crate::driver::CLIErr;
 
 use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
+use self::core::serv::{Serv, ServKind};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -21,47 +23,40 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
+    // register service
+    let services = vec![
+        ("io.term", ServKind::IOTerm),
+        ("io.db", ServKind::IODB),
+        ("etc.chrono", ServKind::EtcChrono),
+        ("etc.fsm", ServKind::EtcFSM),
+        ("gfx.2d", ServKind::GFX2D),
+        ("math.int", ServKind::MathInt),
+        ("sys.task", ServKind::SysTask),
+        ("sys.usr", ServKind::SysUsr),
+    ];
+
+    for (name, kind) in services {
+        let serv = Serv::new(name, kind);
+        kern.reg_serv(serv)?;
+    }
+
     // prepare ram db
-    let s = content::task::LOGIN;
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let content = vec![
+        ("task.login", content::task::LOGIN),
+        ("task.lambda", content::task::LAMBDA),
+        ("img.minecraft.grass", content::img::MINECRAFT_GRASS),
+        ("img.vnix.logo", content::img::VNIX_LOGO),
+        ("img.wall.ai", content::img::WALL_AI)
+    ];
 
-    kern.db_ram.save(
-        Unit::Str("task.login".into()),
-        u
-    );
-
-    let s = content::task::LAMBDA;
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    kern.db_ram.save(
-        Unit::Str("task.lambda".into()),
-        u
-    );
-
-    let s = content::img::MINECRAFT_GRASS;
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    kern.db_ram.save(
-        Unit::Str("img.minecraft.grass".into()),
-        u
-    );
-
-    let s = content::img::VNIX_LOGO;
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    kern.db_ram.save(
-        Unit::Str("img.vnix.logo".into()),
-        u
-    );
-
-    let s = content::img::WALL_AI;
-
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    kern.db_ram.save(
-        Unit::Str("img.wall.ai".into()),
-        u
-    );
+    for (path, s) in content {
+        let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    
+        kern.db_ram.save(
+            Unit::Str(path.into()),
+            u
+        );
+    }
 
     // login task
     let mut ath: String = "super".into();

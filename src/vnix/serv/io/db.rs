@@ -5,7 +5,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
-use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::kern::{KernErr, Kern};
 
 
 pub struct DB {
@@ -55,23 +55,23 @@ impl FromUnit for DB {
 }
 
 impl ServHlr for DB {
-    fn handle(&self, msg: Msg, serv: &mut Serv) -> Result<Option<Msg>, KernErr> {
+    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some((key, val)) = &self.save {
-            serv.kern.db_ram.save(key.clone(), val.clone());
+            kern.db_ram.save(key.clone(), val.clone());
         }
 
         if let Some(key) = &self.load {
             let u = if key.clone() != Unit::Str("all".into()) {
-                serv.kern.db_ram.load(key.clone()).ok_or(KernErr::DbLoadFault)?
+                kern.db_ram.load(key.clone()).ok_or(KernErr::DbLoadFault)?
             } else {
-                Unit::Map(serv.kern.db_ram.data.clone())
+                Unit::Map(kern.db_ram.data.clone())
             };
 
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), u)
             ]);
 
-            return Ok(Some(serv.kern.msg(&msg.ath, m)?));
+            return Ok(Some(kern.msg(&msg.ath, m)?));
         }
 
         Ok(Some(msg))

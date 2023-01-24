@@ -4,11 +4,9 @@ use alloc::vec::Vec;
 use super::msg::Msg;
 use super::serv::{Serv, ServHlr};
 use super::serv::ServErr;
-use super::unit::{Unit, UnitParseErr, FromUnit};
+use super::unit::{Unit, UnitParseErr};
 
 use super::user::Usr;
-
-use crate::vnix::serv::{io, etc, gfx, math, sys};
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
 use crate::vnix::utils::RamDB;
@@ -30,6 +28,8 @@ pub enum KernErr {
     UsrAlreadyReg,
     UsrRegWithAnotherName,
     ServNotFound,
+    ServAlreadyReg,
+    CannotCreateServInstance,
     DbLoadFault,
     DbSaveFault,
     ParseErr(UnitParseErr),
@@ -49,7 +49,8 @@ pub struct Kern<'a> {
     pub db_ram: RamDB,
 
     // vnix
-    users: Vec<Usr>
+    users: Vec<Usr>,
+    services: Vec<Serv>
 }
 
 impl<'a> Kern<'a> {
@@ -61,6 +62,7 @@ impl<'a> Kern<'a> {
             rnd,
             db_ram: RamDB::default(),
             users: Vec::new(),
+            services: Vec::new()
         };
 
         kern
@@ -85,6 +87,19 @@ impl<'a> Kern<'a> {
 
     fn get_usr(&self, ath: &str) -> Result<Usr, KernErr> {
         self.users.iter().find(|usr| usr.name == ath).ok_or(KernErr::UsrNotFound).cloned()
+    }
+
+    pub fn reg_serv(&mut self, serv: Serv) -> Result<(), KernErr> {
+        if self.services.iter().find(|s| s.name == serv.name).is_some() {
+            return Err(KernErr::ServAlreadyReg);
+        }
+
+        self.services.push(serv);
+        Ok(())
+    }
+
+    fn get_serv(&self, name: &str) -> Result<Serv, KernErr> {
+        self.services.iter().find(|s| s.name == name).ok_or(KernErr::ServNotFound).cloned()
     }
 
     pub fn msg(&self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
@@ -157,45 +172,9 @@ impl<'a> Kern<'a> {
             return Ok(None);
         }
 
-        let mut _serv = Serv {
-            name: serv.into(),
-            kern: self,
-        };
+        let mut serv = self.get_serv(serv)?;
+        let inst = serv.inst(&msg.msg).map_or(Err(KernErr::CannotCreateServInstance), |i| Ok(i))?;
 
-        match serv {
-            "io.term" => {
-                let inst = io::term::Term::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "io.db" => {
-                let inst = io::db::DB::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "etc.chrono" => {
-                let inst = etc::chrono::Chrono::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "etc.fsm" => {
-                let inst = etc::fsm::FSM::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "gfx.2d" => {
-                let inst = gfx::GFX2D::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "math.int" => {
-                let inst = math::Int::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "sys.task" => {
-                let inst = sys::task::Task::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            "sys.usr" => {
-                let inst = sys::usr::User::from_unit(&msg.msg);
-                inst.map_or(Ok(None), |inst| inst.handle(msg, &mut _serv))
-            },
-            _ => Err(KernErr::ServNotFound)
-        }
+        inst.handle(msg, &mut serv, self)
     }
 }
