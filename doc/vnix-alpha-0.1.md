@@ -4,6 +4,7 @@
 1. Simple units type system:
     - basic (`none`, `bool`, `byte`, `int`, `float`, `str`)
     - collections (`pair`, `list`, `msg`)
+    - complex (`ref`)
 2. Arbitrary messages (`{<unit>:<unit> ...}`)
 3. Service:
     - lazy instances generation by id

@@ -1,6 +1,6 @@
 # Vnix alpha v0.1
 
-Progress: 39%
+Progress: 45%
 
 ## Features
 
@@ -28,7 +28,7 @@ Progress: 39%
 9. [ ] System-wide k/v database (`io.store`)
 10. [ ] Powerful parsing system (with `etc.parser` and `etc.ast`)
 11. [x] State machines (with `etc.fsm`)
-12. [ ] Time control (with `etc.chrono`)
+12. [x] Time control (with `etc.chrono`)
 
 ## Services
 
@@ -55,5 +55,5 @@ Progress: 39%
 
 ## Applications
 
-1. [ ] lambda - interactive shell for realtime task creation and execution
+1. [x] lambda - interactive shell for realtime task creation and execution
 2. [ ] me - simple message creator
