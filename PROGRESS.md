@@ -34,7 +34,7 @@ Progress: 39%
 
 1. [ ] I/O:
     - [x] `io.term` - interacting user with terminal
-    - [ ] `io.store` - store messages on disk
+    - [x] `io.store` - store messages on disk
 2. [ ] Math:
     - [x] `math.int`
     - [ ] `math.dec`

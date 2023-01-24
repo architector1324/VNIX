@@ -1,2 +1,2 @@
 pub mod term;
-pub mod db;
+pub mod store;

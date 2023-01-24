@@ -10,7 +10,7 @@ use crate::driver::{CLIErr, TermKey};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit, DisplayShort};
 
-use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::utils;
 
@@ -472,6 +472,19 @@ impl FromUnit for Term {
 }
 
 impl ServHlr for Term {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        let u = match topic {
+            ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: {msg:hello task:io.term}".into())
+        };
+
+        let m = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            u
+        )]);
+
+        return Ok(kern.msg(ath, m)?)
+    }
+
     fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if self.trc {
             writeln!(kern.cli, "INFO vnix:io.term: {}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;

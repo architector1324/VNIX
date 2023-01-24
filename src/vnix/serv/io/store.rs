@@ -4,27 +4,27 @@ use alloc::vec;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 
-use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
-pub struct DB {
+pub struct Store {
     load: Option<Unit>,
     save: Option<(Unit, Unit)>
 }
 
-impl Default for DB {
+impl Default for Store {
     fn default() -> Self {
-        DB {
+        Store {
             load: None,
             save: None
         }
     }
 }
 
-impl FromUnit for DB {
+impl FromUnit for Store {
     fn from_unit(u: &Unit) -> Option<Self> {
-        let mut db = DB::default();
+        let mut db = Store::default();
         
         // config instance
         let mut save_path = None;
@@ -54,7 +54,20 @@ impl FromUnit for DB {
     }
 }
 
-impl ServHlr for DB {
+impl ServHlr for Store {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        let u = match topic {
+            ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:(txt.doc `Some beautiful text`) task:io.store} # save text to `txt.doc` path\n{load:txt.doc task:io.store}".into())
+        };
+
+        let m = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            u
+        )]);
+
+        return Ok(kern.msg(ath, m)?)
+    }
+
     fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some((key, val)) = &self.save {
             kern.db_ram.save(key.clone(), val.clone());

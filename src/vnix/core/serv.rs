@@ -7,6 +7,10 @@ use super::unit::{FromUnit, Unit};
 use crate::vnix::serv::{io, etc, gfx, math, sys};
 
 
+pub enum ServHelpTopic {
+    Info
+}
+
 #[derive(Debug)]
 pub enum ServErr {
     NotValidUnit
@@ -15,7 +19,7 @@ pub enum ServErr {
 #[derive(Debug, Clone)]
 pub enum ServKind {
     IOTerm,
-    IODB,
+    IOStore,
     EtcChrono,
     EtcFSM,
     GFX2D,
@@ -26,7 +30,7 @@ pub enum ServKind {
 
 pub enum ServInst {
     IOTerm(io::term::Term),
-    IODB(io::db::DB),
+    IODB(io::store::Store),
     EtcChrono(etc::chrono::Chrono),
     EtcFSM(etc::fsm::FSM),
     GFX2D(gfx::GFX2D),
@@ -52,7 +56,7 @@ impl Serv {
     pub fn inst(&self, u: &Unit) -> Option<ServInst> {
         match self.kind {
             ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit(u)?)),
-            ServKind::IODB => Some(ServInst::IODB(io::db::DB::from_unit(u)?)),
+            ServKind::IOStore => Some(ServInst::IODB(io::store::Store::from_unit(u)?)),
             ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit(u)?)),
             ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit(u)?)),
             ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit(u)?)),
@@ -70,6 +74,19 @@ impl FromUnit for ServInst {
 }
 
 impl ServHlr for ServInst {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        match self {
+            ServInst::IOTerm(inst) => inst.help(ath, topic, kern),
+            ServInst::IODB(inst) => inst.help(ath, topic, kern),
+            ServInst::EtcChrono(inst) => inst.help(ath, topic, kern),
+            ServInst::EtcFSM(inst) => inst.help(ath, topic, kern),
+            ServInst::GFX2D(inst) => inst.help(ath, topic, kern),
+            ServInst::MathInt(inst) => inst.help(ath, topic, kern),
+            ServInst::SysTask(inst) => inst.help(ath, topic, kern),
+            ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
+        }
+    }
+
     fn handle(&self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         match self {
             ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
@@ -85,5 +102,6 @@ impl ServHlr for ServInst {
 }
 
 pub trait ServHlr: FromUnit {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr>;
     fn handle(&self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr>;
 }

@@ -2,7 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::msg::Msg;
-use super::serv::{Serv, ServHlr};
+use super::serv::{Serv, ServHlr, ServHelpTopic};
 use super::serv::ServErr;
 use super::unit::{Unit, UnitParseErr};
 
@@ -32,6 +32,7 @@ pub enum KernErr {
     CannotCreateServInstance,
     DbLoadFault,
     DbSaveFault,
+    HelpTopicNotFound,
     ParseErr(UnitParseErr),
     CLIErr(CLIErr),
     DispErr(DispErr),
@@ -163,18 +164,29 @@ impl<'a> Kern<'a> {
     }
 
     pub fn send<'b>(&'b mut self, serv: &str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
+        // verify msg 
         let usr = self.get_usr(&msg.ath)?;
         usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
 
+        // prepare msg
         if let Some(_msg) = self.msg_hlr(msg, usr)? {
             msg = _msg;
         } else {
             return Ok(None);
         }
-
+        
         let mut serv = self.get_serv(serv)?;
         let inst = serv.inst(&msg.msg).map_or(Err(KernErr::CannotCreateServInstance), |i| Ok(i))?;
 
+        // check help
+        if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
+            match topic.as_str() {
+                "info" => return inst.help(&msg.ath, ServHelpTopic::Info, self).map(|m| Some(m)),
+                _ => return Err(KernErr::HelpTopicNotFound)
+            }
+        }
+        
+        // send
         inst.handle(msg, &mut serv, self)
     }
 }

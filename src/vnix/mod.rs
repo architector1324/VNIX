@@ -18,7 +18,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = vec![
         ("io.term", ServKind::IOTerm),
-        ("io.db", ServKind::IODB),
+        ("io.store", ServKind::IOStore),
         ("etc.chrono", ServKind::EtcChrono),
         ("etc.fsm", ServKind::EtcFSM),
         ("gfx.2d", ServKind::GFX2D),

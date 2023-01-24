@@ -4,6 +4,7 @@ use alloc::vec;
 use alloc::format;
 
 use crate::vnix::core::kern::Kern;
+use crate::vnix::core::serv::ServHelpTopic;
 use crate::vnix::core::unit::FromUnit;
 use crate::vnix::core::unit::Schema;
 use crate::vnix::core::unit::SchemaUnit;
@@ -86,6 +87,19 @@ impl FromUnit for GFX2D {
 }
 
 impl ServHlr for GFX2D {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        let u = match topic {
+            ServHelpTopic::Info => Unit::Str("Service for rendering 2d graphics\nExample: {fill:#ff0000 task:gfx.2d} # fill screen with red color".into())
+        };
+
+        let m = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            u
+        )]);
+
+        return Ok(kern.msg(ath, m)?)
+    }
+
     fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(fill) = &self.fill {
             let res = fill.0.get(kern)?;

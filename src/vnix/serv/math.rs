@@ -5,7 +5,7 @@ use alloc::string::String;
 
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit};
 
@@ -239,6 +239,19 @@ impl FromUnit for Int {
 }
 
 impl ServHlr for Int {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        let u = match topic {
+            ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3] task:math.int}".into())
+        };
+
+        let m = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            u
+        )]);
+
+        return Ok(kern.msg(ath, m)?)
+    }
+
     fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(ref op) = self.op {
             let out = Int::calc_op(op);

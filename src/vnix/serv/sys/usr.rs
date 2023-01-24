@@ -4,7 +4,7 @@ use alloc::string::String;
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
 use crate::vnix::core::user::Usr;
@@ -79,6 +79,19 @@ impl FromUnit for User {
 }
 
 impl ServHlr for User {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        let u = match topic {
+            ServHelpTopic::Info => Unit::Str("Users registration service\nExample: {ath:test task:sys.usr} # register new user with name `test`".into())
+        };
+
+        let m = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            u
+        )]);
+
+        return Ok(kern.msg(ath, m)?)
+    }
+
     fn handle(&self, mut msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(act) = &self.act {
             let (usr, out) = match act {

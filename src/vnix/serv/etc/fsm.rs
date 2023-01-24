@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit};
 
-use crate::vnix::core::serv::{Serv, ServHlr};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
@@ -139,6 +139,19 @@ impl FromUnit for FSM {
 }
 
 impl ServHlr for FSM {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
+        let u = match topic {
+            ServHelpTopic::Info => Unit::Str("Finite state machine service\nExample: {fsm:{a:(b hello) b:a} state:a task:etc.fsm} # switch state `a -> b` and get `hello` msg".into())
+        };
+
+        let m = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            u
+        )]);
+
+        return Ok(kern.msg(ath, m)?)
+    }
+
     fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
             match &t.table {
