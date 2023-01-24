@@ -4,7 +4,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema};
 
 
 pub struct Task {
@@ -23,13 +23,8 @@ impl FromUnit for Task {
     fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Task::default();
 
-        // config instance
-        let mut schm = Schema::Unit(SchemaUnit::Map(vec![(
-            Schema::Value(Unit::Str("msg".into())),
-            Schema::Unit(SchemaUnit::Unit(&mut inst.task))
-        )]));
-
-        schm.find(u);
+        let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
+        inst.task = schm.find(u);
 
         Some(inst)
     }

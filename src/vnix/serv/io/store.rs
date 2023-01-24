@@ -1,8 +1,7 @@
-use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaUnit, SchemaPair, Schema};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -24,33 +23,22 @@ impl Default for Store {
 
 impl FromUnit for Store {
     fn from_unit(u: &Unit) -> Option<Self> {
-        let mut db = Store::default();
-        
-        // config instance
-        let mut save_path = None;
-        let mut save_dat = None;
+        let mut store = Store::default();
 
-        let mut schm = Schema::Unit(SchemaUnit::Map(vec![
-            (
-                Schema::Value(Unit::Str("load".into())),
-                Schema::Unit(SchemaUnit::Unit(&mut db.load))
-            ),
-            (
-                Schema::Value(Unit::Str("save".into())),
-                Schema::Unit(SchemaUnit::Pair((
-                    Box::new(Schema::Unit(SchemaUnit::Unit(&mut save_path))),
-                    Box::new(Schema::Unit(SchemaUnit::Unit(&mut save_dat))),
-                )))
-            ),
-        ]));
+        let schm = SchemaMap(
+            SchemaMapEntry(Unit::Str("load".into()), SchemaUnit),
+            SchemaMapEntry(
+                Unit::Str("save".into()),
+                SchemaPair(SchemaUnit, SchemaUnit)
+            )
+        );
 
-        schm.find(u);
+        schm.find(u).map(|(load, save)| {
+            store.load = load;
+            store.save = save;
+        });
 
-        if let Some((path, dat)) = save_path.iter().filter_map(|path| Some((path.clone(), save_dat.clone()?))).next() {
-            db.save.replace((path, dat));
-        }
-
-        Some(db)
+        Some(store)
     }
 }
 

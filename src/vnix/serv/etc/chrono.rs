@@ -4,7 +4,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Schema, SchemaUnit, Unit, FromUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaInt, Schema};
 
 
 #[derive(Debug)]
@@ -24,15 +24,8 @@ impl FromUnit for Chrono {
     fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Chrono::default();
 
-        // config instance
-        let mut schm = Schema::Unit(
-            SchemaUnit::Map(vec![(
-                Schema::Value(Unit::Str("wait".into())),
-                Schema::Unit(SchemaUnit::Int(&mut inst.wait))
-            )])
-        );
-
-        schm.find(u);
+        let schm = SchemaMapEntry(Unit::Str("wait".into()), SchemaInt);
+        inst.wait = schm.find(u);
 
         Some(inst)
     }

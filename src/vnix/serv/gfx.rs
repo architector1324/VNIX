@@ -6,8 +6,8 @@ use alloc::format;
 use crate::vnix::core::kern::Kern;
 use crate::vnix::core::serv::ServHelpTopic;
 use crate::vnix::core::unit::FromUnit;
-use crate::vnix::core::unit::Schema;
-use crate::vnix::core::unit::SchemaUnit;
+use crate::vnix::core::unit::Or;
+use crate::vnix::core::unit::{Schema, SchemaInt, SchemaMapEntry, SchemaOr, SchemaPair, SchemaStr};
 use crate::vnix::utils;
 
 use crate::vnix::core::msg::Msg;
@@ -48,39 +48,29 @@ impl FromUnit for GFX2D {
         let mut inst = GFX2D::default();
 
         // config instance
-        let mut col_s = None;
-
-        let mut col_s2 = None;
-        let mut w = None;
-        let mut h = None;
-
-        let mut schm = Schema::Unit(
-            SchemaUnit::Map(vec![(
-                Schema::Value(Unit::Str("fill".into())),
-                Schema::Or((
-                    Box::new(Schema::Unit(SchemaUnit::Str(&mut col_s))),
-                    Box::new(Schema::Unit(SchemaUnit::Pair((
-                        Box::new(Schema::Unit(SchemaUnit::Pair((
-                            Box::new(Schema::Unit(SchemaUnit::Int(&mut w))),
-                            Box::new(Schema::Unit(SchemaUnit::Int(&mut h)))
-                        )))),
-                        Box::new(Schema::Unit(SchemaUnit::Str(&mut col_s2)))
-                    ))))
-                ))
-            )])
+        let schm = SchemaMapEntry(
+            Unit::Str("fill".into()),
+            SchemaOr(
+                SchemaStr,
+                SchemaPair(
+                    SchemaPair(SchemaInt, SchemaInt),
+                    SchemaStr
+                )
+            )
         );
 
-        schm.find(u);
-
-        if let Some(col) = col_s {
-                let v = utils::hex_to_u32(col.as_str())?;
-                inst.fill.replace((FillRes::Full, v));
-        }
-
-        if let Some(((w, h), col)) = w.iter().filter_map(|w| Some(((*w, h?), col_s2.clone()?))).next() {
-            let v = utils::hex_to_u32(col.as_str())?;
-            inst.fill.replace((FillRes::Custom(w as usize, h as usize), v));
-        }
+        schm.find(u).map(|or| {
+            match or {
+                Or::First(col) => {
+                    let v = utils::hex_to_u32(col.as_str())?;
+                    inst.fill.replace((FillRes::Full, v))
+                },
+                Or::Second(((w, h), col)) => {
+                    let v = utils::hex_to_u32(col.as_str())?;
+                    inst.fill.replace((FillRes::Custom(w as usize, h as usize), v))
+                }
+            }
+        });
 
         Some(inst)
     }
@@ -112,7 +102,7 @@ impl ServHlr for GFX2D {
 
             let m = Unit::Map(vec![
                 (
-                    Unit::Str("img".into()),
+                    Unit::Str("msg".into()),
                     Unit::Pair((
                         Box::new(Unit::Pair((
                             Box::new(Unit::Int(res.0 as i32)),

@@ -45,27 +45,33 @@ pub enum Unit {
     Map(Vec<(Unit, Unit)>)
 }
 
-#[derive(Debug)]
-pub enum SchemaUnit<'a> {
-    None(&'a mut Option<()>),
-    Bool(&'a mut Option<bool>),
-    Byte(&'a mut Option<u8>),
-    Int(&'a mut Option<i32>),
-    Dec(&'a mut Option<f32>),
-    Str(&'a mut Option<String>),
-    // Ref,
-    Pair((Box<Schema<'a>>, Box<Schema<'a>>)),
-    Lst(Vec<Schema<'a>>),
-    Map(Vec<(Schema<'a>, Schema<'a>)>),
-    Unit(&'a mut Option<Unit>),
+pub trait Schema {
+    type Out;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out>;
 }
 
-#[derive(Debug)]
-pub enum Schema<'a> {
-    Value(Unit),
-    Unit(SchemaUnit<'a>),
-    Or((Box<Schema<'a>>, Box<Schema<'a>>))
+pub struct SchemaNone;
+pub struct SchemaBool;
+pub struct SchemaByte;
+pub struct SchemaInt;
+pub struct SchemaDec;
+pub struct  SchemaStr;
+pub struct  SchemaUnit;
+
+pub struct SchemaPair<A, B>(pub A, pub B) where A: Schema, B: Schema;
+
+pub struct SchemaMapEntry<A>(pub Unit, pub A) where A: Schema;
+
+pub struct SchemaMap<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+pub struct SchemaMapFirstRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+pub struct SchemaMapSecondRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+
+pub enum Or<A, B> {
+    First(A),
+    Second(B)
 }
+pub struct SchemaOr<A, B>(pub A, pub B) where A: Schema, B: Schema;
 
 pub trait FromUnit: Sized {
     fn from_unit(u: &Unit) -> Option<Self>;
@@ -745,94 +751,147 @@ impl Unit {
     }
 }
 
+impl Schema for SchemaNone {
+    type Out = ();
 
-impl<'a> SchemaUnit<'a> {
-    fn find(&mut self, glob:&Unit, u: &Unit) -> bool {
-        if let Unit::Ref(path) = u {
-            if let Some(u) = glob.find_unit(&mut path.iter()) {
-                return self.find(glob, &u);
-            }
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::None = u {
+            return Some(());
         }
-
-        match self {
-            SchemaUnit::None(..) => {
-                if let Unit::None = u {
-                    return true;
-                }
-            }
-            SchemaUnit::Bool(ref mut b) => {
-                if let Unit::Bool(v) = u {
-                    b.replace(*v);
-                    return true;
-                }
-            },
-            SchemaUnit::Byte(ref mut b) => {
-                if let Unit::Byte(v) = u {
-                    b.replace(*v);
-                    return true;
-                }
-            },
-            SchemaUnit::Int(ref mut i) => {
-                if let Unit::Int(v) = u {
-                    i.replace(*v);
-                    return true;
-                }
-            },
-            SchemaUnit::Dec(ref mut f) => {
-                if let Unit::Dec(v) = u {
-                    f.replace(*v);
-                    return true;
-                }
-            },
-            SchemaUnit::Str(ref mut s) => {
-                if let Unit::Str(v) = u {
-                    s.replace(v.clone());
-                    return true;
-                }
-            },
-            SchemaUnit::Pair(ref mut p) => {
-                if let Unit::Pair((u0, u1)) = u {
-                    return p.0.find_loc(glob, u0) && p.1.find_loc(glob, u1);
-                }
-            },
-            SchemaUnit::Lst(ref mut l) => {
-                if let Unit::Lst(u_lst) = u {
-                    return u_lst.iter().zip(l.iter_mut()).map(|(u, s)| {
-                        s.find_loc(glob, &u)
-                    }).fold(true, |a, b| a && b);
-                }
-            },
-            SchemaUnit::Map(ref mut m) => {
-                if let Unit::Map(u_m) = u {
-                    return u_m.iter().map(|u_p| {
-                        m.iter_mut().map(|s_p| {
-                            if s_p.0.find_loc(glob, &u_p.0) {
-                                return s_p.1.find_loc(glob, &u_p.1);
-                            }
-                            false
-                        }).fold(false, |a, b| a || b)
-                    }).fold(false, |a, b| a || b)
-                }
-            },
-            SchemaUnit::Unit(_u) => {
-                _u.replace(u.clone());
-                return true;
-            }
-        }
-        return false;
+        None
     }
 }
 
-impl<'a> Schema<'a> {
-    pub fn find_loc(&mut self, glob:&Unit, u: &Unit) -> bool {
-        match self {
-            Schema::Unit(_u) => _u.find(glob, u),
-            Schema::Value(ref _u) => _u.clone() == u.clone(),
-            Schema::Or((ref mut schm0, ref mut schm1)) => schm0.find_loc(glob, u) || schm1.find_loc(glob, u)
-        }
-    }
+impl Schema for SchemaBool {
+    type Out = bool;
 
-    pub fn find(&mut self, u: &Unit) -> bool {
-        self.find_loc(u, u)
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Bool(b) = u {
+            return Some(*b);
+        }
+        None
+    }
+}
+
+impl Schema for SchemaByte {
+    type Out = u8;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Byte(b) = u {
+            return Some(*b);
+        }
+        None
+    }
+}
+
+impl Schema for SchemaInt {
+    type Out = i32;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Int(v) = u {
+            return Some(*v);
+        }
+        None
+    }
+}
+
+impl Schema for SchemaDec {
+    type Out = f32;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Dec(v) = u {
+            return Some(*v);
+        }
+        None
+    }
+}
+
+impl Schema for SchemaStr {
+    type Out = String;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Str(s) = u {
+            return Some(s.clone());
+        }
+        None
+    }
+}
+
+impl Schema for SchemaUnit {
+    type Out = Unit;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        Some(u.clone())
+    }
+}
+
+impl<A, B> Schema for SchemaPair<A, B> where A: Schema, B: Schema {
+    type Out = (A::Out, B::Out);
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Pair((u0, u1)) = u {
+            return Some((self.0.find(u0)?, self.1.find(u1)?));
+        }
+        None
+    }
+}
+
+impl<A> Schema for SchemaMapEntry<A> where A: Schema {
+    type Out = A::Out;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Map(m) = u {
+            if let Some(u) = m.iter().find(|(u, _)| self.0 == u.clone()).map(|(_, u)| u) {
+                return self.1.find(u);
+            }
+        }
+        None
+    }
+}
+
+impl<A, B> Schema for SchemaMap<A, B> where A: Schema, B: Schema {
+    type Out = (Option<A::Out>, Option<B::Out>);
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if u.as_map().is_some() {
+            return Some((self.0.find(u), self.1.find(u)));
+        }
+
+        None
+    }
+}
+
+impl<A, B> Schema for SchemaMapFirstRequire<A, B> where A: Schema, B: Schema {
+    type Out = (A::Out, Option<B::Out>);
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if u.as_map().is_some() {
+            return Some((self.0.find(u)?, self.1.find(u)));
+        }
+
+        None
+    }
+}
+
+impl<A, B> Schema for SchemaMapSecondRequire<A, B> where A: Schema, B: Schema {
+    type Out = (Option<A::Out>, B::Out);
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if u.as_map().is_some() {
+            return Some((self.0.find(u), self.1.find(u)?));
+        }
+
+        None
+    }
+}
+
+impl<A, B> Schema for SchemaOr<A, B> where A: Schema, B: Schema {
+    type Out = Or<A::Out, B::Out>;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Some(v) = self.0.find(u) {
+            return Some(Or::First(v));
+        }
+        Some(Or::Second(self.1.find(u)?))
     }
 }

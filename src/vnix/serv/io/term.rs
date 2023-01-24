@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit, DisplayShort};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -379,80 +379,58 @@ impl FromUnit for Term {
     fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Term::default();
 
-        // config instance
-        let mut trc = None;
-        let mut shrt = None;
-        let mut cls = None;
-        let mut nl = None;
-        let mut prs = None;
-        let mut inp = None;
-        let mut get = None;
-        let mut _msg = None;
+        let schm = SchemaMapSecondRequire(
+            SchemaMapEntry(Unit::Str("trc".into()), SchemaBool),
+            SchemaMapSecondRequire(
+                SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
+                SchemaMapSecondRequire(
+                    SchemaMapEntry(Unit::Str("cls".into()), SchemaBool),
+                    SchemaMapSecondRequire(
+                        SchemaMapEntry(Unit::Str("nl".into()), SchemaBool),
+                        SchemaMapSecondRequire(
+                            SchemaMapEntry(Unit::Str("prs".into()), SchemaBool),
+                            SchemaMapSecondRequire(
+                                SchemaMapEntry(Unit::Str("inp".into()), SchemaStr),
+                                SchemaMap(
+                                    SchemaMapEntry(Unit::Str("get".into()), SchemaStr),
+                                    SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit)
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        );
 
-        let mut schm = Schema::Unit(SchemaUnit::Map(vec![
-            (
-                Schema::Value(Unit::Str("trc".into())),
-                Schema::Unit(SchemaUnit::Bool(&mut trc))
-            ),
-            (
-                Schema::Value(Unit::Str("shrt".into())),
-                Schema::Unit(SchemaUnit::Int(&mut shrt))
-            ),
-            (
-                Schema::Value(Unit::Str("cls".into())),
-                Schema::Unit(SchemaUnit::Bool(&mut cls))
-            ),
-            (
-                Schema::Value(Unit::Str("nl".into())),
-                Schema::Unit(SchemaUnit::Bool(&mut nl))
-            ),
-            (
-                Schema::Value(Unit::Str("prs".into())),
-                Schema::Unit(SchemaUnit::Bool(&mut prs))
-            ),
-            (
-                Schema::Value(Unit::Str("inp".into())),
-                Schema::Unit(SchemaUnit::Str(&mut inp))
-            ),
-            (
-                Schema::Value(Unit::Str("get".into())),
-                Schema::Unit(SchemaUnit::Str(&mut get))
-            ),
-            (
-                Schema::Value(Unit::Str("msg".into())),
-                Schema::Unit(SchemaUnit::Unit(&mut _msg))
-            ),
-        ]));
-
-        schm.find(u);
-
-        trc.map(|v| inst.trc = v);
-        shrt.map(|v| inst.shrt.replace(v as usize));
-        cls.map(|v| inst.cls = v);
-        nl.map(|v| inst.nl = v);
-        prs.map(|v| inst.prs = v);
-
-        inp.map(|s| inst.inp.replace(Inp{pmt: s}));
-
-        get.map(|s| {
-            match s.as_ref() {
-                "cli.res" => inst.get.replace(Get::CliRes),
-                "gfx.res" => inst.get.replace(Get::GfxRes),
-                _ => None
-            }
-        });
-
-        _msg.map(|u| {
-            let s = match u {
-                Unit::Str(s) => format!("{}", s),
-                _ => if let Some(count) = inst.shrt {
-                    format!("{}", DisplayShort(&u, count))
-                } else {
-                    format!("{}", u)
+        schm.find(u).map(|(trc, (shrt, (cls, (nl, (prs, (inp, (get, msg)))))))| {
+            trc.map(|v| inst.trc = v);
+            shrt.map(|v| inst.shrt.replace(v as usize));
+            cls.map(|v| inst.cls = v);
+            nl.map(|v| inst.nl = v);
+            prs.map(|v| inst.prs = v);
+    
+            inp.map(|s| inst.inp.replace(Inp{pmt: s}));
+    
+            get.map(|s| {
+                match s.as_ref() {
+                    "cli.res" => inst.get.replace(Get::CliRes),
+                    "gfx.res" => inst.get.replace(Get::GfxRes),
+                    _ => None
                 }
-            };
-
-            inst.msg.replace(s)
+            });
+    
+            msg.map(|u| {
+                let s = match u {
+                    Unit::Str(s) => format!("{}", s),
+                    _ => if let Some(count) = inst.shrt {
+                        format!("{}", DisplayShort(&u, count))
+                    } else {
+                        format!("{}", u)
+                    }
+                };
+    
+                inst.msg.replace(s)
+            });
         });
 
         if let Some(put) = Vec::<PutChar>::from_unit(u) {

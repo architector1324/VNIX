@@ -6,7 +6,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaStr, SchemaMapSecondRequire, Schema};
 use crate::vnix::core::user::Usr;
 
 
@@ -45,23 +45,19 @@ impl FromUnit for User {
         let mut pub_key = None;
         let mut priv_key = None;
 
-        // config instance
-        let mut schm = Schema::Unit(SchemaUnit::Map(vec![
-            (
-                Schema::Value(Unit::Str("ath".into())),
-                Schema::Unit(SchemaUnit::Str(&mut ath))
-            ),
-            (
-                Schema::Value(Unit::Str("pub".into())),
-                Schema::Unit(SchemaUnit::Str(&mut pub_key))
-            ),
-            (
-                Schema::Value(Unit::Str("priv".into())),
-                Schema::Unit(SchemaUnit::Str(&mut priv_key))
-            ),
-        ]));
+        let schm = SchemaMapSecondRequire(
+            SchemaMapEntry(Unit::Str("ath".into()), SchemaStr),
+            SchemaMap(
+                SchemaMapEntry(Unit::Str("pub".into()), SchemaStr),
+                SchemaMapEntry(Unit::Str("priv".into()), SchemaStr),
+            )
+        );
 
-        schm.find(u);
+        schm.find(u).map(|(_ath, (_pub, _priv))| {
+            ath = _ath;
+            pub_key = _pub;
+            priv_key = _priv;
+        });
 
         if let Some(ath) = ath {
             if let Some(pub_key) = pub_key {
