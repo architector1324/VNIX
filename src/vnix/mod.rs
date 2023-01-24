@@ -15,14 +15,6 @@ use self::core::serv::{Serv, ServKind};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
-    writeln!(kern.cli, "INFO vnix:kern: ok").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-    // register user
-    let _super = Usr::new("super", &mut kern)?.0;
-    kern.reg_usr(_super.clone())?;
-
-    writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
     // register service
     let services = vec![
         ("io.term", ServKind::IOTerm),
@@ -38,7 +30,15 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     for (name, kind) in services {
         let serv = Serv::new(name, kind);
         kern.reg_serv(serv)?;
+
+        writeln!(kern.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
     }
+
+    // register user
+    let _super = Usr::new("super", &mut kern)?.0;
+    kern.reg_usr(_super.clone())?;
+
+    writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // prepare ram db
     let content = vec![

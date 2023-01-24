@@ -1,6 +1,6 @@
 pub mod task {
     pub static LOGIN: &'static str = "{prs:t inp:`login:` msg:`Hello, vnix!` prs:t ath:@msg.ath pub:@msg.pub priv:@msg.priv task:[io.term sys.usr]}";
-    pub static LAMBDA: &'static str = "{prs:t inp:`$ ` msg:`Welcome to lambda shell!` task:[io.term sys.task io.term]}";
+    pub static LAMBDA: &'static str = "{prs:t inp:`$ ` msg:`Welcome to lambda shell!` shrt:32 task:[io.term sys.task io.term]}";
 }
 
 pub mod img {

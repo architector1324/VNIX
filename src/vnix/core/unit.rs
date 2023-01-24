@@ -71,7 +71,10 @@ pub trait FromUnit: Sized {
     fn from_unit(u: &Unit) -> Option<Self>;
 }
 
+pub struct DisplayShort<'a>(pub &'a Unit, pub usize);
+
 impl Eq for Unit {}
+
 
 impl Display for Unit {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -117,6 +120,70 @@ impl Display for Unit {
                         write!(f, "{}:{}", u0, u1)?;
                     } else {
                         write!(f, "{}:{} ", u0, u1)?;
+                    }
+                }
+
+                write!(f, "}}")
+            }
+        }
+    }
+}
+
+impl<'a> Display for DisplayShort<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self.0 {
+            Unit::None => write!(f, "-"),
+            Unit::Bool(b) => {
+                if *b {
+                    write!(f, "t")
+                } else {
+                    write!(f, "f")
+                }
+            },
+            Unit::Byte(b) => write!(f, "{:#02x}", b),
+            Unit::Int(i) => write!(f, "{}", i),
+            Unit::Dec(d) => write!(f, "{}", d),
+            Unit::Str(s) => {
+                let mut s = s.clone();
+                s.truncate(self.1);
+
+                if s.len() >= self.1 {
+                    s = format!("{}..", s);
+                }
+
+                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#') {
+                    write!(f, "{}", s)
+                } else {
+                    write!(f, "`{}`", s)
+                }
+            },
+            Unit::Ref(path) => write!(f, "@{}", path.join(".")),
+            Unit::Pair(p) => write!(f, "({} {})", DisplayShort(&p.0, self.1), DisplayShort(&p.1, self.1)),
+            Unit::Lst(lst) => {
+                write!(f, "[")?;
+
+                for (i, u) in lst.iter().take(self.1).enumerate() {
+                    if i == lst.len().min(self.1) - 1 && lst.len() > self.1 {
+                        write!(f, "{}..", DisplayShort(&u, self.1))?;
+                    } else if i == lst.len().min(self.1) - 1 {
+                        write!(f, "{}", DisplayShort(&u, self.1))?;
+                    } else {
+                        write!(f, "{} ", DisplayShort(&u, self.1))?;
+                    }
+                }
+
+                write!(f, "]")
+            },
+            Unit::Map(map) => {
+                write!(f, "{{")?;
+
+                for (i, (u0, u1)) in map.iter().take(self.1).enumerate() {
+                    if i == map.len().min(self.1) - 1 && map.len() > self.1 {
+                        write!(f, "{}:{}..", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1))?;
+                    } else if  i == map.len().min(self.1) - 1 {
+                        write!(f, "{}:{}", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1))?;
+                    } else {
+                        write!(f, "{}:{} ", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1))?;
                     }
                 }
 

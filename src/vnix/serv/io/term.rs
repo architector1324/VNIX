@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit};
+use crate::vnix::core::unit::{Unit, Schema, SchemaUnit, FromUnit, DisplayShort};
 
 use crate::vnix::core::serv::{Serv, ServHlr};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -56,7 +56,8 @@ pub struct Term {
     nl: bool,
     cls: bool,
     trc: bool,
-    prs: bool
+    prs: bool,
+    shrt: Option<usize>,
 }
 
 impl Default for Term {
@@ -72,7 +73,8 @@ impl Default for Term {
             nl: true,
             cls: false,
             trc: false,
-            prs: false
+            prs: false,
+            shrt: None
         }
     }
 }
@@ -311,18 +313,20 @@ impl Term {
     }
 
     fn print_msg(&self, msg: &Msg, kern: &mut Kern) -> Result<(), KernErr> {
-        if let Some(ref s) = self.msg {
-            if self.nl {
-                writeln!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-            } else {
-                write!(kern.cli, "{}", s).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-            }
-        } else if self.inp.is_none() && self.get.is_none() && !self.cls {
-            if self.nl {
-                writeln!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-            } else {
-                write!(kern.cli, "{}", msg.msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-            }
+        let msg = if let Some(ref s) = self.msg {
+            format!("{}", s)
+        } else if self.inp.is_some() || msg.msg.as_none().is_some() || self.cls {
+            return  Ok(());
+        }else if let Some(count) = self.shrt {
+            format!("{}", DisplayShort(&msg.msg, count))
+        } else {
+            format!("{}", msg.msg)
+        };
+
+        if self.nl {
+            writeln!(kern.cli, "{}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        } else {
+            write!(kern.cli, "{}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
         }
 
         Ok(())
@@ -377,6 +381,7 @@ impl FromUnit for Term {
 
         // config instance
         let mut trc = None;
+        let mut shrt = None;
         let mut cls = None;
         let mut nl = None;
         let mut prs = None;
@@ -388,6 +393,10 @@ impl FromUnit for Term {
             (
                 Schema::Value(Unit::Str("trc".into())),
                 Schema::Unit(SchemaUnit::Bool(&mut trc))
+            ),
+            (
+                Schema::Value(Unit::Str("shrt".into())),
+                Schema::Unit(SchemaUnit::Int(&mut shrt))
             ),
             (
                 Schema::Value(Unit::Str("cls".into())),
@@ -418,6 +427,7 @@ impl FromUnit for Term {
         schm.find(u);
 
         trc.map(|v| inst.trc = v);
+        shrt.map(|v| inst.shrt.replace(v as usize));
         cls.map(|v| inst.cls = v);
         nl.map(|v| inst.nl = v);
         prs.map(|v| inst.prs = v);
@@ -433,10 +443,16 @@ impl FromUnit for Term {
         });
 
         _msg.map(|u| {
-            match u {
-                Unit::Str(s) => inst.msg.replace(format!("{}", s)),
-                _ => inst.msg.replace(format!("{}", u))
-            }
+            let s = match u {
+                Unit::Str(s) => format!("{}", s),
+                _ => if let Some(count) = inst.shrt {
+                    format!("{}", DisplayShort(&u, count))
+                } else {
+                    format!("{}", u)
+                }
+            };
+
+            inst.msg.replace(s)
         });
 
         if let Some(put) = Vec::<PutChar>::from_unit(u) {
