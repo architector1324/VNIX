@@ -61,8 +61,9 @@ pub struct  SchemaUnit;
 
 pub struct SchemaPair<A, B>(pub A, pub B) where A: Schema, B: Schema;
 
-pub struct SchemaMapEntry<A>(pub Unit, pub A) where A: Schema;
+pub struct SchemaSeq<A>(pub A) where A: Schema;
 
+pub struct SchemaMapEntry<A>(pub Unit, pub A) where A: Schema;
 pub struct SchemaMap<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 pub struct SchemaMapFirstRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 pub struct SchemaMapSecondRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
@@ -831,6 +832,17 @@ impl<A, B> Schema for SchemaPair<A, B> where A: Schema, B: Schema {
     fn find(&self, u: &Unit) -> Option<Self::Out> {
         if let Unit::Pair(u0, u1) = u {
             return Some((self.0.find(u0)?, self.1.find(u1)?));
+        }
+        None
+    }
+}
+
+impl<A> Schema for SchemaSeq<A> where A: Schema {
+    type Out = Vec<A::Out>;
+
+    fn find(&self, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Lst(lst) = u {
+            return Some(lst.iter().filter_map(|u| self.0.find(u)).collect());
         }
         None
     }

@@ -1,13 +1,12 @@
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
-use alloc::string::String;
 
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Unit, FromUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaPair, SchemaInt, Schema, SchemaOr, SchemaSeq, Or, SchemaUnit};
 
 
 #[derive(Debug)]
@@ -70,103 +69,95 @@ impl Default for Int {
 }
 
 impl Int {
-    fn find_single_op_with(path: Vec<String>, act: SingleOpAct, u: &Unit) -> Option<Operation> {
-        let op = u.find_int(&mut path.iter()).map(|v| {
-            Operation::Single(
+    fn find_single_op_with(path: &str, act: SingleOpAct, u: &Unit) -> Option<Operation> {
+        let schm = SchemaMapEntry(
+            Unit::Str(path.into()),
+            SchemaOr(SchemaInt, SchemaUnit)
+        );
+
+        schm.find(u).map(|or| {
+            let op = match or {
+                Or::First(v) => Operand::Int(v),
+                Or::Second(u) => Operand::Operation(Box::new(Int::find_op(&u)?)),
+            };
+
+            Some(Operation::Single(
                 SingleOp {
-                    act: act.clone(),
-                    op: Operand::Int(v)
+                    act: act,
+                    op
                 }
+            ))
+        }).flatten()
+    }
+
+    fn find_multi_op_with(path: &str, act: MultiOpAct, u: &Unit) -> Option<Operation> {
+        let schm = SchemaMapEntry(
+            Unit::Str(path.into()),
+            SchemaOr(
+                SchemaPair(
+                    SchemaOr(SchemaInt, SchemaUnit),
+                    SchemaOr(SchemaInt, SchemaUnit)
+                ),
+                SchemaSeq(SchemaOr(SchemaInt, SchemaUnit))
             )
-        });
+        );
 
-        if op.is_some() {
-            return op;
-        }
+        schm.find(u).map(|or| {
+            let op = match or {
+                Or::First((a, b)) => {
+                    let a = match a {
+                        Or::First(v) => Operand::Int(v),
+                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(&u)?))
+                    };
+        
+                    let b = match b {
+                        Or::First(v) => Operand::Int(v),
+                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(&u)?))
+                    };
+        
+                    vec![a, b]
+                },
+                Or::Second(seq) =>
+                    seq.iter().map(|or| {
+                        match or {
+                            Or::First(v) => Some(Operand::Int(*v)),
+                            Or::Second(u) => Some(Operand::Operation(Box::new(Int::find_op(u)?)))
+                        }
+                    }).filter_map(|v| v).collect::<Vec<_>>()
+            };
 
-        let op = u.find_map(&mut path.iter()).map(|m| {
-            Some(
-                Operation::Single(
-                    SingleOp {
-                        act: act,
-                        op: Operand::Operation(Box::new(Int::find_op(&Unit::Map(m))?))
-                    }
-                )
-            )
-        }).flatten();
-
-        op
+            Some(Operation::Multi(
+                MultiOp {
+                    act: act,
+                    op
+                }
+            ))
+        }).flatten()
     }
 
     fn find_single_op(u: &Unit) -> Option<Operation> {
         let ops = vec![
-            (vec!["neg".into()], SingleOpAct::Neg),
-            (vec!["abs".into()], SingleOpAct::Abs),
-            (vec!["inc".into()], SingleOpAct::Inc),
-            (vec!["dec".into()], SingleOpAct::Dec),
-            (vec!["sqr".into()], SingleOpAct::Sqr),
-            (vec!["sqrt".into()], SingleOpAct::Sqrt),
-            (vec!["fac".into()], SingleOpAct::Fac),
-            (vec!["log".into()], SingleOpAct::Log),
+            ("neg", SingleOpAct::Neg),
+            ("abs", SingleOpAct::Abs),
+            ("inc", SingleOpAct::Inc),
+            ("dec", SingleOpAct::Dec),
+            ("sqr", SingleOpAct::Sqr),
+            ("sqrt", SingleOpAct::Sqrt),
+            ("fac", SingleOpAct::Fac),
+            ("log", SingleOpAct::Log),
         ];
 
         ops.iter().find_map(|(path, act)| Int::find_single_op_with(path.clone(), act.clone(), u))
     }
 
-    fn find_multi_op_with(path: Vec<String>, act: MultiOpAct, u: &Unit) -> Option<Operation> {
-        let op = u.find_pair(&mut path.iter()).map(|(u0, u1)| {
-            let v0 = match u0 {
-                Unit::Int(v) => Operand::Int(v),
-                Unit::Map(m) => Operand::Operation(Box::new(Int::find_op(&Unit::Map(m))?)),
-                _ => return None
-            };
-
-            let v1 = match u1 {
-                Unit::Int(v) => Operand::Int(v),
-                Unit::Map(m) => Operand::Operation(Box::new(Int::find_op(&Unit::Map(m))?)),
-                _ => return None
-            };
-
-            Some(Operation::Multi(
-                MultiOp {
-                    act: act.clone(),
-                    op: vec![v0, v1]
-                }
-            ))
-        }).flatten();
-
-        if op.is_some() {
-            return op;
-        }
-
-        let op = u.find_list(&mut path.iter()).map(|lst| {
-            let lst = lst.iter().cloned().map(|u| {
-                match u {
-                    Unit::Int(v) => Some(Operand::Int(v)),
-                    Unit::Map(m) => Some(Operand::Operation(Box::new(Int::find_op(&Unit::Map(m))?))),
-                    _ => return None
-                }
-            }).filter_map(|v| v);
-
-            Operation::Multi(
-                MultiOp {
-                    act: act.clone(),
-                    op: lst.collect()
-                }
-            )
-        });
-
-        op
-    }
-
     fn find_multi_op(u: &Unit) -> Option<Operation> {
         let ops = vec![
-            (vec!["sum".into()], MultiOpAct::Sum),
-            (vec!["sub".into()], MultiOpAct::Sub),
-            (vec!["mul".into()], MultiOpAct::Mul),
-            (vec!["div".into()], MultiOpAct::Div),
-            (vec!["mod".into()], MultiOpAct::Mod),
-            (vec!["pow".into()], MultiOpAct::Pow)
+            ("sum", MultiOpAct::Sum),
+            ("sub", MultiOpAct::Sub),
+            ("mul", MultiOpAct::Mul),
+            ("div", MultiOpAct::Div),
+            ("mod", MultiOpAct::Mod),
+            ("pow", MultiOpAct::Pow)
         ];
 
         ops.iter().find_map(|(path, act)| Int::find_multi_op_with(path.clone(), act.clone(), u))
@@ -231,7 +222,6 @@ impl FromUnit for Int {
     fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = Int::default();
 
-        // config instance
         inst.op = Int::find_op(u);
 
         Some(inst)
