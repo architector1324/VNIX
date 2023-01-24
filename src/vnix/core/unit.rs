@@ -40,7 +40,7 @@ pub enum Unit {
     Dec(f32),
     Str(String),
     Ref(Vec<String>),
-    Pair((Box<Unit>, Box<Unit>)),
+    Pair(Box<Unit>, Box<Unit>),
     Lst(Vec<Unit>),
     Map(Vec<(Unit, Unit)>)
 }
@@ -104,7 +104,7 @@ impl Display for Unit {
                 }
             },
             Unit::Ref(path) => write!(f, "@{}", path.join(".")),
-            Unit::Pair(p) => write!(f, "({} {})", p.0, p.1),
+            Unit::Pair(u0, u1) => write!(f, "({} {})", u0, u1),
             Unit::Lst(lst) => {
                 write!(f, "[")?;
 
@@ -164,7 +164,7 @@ impl<'a> Display for DisplayShort<'a> {
                 }
             },
             Unit::Ref(path) => write!(f, "@{}", path.join(".")),
-            Unit::Pair(p) => write!(f, "({} {})", DisplayShort(&p.0, self.1), DisplayShort(&p.1, self.1)),
+            Unit::Pair(u0, u1) => write!(f, "({} {})", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1)),
             Unit::Lst(lst) => {
                 write!(f, "[")?;
 
@@ -430,10 +430,10 @@ impl Unit {
         it = tmp;
 
         return Ok((
-            Unit::Pair((
+            Unit::Pair(
                 Box::new(u0.0),
                 Box::new(u1.0)
-            )),
+            ),
             it
         ));
     }
@@ -585,11 +585,11 @@ impl Unit {
                 return glob.find_unit(&mut n_path.iter());
             }
 
-            if let Unit::Pair(p) = self {
+            if let Unit::Pair(u0, u1) = self {
                 if curr == "0" {
-                    return p.0.deref().find_unit_loc(glob, path);
+                    return u0.deref().find_unit_loc(glob, path);
                 } else if curr == "1" {
-                    return p.1.deref().find_unit_loc(glob, path);
+                    return u1.deref().find_unit_loc(glob, path);
                 }
             }
 
@@ -694,7 +694,7 @@ impl Unit {
     }
 
     pub fn as_pair(&self) -> Option<(Box<Unit>, Box<Unit>)> {
-        if let Unit::Pair((u0, u1)) = self {
+        if let Unit::Pair(u0, u1) = self {
             return Some((u0.clone(), u1.clone()))
         }
         None
@@ -829,7 +829,7 @@ impl<A, B> Schema for SchemaPair<A, B> where A: Schema, B: Schema {
     type Out = (A::Out, B::Out);
 
     fn find(&self, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Pair((u0, u1)) = u {
+        if let Unit::Pair(u0, u1) = u {
             return Some((self.0.find(u0)?, self.1.find(u1)?));
         }
         None

@@ -103,13 +103,13 @@ impl ServHlr for GFX2D {
             let m = Unit::Map(vec![
                 (
                     Unit::Str("msg".into()),
-                    Unit::Pair((
-                        Box::new(Unit::Pair((
+                    Unit::Pair(
+                        Box::new(Unit::Pair(
                             Box::new(Unit::Int(res.0 as i32)),
                             Box::new(Unit::Int(res.1 as i32))
-                        ))),
+                        )),
                         Box::new(Unit::Str(img_out.into()))
-                    ))
+                    )
                 ),
             ]);
 

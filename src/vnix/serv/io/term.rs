@@ -158,10 +158,10 @@ impl Get {
         let _msg = Unit::Map(vec![
             (
                 Unit::Str("msg".into()),
-                Unit::Pair((
+                Unit::Pair(
                     Box::new(Unit::Int(res.0 as i32)),
                     Box::new(Unit::Int(res.1 as i32))
-                ))
+                )
             )
         ]);
 
