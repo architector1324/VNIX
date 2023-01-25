@@ -1,4 +1,3 @@
-use core::ops::Deref;
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
 
@@ -580,71 +579,6 @@ impl Unit {
         }
 
         Err(UnitParseErr::NotUnit)
-    }
-
-    fn find_unit_loc<'a, I>(&self, glob: &Unit, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
-        if let Some(curr) = path.next() {
-            if let Unit::Ref(n_path) = self {
-                return glob.find_unit(&mut n_path.iter());
-            }
-
-            if let Unit::Pair(u0, u1) = self {
-                if curr == "0" {
-                    return u0.deref().find_unit_loc(glob, path);
-                } else if curr == "1" {
-                    return u1.deref().find_unit_loc(glob, path);
-                }
-            }
-
-            if let Unit::Lst(lst) = self {
-                let idx = curr.parse::<usize>().ok()?;
-                if let Some(u) = lst.get(idx) {
-                    return u.find_unit_loc(glob, path);
-                }
-            }
-
-            if let Unit::Map(m) = self {
-                return m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1)))
-                        .find(|(s, _)| *s == *curr)
-                        .map(|(_, u)| u.find_unit_loc(glob, path)).flatten();
-            }
-
-            return None;
-        } else {
-            if let Unit::Ref(n_path) = self {
-                return glob.find_unit(&mut n_path.iter());
-            }
-
-            return Some(self.clone());
-        }
-    }
-
-    pub fn find_unit<'a, I>(&self, path: &mut I) -> Option<Unit> where I: Iterator<Item = &'a String> {
-        self.find_unit_loc(self, path)
-    }
-
-    pub fn find_bool<'a, I>(&self, path: &mut I) -> Option<bool> where I: Iterator<Item = &'a String> {
-        self.find_unit(path).map(|u| u.as_bool()).flatten()
-    }
-
-    pub fn find_int<'a, I>(&self, path: &mut I) -> Option<i32> where I: Iterator<Item = &'a String> {
-        self.find_unit(path).map(|u| u.as_int()).flatten()
-    }
-
-    pub fn find_str<'a, I>(&self, path: &mut I) -> Option<String> where I: Iterator<Item = &'a String> {
-        self.find_unit(path).map(|u| u.as_str()).flatten()
-    }
-
-    pub fn find_pair<'a, I>(&self, path: &mut I) -> Option<(Unit, Unit)> where I: Iterator<Item = &'a String> {
-        self.find_unit(path).map(|u| u.as_pair()).flatten().map(|p| (p.0.deref().clone(), p.1.deref().clone()))
-    }
-
-    pub fn find_list<'a, I>(&self, path: &mut I) -> Option<Vec<Unit>> where I: Iterator<Item = &'a String> {
-        self.find_unit(path).map(|u| u.as_vec()).flatten()
-    }
-
-    pub fn find_map<'a, I>(&self, path: &mut I) -> Option<Vec<(Unit, Unit)>> where I: Iterator<Item = &'a String> {
-        self.find_unit(path).map(|u| u.as_map()).flatten()
     }
 
     pub fn as_none(&self) -> Option<()> {

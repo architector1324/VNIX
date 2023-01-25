@@ -1,10 +1,9 @@
-use alloc::vec;
 use alloc::vec::Vec;
 
 use super::msg::Msg;
 use super::serv::{Serv, ServHlr, ServHelpTopic};
 use super::serv::ServErr;
-use super::unit::{Unit, UnitParseErr};
+use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaSeq, SchemaUnit, SchemaStr, Schema, SchemaBool, SchemaMap, SchemaOr, Or};
 
 use super::user::Usr;
 
@@ -109,52 +108,68 @@ impl<'a> Kern<'a> {
     }
 
     fn msg_hlr(&self, msg: Msg, usr: Usr) -> Result<Option<Msg>, KernErr> {
-        if let Some(_msg) = msg.msg.find_unit(&mut vec!["mrg".into()].iter()) {
-            return Ok(Some(self.msg(&usr.name, msg.msg.merge(_msg))?));
-        }
+        let schm = SchemaMap(
+            SchemaMapEntry(Unit::Str("mrg".into()), SchemaUnit),
+            SchemaMapEntry(Unit::Str("abt".into()), SchemaBool)
+        );
 
-        if let Some(b) = msg.msg.find_bool(&mut vec!["abt".into()].iter()) {
-            if b {
-                return Ok(None)
+        let u = msg.msg.clone();
+
+        if let Some((msg, b)) = schm.find(&u) {
+            if let Some(msg) = msg {
+                return Ok(Some(self.msg(&usr.name, u.merge(msg))?));
             }
-        }
+
+            if let Some(b) = b {
+                if b {
+                    return Ok(None)
+                }
+            }
+        };
 
         Ok(Some(msg))
     }
 
     pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        let path = vec!["task".into()];
+        let schm = SchemaMapEntry(
+            Unit::Str("task".into()),
+            SchemaOr(
+                SchemaStr,
+                SchemaSeq(SchemaUnit)
+            )
+        );
 
-        if let Some(serv) = msg.msg.find_str(&mut path.iter()) {
-            return self.send(serv.as_str(), msg);
-        }
-
-        if let Some(lst) = msg.msg.find_list(&mut path.iter()) {
-            let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
-
-            if net.is_empty() {
-                return Ok(None);
-            }
-
-            let mut msg = msg;
-
-            loop {
-                for (i, serv) in net.iter().enumerate() {
-                    if net.len() > 1 && i == net.len() - 1 && net.first().unwrap() == net.last().unwrap() {
-                        break;
-                    }
-
-                    let u = msg.msg.clone();
-    
-                    if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
-                        let usr = self.get_usr(&_msg.ath)?;
-                        msg = self.msg(&usr.name, u.merge(_msg.msg))?;
-                    } else {
+        if let Some(or) = schm.find(&msg.msg) {
+            match or {
+                Or::First(serv) => return self.send(serv.as_str(), msg),
+                Or::Second(lst) => {
+                    let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
+            
+                    if net.is_empty() {
                         return Ok(None);
                     }
-
-                    if i == net.len() - 1 && net.first().unwrap() != net.last().unwrap() {
-                        return Ok(Some(msg));
+            
+                    let mut msg = msg;
+            
+                    loop {
+                        for (i, serv) in net.iter().enumerate() {
+                            if net.len() > 1 && i == net.len() - 1 && net.first().unwrap() == net.last().unwrap() {
+                                break;
+                            }
+            
+                            let u = msg.msg.clone();
+            
+                            if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
+                                let usr = self.get_usr(&_msg.ath)?;
+                                msg = self.msg(&usr.name, u.merge(_msg.msg))?;
+                            } else {
+                                return Ok(None);
+                            }
+            
+                            if i == net.len() - 1 && net.first().unwrap() != net.last().unwrap() {
+                                return Ok(Some(msg));
+                            }
+                        }
                     }
                 }
             }

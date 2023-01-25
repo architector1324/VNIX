@@ -1,8 +1,6 @@
-use core::ops::Deref;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaMap, SchemaUnit, SchemaMapSeq, SchemaOr, SchemaPair, Schema, Or};
 
