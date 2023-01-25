@@ -139,7 +139,7 @@ impl ServHlr for FSM {
         return Ok(kern.msg(ath, m)?)
     }
 
-    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         // writeln!(kern.cli, "DEBG vnix:fsm: {:?}", self).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         let out = self.table.iter().find(|e| e.state == self.state).map(|t| {

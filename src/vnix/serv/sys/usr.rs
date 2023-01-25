@@ -88,7 +88,7 @@ impl ServHlr for User {
         return Ok(kern.msg(ath, m)?)
     }
 
-    fn handle(&self, mut msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, mut msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(act) = &self.act {
             let (usr, out) = match act {
                 UserAct::Reg {ath} => Usr::new(ath, kern)?,

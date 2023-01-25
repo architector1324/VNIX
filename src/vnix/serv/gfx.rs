@@ -90,7 +90,7 @@ impl ServHlr for GFX2D {
         return Ok(kern.msg(ath, m)?)
     }
 
-    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(fill) = &self.fill {
             let res = fill.0.get(kern)?;
 
@@ -102,7 +102,7 @@ impl ServHlr for GFX2D {
 
             let m = Unit::Map(vec![
                 (
-                    Unit::Str("msg".into()),
+                    Unit::Str("img".into()),
                     Unit::Pair(
                         Box::new(Unit::Pair(
                             Box::new(Unit::Int(res.0 as i32)),

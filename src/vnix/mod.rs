@@ -44,6 +44,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let content = vec![
         ("task.login", content::task::LOGIN),
         ("task.lambda", content::task::LAMBDA),
+        ("task.gfx.login", content::task::GFX_LOGIN),
+        ("task.gfx.lambda", content::task::GFX_LAMBDA),
         ("img.minecraft.grass", content::img::MINECRAFT_GRASS),
         ("img.vnix.logo", content::img::VNIX_LOGO),
         ("img.wall.ai", content::img::WALL_AI)
@@ -62,7 +64,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let mut ath: String = "super".into();
 
     'login: loop {
-        let u = kern.db_ram.load(Unit::Str("task.login".into())).ok_or(KernErr::DbLoadFault)?;
+        let u = kern.db_ram.load(Unit::Str("task.gfx.login".into())).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg("super", u)?;
     
         let go = kern.task(msg);
@@ -81,7 +83,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     loop {
         // prepare message
         // λ
-        let u = kern.db_ram.load(Unit::Str("task.lambda".into())).ok_or(KernErr::DbLoadFault)?;
+        let u = kern.db_ram.load(Unit::Str("task.gfx.lambda".into())).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg(&ath, u)?;
 
         // run

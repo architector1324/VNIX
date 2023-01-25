@@ -56,7 +56,7 @@ impl ServHlr for Store {
         return Ok(kern.msg(ath, m)?)
     }
 
-    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some((key, val)) = &self.save {
             kern.db_ram.save(key.clone(), val.clone());
         }

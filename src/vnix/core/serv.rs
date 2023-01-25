@@ -87,7 +87,7 @@ impl ServHlr for ServInst {
         }
     }
 
-    fn handle(&self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         match self {
             ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
             ServInst::IODB(inst) => inst.handle(msg, serv, kern),
@@ -103,5 +103,5 @@ impl ServHlr for ServInst {
 
 pub trait ServHlr: FromUnit {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr>;
-    fn handle(&self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr>;
+    fn handle(&mut self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr>;
 }

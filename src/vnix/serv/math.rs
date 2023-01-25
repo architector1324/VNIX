@@ -242,7 +242,7 @@ impl ServHlr for Int {
         return Ok(kern.msg(ath, m)?)
     }
 
-    fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(ref op) = self.op {
             let out = Int::calc_op(op);
 
