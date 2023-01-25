@@ -2,8 +2,9 @@ use core::ops::Deref;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaMap, SchemaUnit, SchemaMapSeq, SchemaOr, SchemaPair, Schema, Or};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -57,81 +58,69 @@ impl FromUnit for FSM {
     fn from_unit(u: &Unit) -> Option<Self> {
         let mut inst = FSM::default();
 
-        // config instance
-        u.find_unit(&mut vec!["state".into()].iter()).map(|u| {
-            inst.state = u;
-        });
+        let schm = SchemaMap(
+            SchemaMapEntry(Unit::Str("state".into()), SchemaUnit),
+            SchemaMapEntry(
+                Unit::Str("fsm".into()),
+                SchemaMapSeq(
+                    SchemaUnit,
+                    SchemaOr(
+                        SchemaOr(
+                            SchemaPair(SchemaUnit, SchemaUnit),
+                            SchemaMapSeq(
+                                SchemaUnit,
+                                SchemaOr(
+                                    SchemaPair(SchemaUnit, SchemaUnit),
+                                    SchemaUnit
+                                )
+                            )
+                        ),
+                        SchemaUnit
+                    )
+                )
+            )
+        );
 
-        u.find_map(&mut vec!["fsm".into()].iter()).map(|m| {
-            let u = Unit::Map(m);
+        schm.find(u).map(|(state, fsm)| {
+            state.map(|u| inst.state = u);
 
-            if let Unit::Map(m) = u {
-                // a:b
-                let states = m.iter().filter(|(_, u1)| u1.as_pair().is_none() && u1.as_map().is_none())
-                    .map(|(state, n_state)| {
-                        EventTable {
-                            state: state.clone(),
-                            table: EventTableEntry::State(n_state.clone())
-                        }
-                    });
-                
-                inst.table.extend(states);
-
-                // a:(b msg)
-                let outs = m.iter().filter_map(|(u0, u1)| Some((u0, u1.as_pair()?)))
-                    .map(|(state, out)| {
-                        let out = EventOut {
-                            state: out.0.deref().clone(),
-                            msg: Some(out.1.deref().clone())
-                        };
-
-                        EventTable {
-                            state: state.clone(),
-                            table: EventTableEntry::Out(out)
-                        }
-                    });
-
-                inst.table.extend(outs);
-                
-                // a:{msg:(b msg) ..}
-                let events = m.iter().filter_map(|(u0, u1)| Some((u0, u1.as_map()?)))
-                    .map(|(state, m)| {
-                        let mut events = m.iter().filter_map(|(ev, out)| Some((ev, out.as_pair()?)))
-                            .map(|(ev, out)| {
-                                let out = EventOut {
-                                    state: out.0.deref().clone(),
-                                    msg: Some(out.1.deref().clone())
+            fsm.map(|fsm| inst.table = fsm.iter().map(|(state, or)| {
+                let table = match or {
+                    Or::Second(n_state) => EventTableEntry::State(n_state.clone()), // a:b
+                    Or::First(or) => match or {
+                        Or::First((n_state, msg)) => // a:(b msg)
+                            EventTableEntry::Out(
+                                EventOut {
+                                    state: n_state.clone(),
+                                    msg: Some(msg.clone())
+                                }
+                            ),
+                        Or::Second(events) => {
+                            // a:{msg:(b msg) ..}
+                            let events = events.iter().map(|(ev, or)| {
+                                let out = match or {
+                                    Or::Second(n_state) => EventOut {
+                                        state: n_state.clone(),
+                                        msg: None
+                                    },
+                                    Or::First((n_state, msg)) => EventOut {
+                                        state: n_state.clone(),
+                                        msg: Some(msg.clone())
+                                    }
                                 };
 
-                                Event {
-                                    ev: ev.clone(),
-                                    out
-                                }
-                            }).collect::<Vec<_>>();
-                        
-                        let outs = m.iter().filter(|(_, out)| out.as_pair().is_none())
-                            .map(|(ev, out)| {
-                                let out = EventOut {
-                                    state: out.clone(),
-                                    msg: None
-                                };
-
-                                Event {
-                                    ev: ev.clone(),
-                                    out
-                                }
-                            }).collect::<Vec<_>>();
-
-                        events.extend(outs);
-
-                        EventTable {
-                            state: state.clone(),
-                            table: EventTableEntry::Event(events)
+                                Event {ev: ev.clone(), out}
+                            }).collect();
+                            EventTableEntry::Event(events)
                         }
-                    });
+                    }
+                };
 
-                inst.table.extend(events);
-            }
+                EventTable {
+                    state: state.clone(),
+                    table
+                }
+            }).collect());
         });
 
         Some(inst)
@@ -153,6 +142,8 @@ impl ServHlr for FSM {
     }
 
     fn handle(&self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+        // writeln!(kern.cli, "DEBG vnix:fsm: {:?}", self).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
         let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
             match &t.table {
                 EventTableEntry::State(state) => {
@@ -168,7 +159,7 @@ impl ServHlr for FSM {
                     }
                 },
                 EventTableEntry::Event(ev) => {
-                    let msg = msg.msg.find_unit(&mut vec!["msg".into()].iter());
+                    let msg = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit).find(&msg.msg);
 
                     if let Some(msg) = msg {
                         if let Some(out) = ev.iter().find(|e| e.ev == msg).map(|e| &e.out) {
@@ -186,8 +177,6 @@ impl ServHlr for FSM {
                 }
             }
         });
-
-        // writeln!(kern.cli, "DEBG vnix:fsm: {:?}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
         if let Some(out) = out {
             let mut m = vec![

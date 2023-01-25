@@ -51,7 +51,9 @@ impl ServHlr for Task {
             let task = kern.msg(&ath, u.clone())?;
             let msg = kern.task(task)?;
 
-            if let Some(out) = msg.map(|msg| msg.msg.find_unit(&mut vec!["msg".into()].iter())).flatten() {
+            let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
+
+            if let Some(out) = msg.map(|msg| schm.find(&msg.msg)).flatten() {
                 let msg = Unit::Map(vec![
                     (Unit::Str("msg".into()), out)
                 ]);
