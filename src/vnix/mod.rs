@@ -48,7 +48,9 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         ("task.gfx.lambda", content::task::GFX_LAMBDA),
         ("img.minecraft.grass", content::img::MINECRAFT_GRASS),
         ("img.vnix.logo", content::img::VNIX_LOGO),
-        ("img.wall.ai", content::img::WALL_AI)
+        ("img.wall.ai", content::img::WALL_AI),
+        ("font.sys.ascii", content::font::SYS_ASCII),
+        // ("font.sys", content::font::SYS)
     ];
 
     for (path, s) in content {

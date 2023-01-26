@@ -373,6 +373,56 @@ impl Unit {
                 }
             }
 
+            // 'complex string'
+            if c == '\'' {
+                let mut s = String::new();
+                let mut tmp = it.clone();
+
+                while let Some(c) = it.next() {
+                    if c == '\'' {
+                        break;
+                    }
+
+                    s.push(c);
+                    tmp = it.clone();
+                }
+
+                if let Some(c) = tmp.next() {
+                    if c == '\'' {
+                        return Ok((Unit::Str(s), tmp));
+                    } else {
+                        return Err(UnitParseErr::NotClosedQuotes);
+                    }
+                } else {
+                    return Err(UnitParseErr::NotClosedQuotes);
+                }
+            }
+
+            // "complex string"
+            if c == '"' {
+                let mut s = String::new();
+                let mut tmp = it.clone();
+
+                while let Some(c) = it.next() {
+                    if c == '"' {
+                        break;
+                    }
+
+                    s.push(c);
+                    tmp = it.clone();
+                }
+
+                if let Some(c) = tmp.next() {
+                    if c == '"' {
+                        return Ok((Unit::Str(s), tmp));
+                    } else {
+                        return Err(UnitParseErr::NotClosedQuotes);
+                    }
+                } else {
+                    return Err(UnitParseErr::NotClosedQuotes);
+                }
+            }
+
             // abc.123#
             if c.is_alphanumeric() || c == '.' || c == '#' {
                 let mut s = String::new();

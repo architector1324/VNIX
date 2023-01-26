@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaMapRequire};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaMapRequire, SchemaMapSeq, SchemaByte};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -499,9 +499,18 @@ impl FromUnit for Term {
                                 SchemaMapEntry(Unit::Str("get".into()), SchemaStr),
                                 SchemaMapSecondRequire(
                                     SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit),
-                                    SchemaMap(
+                                    SchemaMapSecondRequire(
                                         SchemaMapEntry(Unit::Str("inp".into()), SchemaStr),
-                                        SchemaMapEntry(Unit::Str("mod".into()), SchemaStr),
+                                        SchemaMap(
+                                            SchemaMapEntry(Unit::Str("mod".into()), SchemaStr),
+                                            SchemaMapEntry(
+                                                Unit::Str("font".into()),
+                                                SchemaMapSeq(
+                                                    SchemaStr,
+                                                    SchemaSeq(SchemaByte)
+                                                )
+                                            )
+                                        )
                                     )
                                 )
                             )
@@ -511,7 +520,7 @@ impl FromUnit for Term {
             )
         );
 
-        schm.find_loc(u).map(|(trc, (shrt, (cls, (nl, (prs, (get, (msg, (inp, mode))))))))| {
+        schm.find_loc(u).map(|(trc, (shrt, (cls, (nl, (prs, (get, (msg, (inp, (mode, font)))))))))| {
             trc.map(|v| inst.trc = v);
             shrt.map(|v| inst.shrt.replace(v as usize));
             cls.map(|v| inst.cls = v);
@@ -533,6 +542,17 @@ impl FromUnit for Term {
                     "cli.res" => inst.get.replace(Get::CliRes),
                     "gfx.res" => inst.get.replace(Get::GfxRes),
                     _ => None
+                }
+            });
+
+            font.map(|glyths| {
+                let glyths = glyths.iter().filter_map(|(s, v)| {
+                    let dat = v.iter().cloned().map(|v| v as u8).collect::<Vec<_>>().try_into().ok()?;
+                    Some((s.chars().next()?, dat))}
+                ).collect();
+
+                inst.font = Font {
+                    glyths
                 }
             });
     
