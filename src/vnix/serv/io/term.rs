@@ -404,7 +404,7 @@ impl Term {
     fn cls(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
         if self.cls {
             kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear))?;
-            unsafe{CUR_POS = (0, 0);}
+            self.clear(kern)?;
         }
         Ok(())
     }
