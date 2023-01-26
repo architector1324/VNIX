@@ -44,7 +44,7 @@ impl FillRes {
 }
 
 impl FromUnit for GFX2D {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = GFX2D::default();
 
         // config instance
@@ -59,7 +59,7 @@ impl FromUnit for GFX2D {
             )
         );
 
-        schm.find(u).map(|or| {
+        schm.find_loc(u).map(|or| {
             match or {
                 Or::First(col) => {
                     let v = utils::hex_to_u32(col.as_str())?;
@@ -102,7 +102,7 @@ impl ServHlr for GFX2D {
 
             let m = Unit::Map(vec![
                 (
-                    Unit::Str("img".into()),
+                    Unit::Str("msg".into()),
                     Unit::Pair(
                         Box::new(Unit::Pair(
                             Box::new(Unit::Int(res.0 as i32)),

@@ -22,7 +22,7 @@ impl Default for Store {
 }
 
 impl FromUnit for Store {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut store = Store::default();
 
         let schm = SchemaMap(
@@ -33,7 +33,7 @@ impl FromUnit for Store {
             )
         );
 
-        schm.find(u).map(|(load, save)| {
+        schm.find_loc(u).map(|(load, save)| {
             store.load = load;
             store.save = save;
         });

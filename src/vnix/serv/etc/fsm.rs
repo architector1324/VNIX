@@ -53,7 +53,7 @@ impl FSM {
 }
 
 impl FromUnit for FSM {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = FSM::default();
 
         let schm = SchemaMap(
@@ -79,7 +79,7 @@ impl FromUnit for FSM {
             )
         );
 
-        schm.find(u).map(|(state, fsm)| {
+        schm.find_loc(u).map(|(state, fsm)| {
             state.map(|u| inst.state = u);
 
             fsm.map(|fsm| inst.table = fsm.iter().map(|(state, or)| {
@@ -157,7 +157,7 @@ impl ServHlr for FSM {
                     }
                 },
                 EventTableEntry::Event(ev) => {
-                    let msg = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit).find(&msg.msg);
+                    let msg = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit).find_loc(&msg.msg);
 
                     if let Some(msg) = msg {
                         if let Some(out) = ev.iter().find(|e| e.ev == msg).map(|e| &e.out) {

@@ -55,20 +55,20 @@ impl Serv {
 
     pub fn inst(&self, u: &Unit) -> Option<ServInst> {
         match self.kind {
-            ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit(u)?)),
-            ServKind::IOStore => Some(ServInst::IODB(io::store::Store::from_unit(u)?)),
-            ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit(u)?)),
-            ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit(u)?)),
-            ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit(u)?)),
-            ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit(u)?)),
-            ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit(u)?)),
-            ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit(u)?)),
+            ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit_loc(u)?)),
+            ServKind::IOStore => Some(ServInst::IODB(io::store::Store::from_unit_loc(u)?)),
+            ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit_loc(u)?)),
+            ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit_loc(u)?)),
+            ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit_loc(u)?)),
+            ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
+            ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
+            ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
         }
     }
 }
 
 impl FromUnit for ServInst {
-    fn from_unit(_u: &Unit) -> Option<Self> {
+    fn from_unit_loc(_u: &Unit) -> Option<Self> {
         None
     }
 }

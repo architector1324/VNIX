@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use alloc::boxed::Box;
 use alloc::{format, vec};
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::driver::{CLIErr, TermKey};
@@ -195,7 +195,11 @@ impl Get {
 }
 
 impl FromUnit for Img {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaMapEntry(
             Unit::Str("img".into()),
             SchemaPair(
@@ -207,7 +211,7 @@ impl FromUnit for Img {
             )
         );
 
-        schm.find(u).map(|((w, h), or)| {
+        schm.find_deep(glob, u).map(|((w, h), or)| {
             let img = match or {
                 Or::First(s) => {
                     let img0 = utils::decompress(s.as_str()).ok()?;
@@ -228,7 +232,11 @@ impl FromUnit for Img {
 }
 
 impl FromUnit for Vec<PutChar> {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaMapEntry(
             Unit::Str("put".into()),
             SchemaOr(
@@ -245,7 +253,7 @@ impl FromUnit for Vec<PutChar> {
             )
         );
 
-        schm.find(u).map(|or| {
+        schm.find_deep(glob, u).map(|or| {
             match or {
                 Or::First(((x, y), ch)) => vec![
                     PutChar {
@@ -266,7 +274,11 @@ impl FromUnit for Vec<PutChar> {
 }
 
 impl FromUnit for Sprite {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaMapEntry(
             Unit::Str("spr".into()),
             SchemaMapRequire(
@@ -278,10 +290,10 @@ impl FromUnit for Sprite {
             )
         );
 
-        schm.find(u).map(|(x, (y, u))| {
+        schm.find_deep(glob, u).map(|(x, (y, u))| {
             Some(Sprite {
                 pos: (x, y),
-                img: Img::from_unit(&u)?
+                img: Img::from_unit(glob, &u)?
             })
         }).flatten()
     }
@@ -470,7 +482,7 @@ impl Term {
 }
 
 impl FromUnit for Term {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = Term::default();
 
         let schm = SchemaMapSecondRequire(
@@ -499,7 +511,7 @@ impl FromUnit for Term {
             )
         );
 
-        schm.find(u).map(|(trc, (shrt, (cls, (nl, (prs, (get, (msg, (inp, mode))))))))| {
+        schm.find_loc(u).map(|(trc, (shrt, (cls, (nl, (prs, (get, (msg, (inp, mode))))))))| {
             trc.map(|v| inst.trc = v);
             shrt.map(|v| inst.shrt.replace(v as usize));
             cls.map(|v| inst.cls = v);
@@ -538,15 +550,15 @@ impl FromUnit for Term {
             });
         });
 
-        if let Some(put) = Vec::<PutChar>::from_unit(u) {
+        if let Some(put) = Vec::<PutChar>::from_unit(u, u) {
             inst.put.replace(put);
         }
 
-        if let Some(img) = Img::from_unit(u) {
+        if let Some(img) = Img::from_unit(u, u) {
             inst.img.replace(img);
         }
 
-        if let Some(spr) = Sprite::from_unit(u) {
+        if let Some(spr) = Sprite::from_unit(u, u) {
             inst.spr.replace(spr);
         }
 

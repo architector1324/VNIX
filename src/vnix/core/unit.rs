@@ -47,7 +47,23 @@ pub enum Unit {
 pub trait Schema {
     type Out;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out>;
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out>;
+
+    fn find_deep(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
+        match u {
+            Unit::Ref(path) => {
+                if let Some(u) = Unit::find_ref(path.into_iter().cloned(), glob) {
+                    return self.find_deep(glob, &u);
+                }
+            },
+            _ => return self.find(glob, u)
+        }
+        None
+    }
+
+    fn find_loc(&self, u: &Unit) -> Option<Self::Out> {
+        self.find_deep(u, u)
+    }
 }
 
 pub struct SchemaNone;
@@ -76,7 +92,11 @@ pub enum Or<A, B> {
 pub struct SchemaOr<A, B>(pub A, pub B) where A: Schema, B: Schema;
 
 pub trait FromUnit: Sized {
-    fn from_unit(u: &Unit) -> Option<Self>;
+    fn from_unit_loc(u: &Unit) -> Option<Self>;
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        Self::from_unit_loc(u)
+    }
 }
 
 pub struct DisplayShort<'a>(pub &'a Unit, pub usize);
@@ -581,6 +601,29 @@ impl Unit {
         Err(UnitParseErr::NotUnit)
     }
 
+    pub fn find_ref<I>(mut path: I, u: &Unit) -> Option<Unit> where I: Iterator<Item = String> {
+        match u {
+            Unit::Map(m) => {
+                if let Some(path_s) = path.next() {
+                    if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
+                        return Unit::find_ref(path, next);
+                    }
+                }
+            },
+            Unit::Lst(lst) => {
+                if let Some(path_s) = path.next() {
+                    if let Some(idx) = path_s.parse::<usize>().ok() {
+                        if let Some(next) = lst.get(idx) {
+                            return Unit::find_ref(path, next);
+                        }
+                    }
+                }
+            }
+            _ => return Some(u.clone())
+        }
+        None
+    }
+
     pub fn as_none(&self) -> Option<()> {
         if let Unit::None = self {
             return Some(())
@@ -691,7 +734,7 @@ impl Unit {
 impl Schema for SchemaNone {
     type Out = ();
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::None = u {
             return Some(());
         }
@@ -702,7 +745,7 @@ impl Schema for SchemaNone {
 impl Schema for SchemaBool {
     type Out = bool;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Bool(b) = u {
             return Some(*b);
         }
@@ -713,7 +756,7 @@ impl Schema for SchemaBool {
 impl Schema for SchemaByte {
     type Out = u8;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Byte(b) = u {
             return Some(*b);
         }
@@ -724,7 +767,7 @@ impl Schema for SchemaByte {
 impl Schema for SchemaInt {
     type Out = i32;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Int(v) = u {
             return Some(*v);
         }
@@ -735,7 +778,7 @@ impl Schema for SchemaInt {
 impl Schema for SchemaDec {
     type Out = f32;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Dec(v) = u {
             return Some(*v);
         }
@@ -746,7 +789,7 @@ impl Schema for SchemaDec {
 impl Schema for SchemaStr {
     type Out = String;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Str(s) = u {
             return Some(s.clone());
         }
@@ -757,7 +800,7 @@ impl Schema for SchemaStr {
 impl Schema for SchemaUnit {
     type Out = Unit;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         Some(u.clone())
     }
 }
@@ -765,9 +808,9 @@ impl Schema for SchemaUnit {
 impl<A, B> Schema for SchemaPair<A, B> where A: Schema, B: Schema {
     type Out = (A::Out, B::Out);
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Pair(u0, u1) = u {
-            return Some((self.0.find(u0)?, self.1.find(u1)?));
+            return Some((self.0.find_deep(glob, u0)?, self.1.find_deep(glob, u1)?));
         }
         None
     }
@@ -776,9 +819,9 @@ impl<A, B> Schema for SchemaPair<A, B> where A: Schema, B: Schema {
 impl<A> Schema for SchemaSeq<A> where A: Schema {
     type Out = Vec<A::Out>;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Lst(lst) = u {
-            return Some(lst.iter().filter_map(|u| self.0.find(u)).collect());
+            return Some(lst.iter().filter_map(|u| self.0.find_deep(glob, u)).collect());
         }
         None
     }
@@ -787,9 +830,9 @@ impl<A> Schema for SchemaSeq<A> where A: Schema {
 impl<A, B> Schema for SchemaMapSeq<A, B> where A: Schema, B: Schema {
     type Out = Vec<(A::Out, B::Out)>;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Map(m) = u {
-            return Some(m.iter().filter_map(|(u0, u1)| Some((self.0.find(u0)?, self.1.find(u1)?))).collect());
+            return Some(m.iter().filter_map(|(u0, u1)| Some((self.0.find_deep(glob, u0)?, self.1.find_deep(glob, u1)?))).collect());
         }
         None
     }
@@ -798,10 +841,10 @@ impl<A, B> Schema for SchemaMapSeq<A, B> where A: Schema, B: Schema {
 impl<A> Schema for SchemaMapEntry<A> where A: Schema {
     type Out = A::Out;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Map(m) = u {
             if let Some(u) = m.iter().find(|(u, _)| self.0 == u.clone()).map(|(_, u)| u) {
-                return self.1.find(u);
+                return self.1.find_deep(glob, u);
             }
         }
         None
@@ -811,9 +854,9 @@ impl<A> Schema for SchemaMapEntry<A> where A: Schema {
 impl<A, B> Schema for SchemaMap<A, B> where A: Schema, B: Schema {
     type Out = (Option<A::Out>, Option<B::Out>);
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if u.as_map().is_some() {
-            return Some((self.0.find(u), self.1.find(u)));
+            return Some((self.0.find_deep(glob, u), self.1.find_deep(glob, u)));
         }
 
         None
@@ -823,9 +866,9 @@ impl<A, B> Schema for SchemaMap<A, B> where A: Schema, B: Schema {
 impl<A, B> Schema for SchemaMapFirstRequire<A, B> where A: Schema, B: Schema {
     type Out = (A::Out, Option<B::Out>);
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if u.as_map().is_some() {
-            return Some((self.0.find(u)?, self.1.find(u)));
+            return Some((self.0.find_deep(glob, u)?, self.1.find_deep(glob, u)));
         }
 
         None
@@ -835,9 +878,9 @@ impl<A, B> Schema for SchemaMapFirstRequire<A, B> where A: Schema, B: Schema {
 impl<A, B> Schema for SchemaMapSecondRequire<A, B> where A: Schema, B: Schema {
     type Out = (Option<A::Out>, B::Out);
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if u.as_map().is_some() {
-            return Some((self.0.find(u), self.1.find(u)?));
+            return Some((self.0.find_deep(glob, u), self.1.find_deep(glob, u)?));
         }
 
         None
@@ -847,9 +890,9 @@ impl<A, B> Schema for SchemaMapSecondRequire<A, B> where A: Schema, B: Schema {
 impl<A, B> Schema for SchemaMapRequire<A, B> where A: Schema, B: Schema {
     type Out = (A::Out, B::Out);
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if u.as_map().is_some() {
-            return Some((self.0.find(u)?, self.1.find(u)?));
+            return Some((self.0.find_deep(glob, u)?, self.1.find_deep(glob, u)?));
         }
 
         None
@@ -859,10 +902,10 @@ impl<A, B> Schema for SchemaMapRequire<A, B> where A: Schema, B: Schema {
 impl<A, B> Schema for SchemaOr<A, B> where A: Schema, B: Schema {
     type Out = Or<A::Out, B::Out>;
 
-    fn find(&self, u: &Unit) -> Option<Self::Out> {
-        if let Some(v) = self.0.find(u) {
+    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
+        if let Some(v) = self.0.find_deep(glob, u) {
             return Some(Or::First(v));
         }
-        Some(Or::Second(self.1.find(u)?))
+        Some(Or::Second(self.1.find_deep(glob, u)?))
     }
 }

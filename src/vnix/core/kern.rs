@@ -115,7 +115,7 @@ impl<'a> Kern<'a> {
 
         let u = msg.msg.clone();
 
-        if let Some((msg, b)) = schm.find(&u) {
+        if let Some((msg, b)) = schm.find_loc(&u) {
             if let Some(msg) = msg {
                 return Ok(Some(self.msg(&usr.name, u.merge(msg))?));
             }
@@ -139,7 +139,7 @@ impl<'a> Kern<'a> {
             )
         );
 
-        if let Some(or) = schm.find(&msg.msg) {
+        if let Some(or) = schm.find_loc(&msg.msg) {
             match or {
                 Or::First(serv) => return self.send(serv.as_str(), msg),
                 Or::Second(lst) => {

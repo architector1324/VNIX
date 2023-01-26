@@ -69,16 +69,16 @@ impl Default for Int {
 }
 
 impl Int {
-    fn find_single_op_with(path: &str, act: SingleOpAct, u: &Unit) -> Option<Operation> {
+    fn find_single_op_with(path: &str, act: SingleOpAct, glob: &Unit, u: &Unit) -> Option<Operation> {
         let schm = SchemaMapEntry(
             Unit::Str(path.into()),
             SchemaOr(SchemaInt, SchemaUnit)
         );
 
-        schm.find(u).map(|or| {
+        schm.find_deep(glob, u).map(|or| {
             let op = match or {
                 Or::First(v) => Operand::Int(v),
-                Or::Second(u) => Operand::Operation(Box::new(Int::find_op(&u)?)),
+                Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?)),
             };
 
             Some(Operation::Single(
@@ -90,7 +90,7 @@ impl Int {
         }).flatten()
     }
 
-    fn find_multi_op_with(path: &str, act: MultiOpAct, u: &Unit) -> Option<Operation> {
+    fn find_multi_op_with(path: &str, act: MultiOpAct, glob: &Unit, u: &Unit) -> Option<Operation> {
         let schm = SchemaMapEntry(
             Unit::Str(path.into()),
             SchemaOr(
@@ -102,17 +102,17 @@ impl Int {
             )
         );
 
-        schm.find(u).map(|or| {
+        schm.find_deep(glob, u).map(|or| {
             let op = match or {
                 Or::First((a, b)) => {
                     let a = match a {
                         Or::First(v) => Operand::Int(v),
-                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(&u)?))
+                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?))
                     };
         
                     let b = match b {
                         Or::First(v) => Operand::Int(v),
-                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(&u)?))
+                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?))
                     };
         
                     vec![a, b]
@@ -121,7 +121,7 @@ impl Int {
                     seq.iter().map(|or| {
                         match or {
                             Or::First(v) => Some(Operand::Int(*v)),
-                            Or::Second(u) => Some(Operand::Operation(Box::new(Int::find_op(u)?)))
+                            Or::Second(u) => Some(Operand::Operation(Box::new(Int::find_op(glob, u)?)))
                         }
                     }).filter_map(|v| v).collect::<Vec<_>>()
             };
@@ -135,7 +135,7 @@ impl Int {
         }).flatten()
     }
 
-    fn find_single_op(u: &Unit) -> Option<Operation> {
+    fn find_single_op(glob: &Unit, u: &Unit) -> Option<Operation> {
         let ops = vec![
             ("neg", SingleOpAct::Neg),
             ("abs", SingleOpAct::Abs),
@@ -147,10 +147,10 @@ impl Int {
             ("log", SingleOpAct::Log),
         ];
 
-        ops.iter().find_map(|(path, act)| Int::find_single_op_with(path.clone(), act.clone(), u))
+        ops.iter().find_map(|(path, act)| Int::find_single_op_with(path.clone(), act.clone(), glob, u))
     }
 
-    fn find_multi_op(u: &Unit) -> Option<Operation> {
+    fn find_multi_op(glob: &Unit, u: &Unit) -> Option<Operation> {
         let ops = vec![
             ("sum", MultiOpAct::Sum),
             ("sub", MultiOpAct::Sub),
@@ -160,16 +160,16 @@ impl Int {
             ("pow", MultiOpAct::Pow)
         ];
 
-        ops.iter().find_map(|(path, act)| Int::find_multi_op_with(path.clone(), act.clone(), u))
+        ops.iter().find_map(|(path, act)| Int::find_multi_op_with(path.clone(), act.clone(), glob, u))
     }
 
-    fn find_op(u: &Unit) -> Option<Operation> {
-        let op = Int::find_single_op(u);
+    fn find_op(glob: &Unit, u: &Unit) -> Option<Operation> {
+        let op = Int::find_single_op(glob, u);
         if op.is_some() {
             return op;
         }
 
-        Int::find_multi_op(u)
+        Int::find_multi_op(glob, u)
     }
 
     fn calc_op(op: &Operation) -> i32 {
@@ -219,10 +219,10 @@ impl Int {
 }
 
 impl FromUnit for Int {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = Int::default();
 
-        inst.op = Int::find_op(u);
+        inst.op = Int::find_op(u, u);
 
         Some(inst)
     }

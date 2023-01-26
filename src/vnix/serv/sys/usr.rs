@@ -38,7 +38,7 @@ impl Default for User {
 }
 
 impl FromUnit for User {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = User::default();
 
         let mut ath = None;
@@ -53,7 +53,7 @@ impl FromUnit for User {
             )
         );
 
-        schm.find(u).map(|(_ath, (_pub, _priv))| {
+        schm.find_loc(u).map(|(_ath, (_pub, _priv))| {
             ath = _ath;
             pub_key = _pub;
             priv_key = _priv;

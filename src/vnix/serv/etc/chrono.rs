@@ -21,11 +21,11 @@ impl Default for Chrono {
 }
 
 impl FromUnit for Chrono {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = Chrono::default();
 
         let schm = SchemaMapEntry(Unit::Str("wait".into()), SchemaInt);
-        inst.wait = schm.find(u);
+        inst.wait = schm.find_loc(u);
 
         Some(inst)
     }

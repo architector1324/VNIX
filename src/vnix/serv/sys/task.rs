@@ -20,11 +20,11 @@ impl Default for Task {
 }
 
 impl FromUnit for Task {
-    fn from_unit(u: &Unit) -> Option<Self> {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = Task::default();
 
         let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
-        inst.task = schm.find(u);
+        inst.task = schm.find_loc(u);
 
         Some(inst)
     }
@@ -53,7 +53,7 @@ impl ServHlr for Task {
 
             let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
 
-            if let Some(out) = msg.map(|msg| schm.find(&msg.msg)).flatten() {
+            if let Some(out) = msg.map(|msg| schm.find_loc(&msg.msg)).flatten() {
                 let msg = Unit::Map(vec![
                     (Unit::Str("msg".into()), out)
                 ]);
