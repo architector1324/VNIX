@@ -893,7 +893,7 @@ impl Unit {
                     return Unit::Lst(lst);
                 }
             },
-            _ => return self
+            _ => return u
         }
         self
     }
