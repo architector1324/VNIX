@@ -1,3 +1,4 @@
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -6,7 +7,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaPair, SchemaInt, Schema, SchemaOr, SchemaSeq, Or, SchemaUnit};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaPair, SchemaInt, Schema, SchemaOr, SchemaSeq, Or, SchemaUnit, SchemaRef};
 
 
 #[derive(Debug)]
@@ -57,7 +58,7 @@ pub enum Operation {
 
 
 pub struct Int {
-    op: Option<Operation>
+    op: Option<(Operation, Vec<String>)>
 }
 
 impl Default for Int {
@@ -222,7 +223,20 @@ impl FromUnit for Int {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = Int::default();
 
-        inst.op = Int::find_op(u, u);
+        if let Some(op) = Int::find_op(u, u) {
+            inst.op = Some((op, vec!["msg".into()]));
+        } else {
+            let schm = SchemaMapEntry(
+                Unit::Str("val".into()),
+                SchemaPair(SchemaRef, SchemaUnit)
+            );
+
+            schm.find_loc(u).map(|(path, loc)| {
+                if let Some(op) = Int::find_op(&u, &loc) {
+                    inst.op = Some((op, path))
+                }
+            });
+        }
 
         Some(inst)
     }
@@ -243,12 +257,10 @@ impl ServHlr for Int {
     }
 
     fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some(ref op) = self.op {
+        if let Some((op, path)) = &self.op {
             let out = Int::calc_op(op);
 
-            let m = Unit::Map(vec![
-                (Unit::Str("msg".into()), Unit::Int(out)),
-            ]);
+            let m = Unit::merge_ref(path.clone().into_iter(), Unit::Int(out), msg.msg).ok_or(KernErr::DbLoadFault)?;
 
             return Ok(Some(kern.msg(&msg.ath, m)?))
         }
