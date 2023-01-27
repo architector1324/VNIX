@@ -121,7 +121,7 @@ impl Display for Unit {
             Unit::Int(i) => write!(f, "{}", i),
             Unit::Dec(d) => write!(f, "{}", d),
             Unit::Str(s) => {
-                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#') {
+                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
                     write!(f, "{}", s)
                 } else {
                     write!(f, "`{}`", s)
@@ -181,7 +181,7 @@ impl<'a> Display for DisplayShort<'a> {
                     s = format!("{}..", s);
                 }
 
-                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#') {
+                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
                     write!(f, "{}", s)
                 } else {
                     write!(f, "`{}`", s)
@@ -426,14 +426,14 @@ impl Unit {
             }
 
             // abc.123#
-            if c.is_alphanumeric() || c == '.' || c == '#' {
+            if c.is_alphanumeric() || c == '.' || c == '#' || c == '_' {
                 let mut s = String::new();
                 let mut tmp = it.clone();
 
                 s.push(c);
 
                 while let Some(c) = it.next() {
-                    if !(c.is_alphanumeric() || c == '.' || c == '#') {
+                    if !(c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
                         break;
                     }
 
@@ -462,7 +462,7 @@ impl Unit {
             let path = path.split(".").map(|s| s.to_string()).collect::<Vec<_>>();
 
             for p in &path {
-                if !p.chars().all(|c| c.is_alphanumeric()) {
+                if !p.chars().all(|c| c.is_alphanumeric() || c == '#' || c == '_') {
                     return Err(UnitParseErr::RefInvalidPath);
                 }
             }
