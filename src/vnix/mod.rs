@@ -42,31 +42,31 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     // prepare ram db
     let content = vec![
-        ("task.login", content::task::LOGIN),
-        ("task.lambda", content::task::LAMBDA),
-        ("task.gfx.login", content::task::GFX_LOGIN),
-        ("task.gfx.lambda", content::task::GFX_LAMBDA),
-        ("img.minecraft.grass", content::img::MINECRAFT_GRASS),
-        ("img.vnix.logo", content::img::VNIX_LOGO),
-        ("img.wall.ai", content::img::WALL_AI),
-        ("font.sys.ascii", content::font::SYS_ASCII),
-        // ("font.sys", content::font::SYS)
+        ("@task.login", content::task::LOGIN),
+        ("@task.lambda", content::task::LAMBDA),
+        ("@task.gfx.login", content::task::GFX_LOGIN),
+        ("@task.gfx.lambda", content::task::GFX_LAMBDA),
+        ("@img.minecraft.grass", content::img::MINECRAFT_GRASS),
+        ("@img.vnix.logo", content::img::VNIX_LOGO),
+        ("@img.wall.ai", content::img::WALL_AI),
+        ("@font.sys.ascii", content::font::SYS_ASCII),
+        // ("@font.sys", content::font::SYS)
     ];
 
     for (path, s) in content {
+        let path = Unit::parse(path.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    
-        kern.db_ram.save(
-            Unit::Str(path.into()),
-            u
-        );
+
+        kern.db_ram.save(path, u);
     }
 
     // login task
     let mut ath: String = "super".into();
 
     'login: loop {
-        let u = kern.db_ram.load(Unit::Str("task.gfx.login".into())).ok_or(KernErr::DbLoadFault)?;
+        let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+
+        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg("super", u)?;
     
         let go = kern.task(msg);
@@ -85,7 +85,9 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     loop {
         // prepare message
         // λ
-        let u = kern.db_ram.load(Unit::Str("task.gfx.lambda".into())).ok_or(KernErr::DbLoadFault)?;
+        let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+
+        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg(&ath, u)?;
 
         // run

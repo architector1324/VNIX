@@ -1,5 +1,5 @@
-use alloc::string::String;
 use alloc::vec::Vec;
+use alloc::string::String;
 
 use compression::prelude::{GZipEncoder, GZipDecoder, Action, EncodeExt, DecodeExt};
 use base64ct::{Base64, Encoding};
@@ -32,31 +32,32 @@ pub fn hex_to_u32(s: &str) -> Option<u32> {
     None
 }
 
-
+#[derive(Debug)]
 pub struct RamDB {
-    pub data: Vec<(Unit, Unit)>
+    pub data: Unit
 }
 
 impl Default for RamDB {
     fn default() -> Self {
         RamDB {
-            data: Vec::new()
+            data: Unit::Map(Vec::new())
         }
     }
 }
 
 impl RamDB {
     pub fn load(&self, key: Unit) -> Option<Unit> {
-        self.data.iter().find_map(|(k, val)| {
-            if k.clone() == key {
-                return Some(val.clone())
-            }
-            None
-        })
+        if let Unit::Ref(path) = key {
+            return Unit::find_ref(path.into_iter(), &self.data);
+        }
+        None
     }
 
     pub fn save(&mut self, key: Unit, val: Unit) {
-        self.data.retain(|(k, _)| k.clone() != key);
-        self.data.push((key, val));
+        if let Unit::Ref(path) = key {
+            if let Some(data) = Unit::merge_ref(path.into_iter(), val, self.data.clone()) {
+                self.data = data;
+            }
+        }
     }
 }

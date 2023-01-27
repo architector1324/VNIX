@@ -1,15 +1,17 @@
 use alloc::vec;
+use alloc::vec::Vec;
+use alloc::string::String;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaUnit, SchemaPair, Schema};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaUnit, SchemaPair, Schema, SchemaRef};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
 pub struct Store {
-    load: Option<Unit>,
-    save: Option<(Unit, Unit)>
+    load: Option<Vec<String>>,
+    save: Option<(Vec<String>, Unit)>
 }
 
 impl Default for Store {
@@ -26,10 +28,10 @@ impl FromUnit for Store {
         let mut store = Store::default();
 
         let schm = SchemaMap(
-            SchemaMapEntry(Unit::Str("load".into()), SchemaUnit),
+            SchemaMapEntry(Unit::Str("load".into()), SchemaRef),
             SchemaMapEntry(
                 Unit::Str("save".into()),
-                SchemaPair(SchemaUnit, SchemaUnit)
+                SchemaPair(SchemaRef, SchemaUnit)
             )
         );
 
@@ -57,16 +59,12 @@ impl ServHlr for Store {
     }
 
     fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some((key, val)) = &self.save {
-            kern.db_ram.save(key.clone(), val.clone());
+        if let Some((path, val)) = &self.save {
+            kern.db_ram.save(Unit::Ref(path.clone()), val.clone());
         }
 
-        if let Some(key) = &self.load {
-            let u = if key.clone() != Unit::Str("all".into()) {
-                kern.db_ram.load(key.clone()).ok_or(KernErr::DbLoadFault)?
-            } else {
-                Unit::Map(kern.db_ram.data.clone())
-            };
+        if let Some(path) = &self.load {
+            let u = kern.db_ram.load(Unit::Ref(path.clone())).ok_or(KernErr::DbLoadFault)?;
 
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), u)

@@ -1,7 +1,7 @@
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
 
-use alloc::format;
+use alloc::{format, vec};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -72,6 +72,7 @@ pub struct SchemaByte;
 pub struct SchemaInt;
 pub struct SchemaDec;
 pub struct  SchemaStr;
+pub struct SchemaRef;
 pub struct  SchemaUnit;
 
 pub struct SchemaPair<A, B>(pub A, pub B) where A: Schema, B: Schema;
@@ -657,7 +658,11 @@ impl Unit {
                 if let Some(path_s) = path.next() {
                     if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
                         return Unit::find_ref(path, next);
+                    } else if path_s == "all" {
+                        return Some(u.clone());
                     }
+                } else {
+                    return Some(u.clone());
                 }
             },
             Unit::Lst(lst) => {
@@ -667,9 +672,64 @@ impl Unit {
                             return Unit::find_ref(path, next);
                         }
                     }
+                } else {
+                    return Some(u.clone())
+                }
+            },
+            Unit::Pair(u0, u1) => {
+                if let Some(path_s) = path.next() {
+                    if let Some(idx) = path_s.parse::<usize>().ok() {
+                        match idx {
+                            0 => return Unit::find_ref(path, u0),
+                            1 => return Unit::find_ref(path, u1),
+                            _ => ()
+                        }
+                    }
+                } else {
+                    return Some(u.clone())
                 }
             }
             _ => return Some(u.clone())
+        }
+        None
+    }
+
+    pub fn merge_ref<I>(mut path: I, val: Unit, u: Unit) -> Option<Unit> where I: Iterator<Item = String> {
+        match u {
+            Unit::Map(m) => {
+                if let Some(path_s) = path.next() {
+                    if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
+                        let val = Unit::merge_ref(path, val, next.clone());
+                        if let Some(val) = val {
+                            let val = next.clone().merge(val);
+                            let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
+
+                            return Some(Unit::Map(m).merge(u))
+                        }
+                    } else {
+                        let val = Unit::merge_ref(path, val, Unit::Map(Vec::new()));
+                        if let Some(val) = val {
+                            let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
+                            return Some(Unit::Map(m).merge(u))
+                        }
+                    }
+                } else {
+                    return Some(val);
+                }
+            },
+            Unit::Lst(lst) => todo!(),
+            Unit::Pair(u0, u1) => todo!(),
+            _ => {
+                if let Some(path_s) = path.next() {
+                    let val = Unit::merge_ref(path, val, Unit::Map(Vec::new()));
+                    if let Some(val) = val {
+                        let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
+                        return Some(u)
+                    }
+                } else {
+                    return Some(val);
+                }
+            }
         }
         None
     }
@@ -852,6 +912,21 @@ impl Schema for SchemaUnit {
 
     fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         Some(u.clone())
+    }
+}
+
+impl Schema for SchemaRef {
+    type Out = Vec<String>;
+
+    fn find_deep(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
+        self.find(glob, u)
+    }
+
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Ref(path) = u {
+            return Some(path.clone())
+        }
+        None
     }
 }
 
