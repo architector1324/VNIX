@@ -86,6 +86,7 @@ pub struct SchemaMapFirstRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Sc
 pub struct SchemaMapSecondRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 pub struct SchemaMapRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 
+#[derive(Debug)]
 pub enum Or<A, B> {
     First(A),
     Second(B)
@@ -695,9 +696,9 @@ impl Unit {
     }
 
     pub fn merge_ref<I>(mut path: I, val: Unit, u: Unit) -> Option<Unit> where I: Iterator<Item = String> {
-        match u {
-            Unit::Map(m) => {
-                if let Some(path_s) = path.next() {
+        if let Some(path_s) = path.next() {
+            match u {
+                Unit::Map(m) => {
                     if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
                         let val = Unit::merge_ref(path, val, next.clone());
                         if let Some(val) = val {
@@ -713,23 +714,30 @@ impl Unit {
                             return Some(Unit::Map(m).merge(u))
                         }
                     }
-                } else {
-                    return Some(val);
-                }
-            },
-            Unit::Lst(lst) => todo!(),
-            Unit::Pair(u0, u1) => todo!(),
-            _ => {
-                if let Some(path_s) = path.next() {
+                },
+                Unit::Lst(lst) => todo!(),
+                Unit::Pair(u0, u1) => {
+                    if let Some(idx) = path_s.parse::<usize>().ok() {
+                        let u = match idx {
+                            0 => u0,
+                            1 => u1,
+                            _ => return Some(Unit::Pair(u0, u1))
+                        };
+
+                        todo!()
+                    }
+                },
+                _ => {
                     let val = Unit::merge_ref(path, val, Unit::Map(Vec::new()));
+
                     if let Some(val) = val {
                         let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
                         return Some(u)
                     }
-                } else {
-                    return Some(val);
                 }
             }
+        } else {
+            return Some(val);
         }
         None
     }
