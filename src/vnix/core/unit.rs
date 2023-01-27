@@ -715,16 +715,34 @@ impl Unit {
                         }
                     }
                 },
-                Unit::Lst(lst) => todo!(),
+                Unit::Lst(mut lst) => {
+                    if let Some(idx) = path_s.parse::<usize>().ok() {
+                        if let Some(u) = lst.get_mut(idx) {
+                            let val = Unit::merge_ref(path, val, u.clone());
+                            if let Some(val) = val {
+                               *u = val;
+                            }
+                        }
+                    }
+                    return Some(Unit::Lst(lst));
+                },
                 Unit::Pair(u0, u1) => {
                     if let Some(idx) = path_s.parse::<usize>().ok() {
-                        let u = match idx {
-                            0 => u0,
-                            1 => u1,
+                        match idx {
+                            0 => {
+                                let val = Unit::merge_ref(path, val, *u0);
+                                if let Some(val) = val {
+                                    return Some(Unit::Pair(Box::new(val), u1))
+                                }
+                            },
+                            1 => {
+                                let val = Unit::merge_ref(path, val, *u1);
+                                if let Some(val) = val {
+                                    return Some(Unit::Pair(u0, Box::new(val)))
+                                }
+                            },
                             _ => return Some(Unit::Pair(u0, u1))
                         };
-
-                        todo!()
                     }
                 },
                 _ => {
@@ -834,16 +852,48 @@ impl Unit {
     }
 
     pub fn merge(self, u: Unit) -> Unit {
-        if let Unit::Map(m) = u {
-            if let Some(mut tmp) = self.as_map() {
-                tmp.retain(|(u, _)| {
-                    m.iter().find(|(n, _)| u == n).is_none()
-                });
+        match u {
+            Unit::Map(m) => {
+                if let Some(mut tmp) = self.as_map() {
+                    tmp.retain(|(u, _)| {
+                        m.iter().find(|(n, _)| u == n).is_none()
+                    });
 
-                tmp.extend(m);
+                    tmp.extend(m);
+                    return Unit::Map(tmp);
+                }
+            },
+            Unit::Pair(u0, u1) => {
+                if self.as_pair().is_some() {
+                    return Unit::Pair(u0, u1);
+                }
 
-                return Unit::Map(tmp);
+                if let Some(mut tmp) = self.as_map() {
+                    tmp.retain(|(u, _)| u.clone() == *u0);
+                    tmp.push((*u0, *u1));
+                    return Unit::Map(tmp);
+                }
+
+                if let Some(mut tmp) = self.as_vec() {
+                    tmp.retain(|u| u.clone() == Unit::Pair(u0.clone(), u1.clone()));
+                    tmp.push(Unit::Pair(u0.clone(), u1.clone()));
+                    return Unit::Lst(tmp);
+                }
             }
+            Unit::Lst(lst) => {
+                // if let Some(mut tmp) = self.as_vec() {
+                //     tmp.retain(|u| {
+                //         lst.iter().find(|n| *u == **n).is_none()
+                //     });
+
+                //     tmp.extend(lst);
+                //     return Unit::Lst(tmp);
+                // }
+                if self.as_vec().is_some() {
+                    return Unit::Lst(lst);
+                }
+            },
+            _ => return self
         }
         self
     }
