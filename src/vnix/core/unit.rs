@@ -44,7 +44,7 @@ pub enum Unit {
     Map(Vec<(Unit, Unit)>)
 }
 
-pub trait Schema {
+pub trait Schema: Clone {
     type Out;
 
     fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out>;
@@ -66,31 +66,61 @@ pub trait Schema {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SchemaNone;
+
+#[derive(Debug, Clone)]
 pub struct SchemaBool;
+
+#[derive(Debug, Clone)]
 pub struct SchemaByte;
+
+#[derive(Debug, Clone)]
 pub struct SchemaInt;
+
+#[derive(Debug, Clone)]
 pub struct SchemaDec;
-pub struct  SchemaStr;
+
+#[derive(Debug, Clone)]
+pub struct SchemaStr;
+
+#[derive(Debug, Clone)]
 pub struct SchemaRef;
+
+#[derive(Debug, Clone)]
 pub struct  SchemaUnit;
 
+#[derive(Debug, Clone)]
 pub struct SchemaPair<A, B>(pub A, pub B) where A: Schema, B: Schema;
 
+#[derive(Debug, Clone)]
 pub struct SchemaSeq<A>(pub A) where A: Schema;
+
+#[derive(Debug, Clone)]
 pub struct SchemaMapSeq<A, B>(pub A, pub B) where A: Schema, B: Schema;
 
+#[derive(Debug, Clone)]
 pub struct SchemaMapEntry<A>(pub Unit, pub A) where A: Schema;
+
+#[derive(Debug, Clone)]
 pub struct SchemaMap<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+
+#[derive(Debug, Clone)]
 pub struct SchemaMapFirstRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+
+#[derive(Debug, Clone)]
 pub struct SchemaMapSecondRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
+
+#[derive(Debug, Clone)]
 pub struct SchemaMapRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Or<A, B> {
     First(A),
     Second(B)
 }
+
+#[derive(Debug, Clone)]
 pub struct SchemaOr<A, B>(pub A, pub B) where A: Schema, B: Schema;
 
 pub trait FromUnit: Sized {

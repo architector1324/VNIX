@@ -76,7 +76,7 @@ impl Int {
             SchemaOr(SchemaInt, SchemaUnit)
         );
 
-        schm.find_deep(glob, u).map(|or| {
+        schm.find_deep(glob, u).and_then(|or| {
             let op = match or {
                 Or::First(v) => Operand::Int(v),
                 Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?)),
@@ -88,7 +88,7 @@ impl Int {
                     op
                 }
             ))
-        }).flatten()
+        })
     }
 
     fn find_multi_op_with(path: &str, act: MultiOpAct, glob: &Unit, u: &Unit) -> Option<Operation> {
@@ -103,7 +103,7 @@ impl Int {
             )
         );
 
-        schm.find_deep(glob, u).map(|or| {
+        schm.find_deep(glob, u).and_then(|or| {
             let op = match or {
                 Or::First((a, b)) => {
                     let a = match a {
@@ -133,7 +133,7 @@ impl Int {
                     op
                 }
             ))
-        }).flatten()
+        })
     }
 
     fn find_single_op(glob: &Unit, u: &Unit) -> Option<Operation> {
