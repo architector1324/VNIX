@@ -23,6 +23,7 @@ pub enum Act {
     Clear,
     Nl,
     GetKey,
+    Trc,
     Say(Unit)
 }
 
@@ -39,10 +40,11 @@ pub struct Term {
 }
 
 impl Act {
-    fn act(self, term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
+    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<(), KernErr> {
         match self {
             Act::Clear => term.clear(kern),
             Act::Nl => term.print("\n", kern),
+            Act::Trc => term.print(format!("{}", msg).as_str(), kern),
             Act::Say(msg) => term.out(&msg, kern),
             Act::GetKey => term.get_key(kern)
         }
@@ -104,6 +106,7 @@ impl FromUnit for Act {
                     "cls" => Some(Act::Clear),
                     "key" => Some(Act::GetKey),
                     "nl" => Some(Act::Nl),
+                    "trc" => Some(Act::Trc),
                     "say" => Some(Act::Say(Unit::find_ref(vec!["msg".into()].into_iter(), glob)?)),
                     _ => None
                 },
@@ -185,12 +188,12 @@ impl ServHlr for Term {
     fn handle(&mut self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(acts) = self.act.clone() {
             for act in acts {
-                act.act(self, kern)?;
+                act.act(self, &msg, kern)?;
             }
         } else {
-            if let Some(msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
-                let act = Act::Say(msg);
-                act.act(self, kern)?;
+            if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
+                let act = Act::Say(_msg);
+                act.act(self, &msg, kern)?;
             }
         }
 
