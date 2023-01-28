@@ -154,7 +154,7 @@ impl Display for Unit {
                 if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
                     write!(f, "{}", s)
                 } else {
-                    write!(f, "`{}`", s)
+                    write!(f, "`{}`", s.replace("\\r", "\r").replace("\\n", "\n"))
                 }
             },
             Unit::Ref(path) => write!(f, "@{}", path.join(".")),
