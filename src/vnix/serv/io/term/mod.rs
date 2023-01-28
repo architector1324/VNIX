@@ -34,9 +34,20 @@ pub enum Mode {
 }
 
 #[derive(Debug)]
+pub struct TermBase {
+    pos: (usize, usize)
+}
+
+#[derive(Debug)]
 pub struct Term {
     mode: Mode,
+    font: Font,
     act: Option<Vec<Act>>
+}
+
+#[derive(Debug)]
+struct Font {
+    glyths: Vec<(char, [u8; 16])>
 }
 
 impl Act {
@@ -52,17 +63,80 @@ impl Act {
 }
 
 impl Term {
+    fn print_glyth(&mut self, ch: char, pos: (usize, usize), kern: &mut Kern) -> Result<(), KernErr> {
+        let img = self.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
+
+        for y in 0..16 {
+            for x in 0..8 {
+                let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
+                kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
+            }
+        }
+        Ok(())
+    }
+
     fn print(&mut self, s: &str, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
             Mode::Cli => write!(kern.cli, "{s}").map_err(|_| KernErr::CLIErr(CLIErr::Write)),
-            Mode::Gfx => todo!()
+            Mode::Gfx => {
+                let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+                for ch in s.chars() {
+                    if ch == '\n' {
+                        kern.term.pos.1 += 1;
+                        kern.term.pos.0 = 0;
+                    } else if ch == '\r' {
+                        self.clear_line(kern)?;
+                    } else {
+                        self.print_glyth(ch, (kern.term.pos.0 * 8, kern.term.pos.1 * 16), kern)?;
+                        kern.term.pos.0 += 1;
+                    }
+
+                    if kern.term.pos.0 * 8 >= w {
+                        kern.term.pos.1 += 1;
+                        kern.term.pos.0 = 0;
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn clear_line(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
+        match self.mode {
+            Mode::Cli => write!(kern.cli, "\r").map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
+            Mode::Gfx => {
+                let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+                kern.term.pos.0 = 0;
+        
+                for _ in 0..(w / 8 - 1) {
+                    self.print(" ", kern)?;
+                }
+                kern.term.pos.0 = 0;
+
+                Ok(())
+            }
         }
     }
 
     fn clear(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
             Mode::Cli => kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
-            Mode::Gfx => todo!()
+            Mode::Gfx => {
+                let (_, h) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+                kern.term.pos.1 = 0;
+
+                for _ in 0..(h / 16 - 1) {
+                    self.clear_line(kern)?;
+                    kern.term.pos.1 += 1;
+                }
+
+                kern.term.pos.1 = 0;
+
+                Ok(())
+            }
         }
     }
 
@@ -74,7 +148,15 @@ impl Term {
     fn out(&mut self, msg: &Unit, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
             Mode::Cli => write!(kern.cli, "{}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write)),
-            Mode::Gfx => todo!()
+            Mode::Gfx => self.print(format!("{}", msg).as_str(), kern),
+        }
+    }
+}
+
+impl Default for TermBase {
+    fn default() -> Self {
+        TermBase {
+            pos: (0, 0)
         }
     }
 }
@@ -83,6 +165,7 @@ impl Default for Term {
     fn default() -> Self {
         Term {
             mode: Mode::Cli,
+            font: Font{glyths: Vec::from(content::SYS_FONT)},
             act: None
         }
     }

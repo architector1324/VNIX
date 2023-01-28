@@ -8,6 +8,7 @@ use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaSeq, SchemaUnit, Sch
 use super::user::Usr;
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
+use crate::vnix::serv::io::term::TermBase;
 use crate::vnix::utils::RamDB;
 
 #[derive(Debug)]
@@ -46,6 +47,8 @@ pub struct Kern<'a> {
     pub disp: &'a mut dyn Disp,
     pub time: &'a mut dyn Time,
     pub rnd: &'a mut dyn Rnd,
+
+    pub term: TermBase,
     pub db_ram: RamDB,
 
     // vnix
@@ -61,6 +64,7 @@ impl<'a> Kern<'a> {
             time,
             rnd,
             db_ram: RamDB::default(),
+            term: TermBase::default(),
             users: Vec::new(),
             services: Vec::new()
         };
