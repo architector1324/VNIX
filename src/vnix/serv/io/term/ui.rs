@@ -9,7 +9,7 @@ use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapSecondRequire, SchemaMapE
 
 use crate::vnix::utils;
 
-use super::TermAct;
+use super::{TermAct, Mode};
 
 
 #[derive(Debug, Clone)]
@@ -28,6 +28,12 @@ pub struct Say {
 }
 
 #[derive(Debug, Clone)]
+pub struct Put {
+    pub pos: (i32, i32),
+    pub str: String
+}
+
+#[derive(Debug, Clone)]
 pub struct Img {
     pub size: (usize, usize),
     pub img: Vec<u32>
@@ -38,7 +44,6 @@ pub struct Sprite {
     pub pos: (i32, i32),
     pub img: Img
 }
-
 
 impl FromUnit for Inp {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
@@ -95,6 +100,29 @@ impl FromUnit for Say {
                 shrt: shrt.map(|shrt| shrt as usize),
                 nl: nl.unwrap_or(false)
             })
+        })
+    }
+}
+
+impl FromUnit for Put {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapRequire(
+            SchemaMapEntry(
+                Unit::Str("pos".into()),
+                SchemaPair(SchemaInt, SchemaInt)
+            ),
+            SchemaMapEntry(
+                Unit::Str("put".into()),
+                SchemaStr
+            )
+        );
+
+        schm.find_deep(glob, u).map(|(pos, str)| {
+            Put {pos, str}
         })
     }
 }
@@ -205,6 +233,29 @@ impl TermAct for Inp {
 
         let u = Unit::merge_ref(self.out.into_iter(), out, Unit::Map(Vec::new()));
         Ok(u)
+    }
+}
+
+impl TermAct for Put {
+    fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
+        match term.mode {
+            Mode::Cli => {
+                let (_w, _h) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                unimplemented!()
+            },
+            Mode::Gfx => {
+                let (w, h) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                let (w, h) = (w / 8, h / 16);
+
+                if self.pos.0 < w as i32 && self.pos.1 < h as i32 {
+                    if let Some(ch) = self.str.chars().next() {
+                        term.print_glyth(ch, ((self.pos.0 * 8) as usize, (self.pos.1 * 16) as usize), kern)?;
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 }
 

@@ -31,12 +31,13 @@ enum Act {
     GetGfxRes(Vec<String>),
     Say(ui::Say),
     Inp(ui::Inp),
+    Put(ui::Put),
     Img(ui::Img),
     Spr(ui::Sprite)
 }
 
 #[derive(Debug)]
-enum Mode {
+pub enum Mode {
     Cli,
     Gfx,
 }
@@ -94,6 +95,7 @@ impl TermAct for Act {
                 return Ok(u);
             },
             Act::Inp(inp) => return inp.act(term, msg, kern),
+            Act::Put(put) => return put.act(term, msg, kern),
             Act::Img(img) => return img.act(term, msg, kern),
             Act::Spr(spr) => return spr.act(term, msg, kern)
         }
@@ -339,6 +341,10 @@ impl FromUnit for Act {
                         Or::Second(u) => {
                             if let Some(inp) = ui::Inp::from_unit(glob, &u) {
                                 return Some(Act::Inp(inp));
+                            }
+
+                            if let Some(put) = ui::Put::from_unit(glob, &u) {
+                                return Some(Act::Put(put));
                             }
 
                             if let Some(say) = ui::Say::from_unit(glob, &u) {
