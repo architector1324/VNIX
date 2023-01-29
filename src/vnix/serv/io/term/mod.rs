@@ -10,11 +10,15 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr, SchemaMapSeq, SchemaByte};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr, SchemaMapSeq, SchemaByte};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 
+
+pub trait TermAct {
+    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr>;
+}
 
 #[derive(Debug, Clone)]
 enum Act {
@@ -24,7 +28,8 @@ enum Act {
     Trc,
     Say(ui::Say),
     Inp(ui::Inp),
-    Img(ui::Img)
+    Img(ui::Img),
+    Spr(ui::Sprite)
 }
 
 #[derive(Debug)]
@@ -50,30 +55,13 @@ struct Font {
     glyths: Vec<(char, [u8; 16])>
 }
 
-impl Act {
+impl TermAct for Act {
     fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         match self {
             Act::Clear => term.clear(kern)?,
             Act::Nl => term.print("\n", kern)?,
             Act::Trc => term.print(format!("{}", msg).as_str(), kern)?,
-            Act::Say(say) => {
-                match say.msg {
-                    Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
-                    _ => {
-                        if let Some(shrt) = say.shrt {
-                            term.print(format!("{}", DisplayShort(&say.msg, shrt)).as_str(), kern)?;
-                        } else {
-                            term.print(format!("{}", say.msg).as_str(), kern)?;
-                        }
-                    }
-                }
-
-                if say.nl {
-                    term.print(format!("\n").as_str(), kern)?;
-                }
-
-                return Ok(None);
-            },
+            Act::Say(say) => return say.act(term, msg, kern),
             Act::GetKey(may_path) => {
                 if let Some(key) = term.get_key(kern)? {
                     if let Some(path) = may_path {
@@ -82,32 +70,9 @@ impl Act {
                     }
                 }
             },
-            Act::Inp(inp) => {
-                term.print(inp.pmt.as_str(), kern)?;
-                let out = term.input(inp.sct, kern)?;
-
-                if out.is_empty() {
-                    return Ok(None);
-                }
-
-                let out = if inp.prs {
-                    Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
-                } else {
-                    Unit::Str(out)
-                };
-
-                let u = Unit::merge_ref(inp.out.into_iter(), out, Unit::Map(Vec::new()));
-                return Ok(u);
-            },
-            Act::Img(img) => {
-                for x in 0..img.size.0 {
-                    for y in 0..img.size.1 {
-                        if let Some(px) = img.img.get(x + img.size.0 * y) {
-                            kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
-                        }
-                    }
-                }
-            }
+            Act::Inp(inp) => return inp.act(term, msg, kern),
+            Act::Img(img) => return img.act(term, msg, kern),
+            Act::Spr(spr) => return spr.act(term, msg, kern)
         }
         Ok(None)
     }
@@ -355,6 +320,10 @@ impl FromUnit for Act {
 
                             if let Some(img) = ui::Img::from_unit(glob, &u) {
                                 return Some(Act::Img(img));
+                            }
+
+                            if let Some(spr) = ui::Sprite::from_unit(glob, &u) {
+                                return Some(Act::Spr(spr));
                             }
                             None
                         }

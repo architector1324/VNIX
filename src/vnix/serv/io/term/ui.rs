@@ -1,10 +1,15 @@
-use alloc::vec;
+use alloc::{vec, format};
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaMapRequire, SchemaRef, SchemaPair, SchemaOr, SchemaSeq, Or};
+
+use crate::vnix::core::msg::Msg;
+use crate::vnix::core::kern::KernErr;
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaMapRequire, SchemaRef, SchemaPair, SchemaOr, SchemaSeq, Or, DisplayShort};
 
 use crate::vnix::utils;
+
+use super::TermAct;
 
 
 #[derive(Debug, Clone)]
@@ -26,6 +31,12 @@ pub struct Say {
 pub struct Img {
     pub size: (usize, usize),
     pub img: Vec<u32>
+}
+
+#[derive(Debug, Clone)]
+pub struct Sprite {
+    pub pos: (i32, i32),
+    pub img: Img
 }
 
 
@@ -125,5 +136,106 @@ impl FromUnit for Img {
                 img
             })
         })
+    }
+}
+
+impl FromUnit for Sprite {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapRequire(
+            SchemaMapEntry(
+                Unit::Str("pos".into()),
+                SchemaPair(SchemaInt, SchemaInt)
+            ),
+            SchemaMapEntry(
+                Unit::Str("img".into()),
+                SchemaUnit
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|(pos, img)| {
+            let img = Img::from_unit(glob, &img)?;
+
+            Some(Sprite {
+                pos,
+                img
+            })
+        })
+    }
+}
+
+impl TermAct for Say {
+    fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, crate::vnix::core::kern::KernErr> {
+        match self.msg {
+            Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
+            _ => {
+                if let Some(shrt) = self.shrt {
+                    term.print(format!("{}", DisplayShort(&self.msg, shrt)).as_str(), kern)?;
+                } else {
+                    term.print(format!("{}", self.msg).as_str(), kern)?;
+                }
+            }
+        }
+
+        if self.nl {
+            term.print(format!("\n").as_str(), kern)?;
+        }
+
+        Ok(None)
+    }
+}
+
+impl TermAct for Inp {
+    fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, crate::vnix::core::kern::KernErr> {
+        term.print(self.pmt.as_str(), kern)?;
+        let out = term.input(self.sct, kern)?;
+
+        if out.is_empty() {
+            return Ok(None);
+        }
+
+        let out = if self.prs {
+            Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
+        } else {
+            Unit::Str(out)
+        };
+
+        let u = Unit::merge_ref(self.out.into_iter(), out, Unit::Map(Vec::new()));
+        Ok(u)
+    }
+}
+
+impl TermAct for Img {
+    fn act(self, _term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
+        for x in 0..self.size.0 {
+            for y in 0..self.size.1 {
+                if let Some(px) = self.img.get(x + self.size.0 * y) {
+                    kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
+                }
+            }
+        }
+        Ok(None)
+    }
+}
+
+impl TermAct for Sprite {
+    fn act(self, _term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
+        let w = self.img.size.0;
+        let h = self.img.size.1;
+
+        for x in 0..w {
+            for y in 0..h {
+                if let Some(px) = self.img.img.get(x + w * y) {
+                    let x_offs = (self.pos.0 - (w as i32 / 2)) as usize;
+                    let y_offs = (self.pos.1 - (h as i32 / 2)) as usize;
+
+                    kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
+                }
+            }
+        }
+        Ok(None)
     }
 }
