@@ -60,49 +60,39 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         kern.db_ram.save(path, u);
     }
 
-    let s = "{term.gfx:[cls (say `Hello, vnix!`) (key @msg) nl trc nl say]} msg:abc";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // login task
+    let mut ath: String = "super".into();
 
-    let msg = kern.msg("super", u)?;
-    let msg = kern.send("io.term", msg)?;
+    'login: loop {
+        let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    msg.map(|msg| writeln!(kern.cli, "{:?}", msg.msg.as_map_find("msg")));
-
-    Ok(())
-
-    // // login task
-    // let mut ath: String = "super".into();
-
-    // 'login: loop {
-    //     let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    //     let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
-    //     let msg = kern.msg("super", u)?;
+        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
+        let msg = kern.msg("super", u)?;
     
-    //     let go = kern.task(msg);
+        let go = kern.task(msg);
 
-    //     match go {
-    //         Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
-    //         Ok(msg) => {
-    //             if let Some(msg) = msg {
-    //                 ath = msg.ath;
-    //                 break 'login;
-    //             }
-    //         }
-    //     }
-    // }
+        match go {
+            Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+            Ok(msg) => {
+                if let Some(msg) = msg {
+                    ath = msg.ath;
+                    break 'login;
+                }
+            }
+        }
+    }
 
-    // loop {
-    //     // prepare message
-    //     // λ
-    //     let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    loop {
+        // prepare message
+        // λ
+        let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    //     let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
-    //     let msg = kern.msg(&ath, u)?;
+        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
+        let msg = kern.msg(&ath, u)?;
 
-    //     // run
-    //     if let Err(e) = kern.task(msg) {
-    //         writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-    //     }
-    // }
+        // run
+        if let Err(e) = kern.task(msg) {
+            writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        }
+    }
 }

@@ -2,16 +2,14 @@ mod content;
 
 use core::fmt::Write;
 
-use alloc::boxed::Box;
 use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
-use sha2::digest::typenum::Mod;
 
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaMapRequire, SchemaMapSeq, SchemaByte, SchemaRef};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaMapRequire, SchemaMapSeq, SchemaByte, SchemaRef, SchemaMapFirstRequire};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -19,16 +17,24 @@ use crate::vnix::utils;
 
 
 #[derive(Debug, Clone)]
-pub enum Act {
+struct Inp {
+    pmt: String,
+    prs: bool,
+    out: Vec<String>
+}
+
+#[derive(Debug, Clone)]
+enum Act {
     Clear,
     Nl,
     GetKey(Option<Vec<String>>),
     Trc,
-    Say(Unit)
+    Say(Unit),
+    Inp(Inp)
 }
 
 #[derive(Debug)]
-pub enum Mode {
+enum Mode {
     Cli,
     Gfx,
 }
@@ -64,6 +70,19 @@ impl Act {
                         return Ok(u);
                     }
                 }
+            },
+            Act::Inp(inp) => {
+                term.print(inp.pmt.as_str(), kern)?;
+                let out = term.input(kern)?;
+
+                let out = if inp.prs {
+                    Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
+                } else {
+                    Unit::Str(out)
+                };
+
+                let u = Unit::merge_ref(inp.out.into_iter(), out, Unit::Map(Vec::new()));
+                return Ok(u);
             }
         }
         Ok(None)
@@ -95,6 +114,13 @@ impl Term {
                         kern.term.pos.0 = 0;
                     } else if ch == '\r' {
                         self.clear_line(kern)?;
+                    } else if ch == '\u{8}' {
+                        if kern.term.pos.0 == 0 && kern.term.pos.1 > 0 {
+                            kern.term.pos.1 -= 1;
+                        } else {
+                            kern.term.pos.0 -= 1;
+                        }
+                        self.print_glyth(' ', (kern.term.pos.0 * 8, kern.term.pos.1 * 16), kern)?;
                     } else {
                         self.print_glyth(ch, (kern.term.pos.0 * 8, kern.term.pos.1 * 16), kern)?;
                         kern.term.pos.0 += 1;
@@ -108,6 +134,29 @@ impl Term {
                 Ok(())
             }
         }
+    }
+
+    fn input(&mut self, kern: &mut Kern) -> Result<String, KernErr> {
+        let mut out = String::new();
+
+        let save_cur = kern.term.pos.clone();
+
+        loop {
+            if let Some(key) = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+                if let TermKey::Char(c) = key {
+                    if c == '\r' || c == '\n' {
+                        break;
+                    } else if c == '\u{8}' && kern.term.pos.0 > save_cur.0 {
+                        out.pop();
+                        self.print(format!("{}", c).as_str(), kern)?;
+                    } else if !c.is_ascii_control() {
+                        write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        self.print(format!("{}", c).as_str(), kern)?;
+                    }
+                }
+            }
+        }
+        Ok(out)
     }
 
     fn clear_line(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
@@ -179,6 +228,30 @@ impl Default for Term {
     }
 }
 
+impl FromUnit for Inp {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapRequire(
+            SchemaMapEntry(Unit::Str("pmt".into()), SchemaStr),
+            SchemaMap(
+                SchemaMapEntry(Unit::Str("prs".into()), SchemaBool),
+                SchemaMapEntry(Unit::Str("out".into()), SchemaRef),
+            )
+        );
+
+        schm.find_deep(glob, u).map(|(pmt, (prs, out))| {
+            Inp {
+                pmt,
+                prs: prs.unwrap_or(false),
+                out: out.unwrap_or(vec!["msg".into()])
+            }
+        })
+    }
+}
+
 impl FromUnit for Act {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -188,8 +261,11 @@ impl FromUnit for Act {
         let schm = SchemaOr(
             SchemaStr,
             SchemaOr(
-                SchemaPair(SchemaStr, SchemaRef),
-                SchemaPair(SchemaStr, SchemaUnit)
+                SchemaOr(
+                    SchemaPair(SchemaStr, SchemaRef),
+                    SchemaPair(SchemaStr, SchemaUnit)
+                ),
+                SchemaUnit
             )
         );
 
@@ -206,16 +282,27 @@ impl FromUnit for Act {
                 },
                 Or::Second(or) =>
                     match or {
-                        Or::First((s, path)) =>
-                            match s.as_str() {
-                                "key" => Some(Act::GetKey(Some(path))),
-                                _ => None
-                            },
-                        Or::Second((s, msg)) =>
-                            match s.as_str() {
-                                "say" => Some(Act::Say(msg)),
-                                _ => None
-                            }
+                        Or::First(or) =>
+                        match or {
+                            Or::First((s, path)) =>
+                                match s.as_str() {
+                                    "key" => Some(Act::GetKey(Some(path))),
+                                    _ => None
+                                },
+                            Or::Second((s, msg)) =>
+                                match s.as_str() {
+                                    "say" => Some(Act::Say(msg)),
+                                    "inp" => Some(Act::Inp(
+                                        Inp {
+                                            pmt: msg.as_str()?,
+                                            prs: false,
+                                            out: vec!["msg".into()]
+                                        }
+                                    )),
+                                    _ => None
+                                }
+                        },
+                        Or::Second(u) => Some(Act::Inp(Inp::from_unit(glob, &u)?))
                     }
             }
         })
@@ -287,7 +374,7 @@ impl ServHlr for Term {
         return Ok(kern.msg(ath, m)?)
     }
 
-    fn handle(&mut self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         let mut out_u: Option<Unit> = None;
 
         if let Some(acts) = self.act.clone() {
