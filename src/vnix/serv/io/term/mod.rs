@@ -75,6 +75,10 @@ impl Act {
                 term.print(inp.pmt.as_str(), kern)?;
                 let out = term.input(kern)?;
 
+                if out.is_empty() {
+                    return Ok(None);
+                }
+
                 let out = if inp.prs {
                     Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
                 } else {
