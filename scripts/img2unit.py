@@ -40,7 +40,7 @@ def convert(size, dim, dat, zip):
         img_s = base64.b64encode(img_s).decode()
         img_s = f'`{img_s}`'
 
-    return f'{{img:(({size[0]} {size[1]}) {img_s})}}'
+    return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
 
 
 # parse args

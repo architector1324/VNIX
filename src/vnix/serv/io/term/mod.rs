@@ -1,4 +1,5 @@
 mod content;
+mod ui;
 
 use core::fmt::Write;
 
@@ -9,27 +10,10 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaInt, SchemaStr, SchemaUnit, Schema, SchemaMap, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaMapRequire, SchemaMapSeq, SchemaByte, SchemaRef, SchemaMapFirstRequire};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::utils;
-
-
-#[derive(Debug, Clone)]
-struct Inp {
-    pmt: String,
-    prs: bool,
-    sct: bool,
-    out: Vec<String>
-}
-
-#[derive(Debug, Clone)]
-struct Say {
-    msg: Unit,
-    shrt: Option<usize>,
-    nl: bool
-}
 
 
 #[derive(Debug, Clone)]
@@ -38,8 +22,9 @@ enum Act {
     Nl,
     GetKey(Option<Vec<String>>),
     Trc,
-    Say(Say),
-    Inp(Inp)
+    Say(ui::Say),
+    Inp(ui::Inp),
+    Img(ui::Img)
 }
 
 #[derive(Debug)]
@@ -113,6 +98,15 @@ impl Act {
 
                 let u = Unit::merge_ref(inp.out.into_iter(), out, Unit::Map(Vec::new()));
                 return Ok(u);
+            },
+            Act::Img(img) => {
+                for x in 0..img.size.0 {
+                    for y in 0..img.size.1 {
+                        if let Some(px) = img.img.get(x + img.size.0 * y) {
+                            kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
+                        }
+                    }
+                }
             }
         }
         Ok(None)
@@ -253,65 +247,6 @@ impl Default for Term {
     }
 }
 
-impl FromUnit for Inp {
-    fn from_unit_loc(u: &Unit) -> Option<Self> {
-        Self::from_unit(u, u)
-    }
-
-    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
-        let schm = SchemaMapRequire(
-            SchemaMapEntry(Unit::Str("pmt".into()), SchemaStr),
-            SchemaMapSecondRequire(
-                SchemaMapEntry(Unit::Str("prs".into()), SchemaBool),
-                SchemaMap(
-                    SchemaMapEntry(Unit::Str("sct".into()), SchemaBool),
-                    SchemaMapEntry(Unit::Str("out".into()), SchemaRef),
-
-                )
-            )
-        );
-
-        schm.find_deep(glob, u).map(|(pmt, (prs, (sct, out)))| {
-            Inp {
-                pmt,
-                prs: prs.unwrap_or(false),
-                sct: sct.unwrap_or(false),
-                out: out.unwrap_or(vec!["msg".into()])
-            }
-        })
-    }
-}
-
-impl FromUnit for Say {
-    fn from_unit_loc(u: &Unit) -> Option<Self> {
-        Self::from_unit(u, u)
-    }
-
-    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
-        let schm = SchemaMapSecondRequire(
-            SchemaMapEntry(Unit::Str("say".into()), SchemaUnit),
-            SchemaMap(
-                SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
-                SchemaMapEntry(Unit::Str("nl".into()), SchemaBool)
-            )
-        );
-
-        schm.find_deep(glob, u).and_then(|(msg, (shrt, nl))| {
-            let msg = if let Some(msg) = msg {
-                msg
-            } else {
-                Unit::find_ref(vec!["msg".into()].into_iter(), glob)?
-            };
-
-            Some(Say {
-                msg,
-                shrt: shrt.map(|shrt| shrt as usize),
-                nl: nl.unwrap_or(false)
-            })
-        })
-    }
-}
-
 impl FromUnit for Act {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -338,7 +273,7 @@ impl FromUnit for Act {
                     "nl" => Some(Act::Nl),
                     "trc" => Some(Act::Trc),
                     "say" => Some(Act::Say(
-                        Say {
+                        ui::Say {
                             msg: Unit::find_ref(vec!["msg".into()].into_iter(), glob)?,
                             shrt: None,
                             nl: false
@@ -354,7 +289,7 @@ impl FromUnit for Act {
                                 match s.as_str() {
                                     "key" => Some(Act::GetKey(Some(path))),
                                     "say" => Some(Act::Say(
-                                        Say {
+                                        ui::Say {
                                             msg: Unit::find_ref(path.into_iter(), glob)?,
                                             shrt: None,
                                             nl: false
@@ -365,14 +300,14 @@ impl FromUnit for Act {
                             Or::Second((s, msg)) =>
                                 match s.as_str() {
                                     "say" => Some(Act::Say(
-                                        Say {
+                                        ui::Say {
                                             msg,
                                             shrt: None,
                                             nl: false
                                         }
                                     )),
                                     "inp" => Some(Act::Inp(
-                                        Inp {
+                                        ui::Inp {
                                             pmt: msg.as_str()?,
                                             prs: false,
                                             sct: false,
@@ -383,12 +318,16 @@ impl FromUnit for Act {
                                 }
                         },
                         Or::Second(u) => {
-                            if let Some(inp) = Inp::from_unit(glob, &u) {
+                            if let Some(inp) = ui::Inp::from_unit(glob, &u) {
                                 return Some(Act::Inp(inp));
                             }
 
-                            if let Some(say) = Say::from_unit(glob, &u) {
+                            if let Some(say) = ui::Say::from_unit(glob, &u) {
                                 return Some(Act::Say(say));
+                            }
+
+                            if let Some(img) = ui::Img::from_unit(glob, &u) {
+                                return Some(Act::Img(img));
                             }
 
                             None
@@ -475,7 +414,7 @@ impl ServHlr for Term {
             }
         } else {
             if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
-                let act = Act::Say(Say {
+                let act = Act::Say(ui::Say {
                     msg: _msg,
                     shrt: None,
                     nl: false
