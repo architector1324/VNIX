@@ -3,6 +3,7 @@ mod ui;
 
 use core::fmt::Write;
 
+use alloc::boxed::Box;
 use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -26,6 +27,8 @@ enum Act {
     Nl,
     GetKey(Option<Vec<String>>),
     Trc,
+    GetCLiRes(Vec<String>),
+    GetGfxRes(Vec<String>),
     Say(ui::Say),
     Inp(ui::Inp),
     Img(ui::Img),
@@ -69,6 +72,26 @@ impl TermAct for Act {
                         return Ok(u);
                     }
                 }
+            },
+            Act::GetCLiRes(path) => {
+                let res = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                let u = Unit::Pair(
+                    Box::new(Unit::Int(res.0 as i32)),
+                    Box::new(Unit::Int(res.1 as i32))
+                );
+
+                let u = Unit::merge_ref(path.into_iter(), u, Unit::Map(Vec::new()));
+                return Ok(u);
+            },
+            Act::GetGfxRes(path) => {
+                let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                let u = Unit::Pair(
+                    Box::new(Unit::Int(res.0 as i32)),
+                    Box::new(Unit::Int(res.1 as i32))
+                );
+
+                let u = Unit::merge_ref(path.into_iter(), u, Unit::Map(Vec::new()));
+                return Ok(u);
             },
             Act::Inp(inp) => return inp.act(term, msg, kern),
             Act::Img(img) => return img.act(term, msg, kern),
@@ -271,6 +294,8 @@ impl FromUnit for Act {
                             nl: false
                         }
                     )),
+                    "res.cli" => Some(Act::GetCLiRes(vec!["msg".into()])),
+                    "res.gfx" => Some(Act::GetGfxRes(vec!["msg".into()])),
                     _ => None
                 },
                 Or::Second(or) =>
@@ -287,6 +312,8 @@ impl FromUnit for Act {
                                             nl: false
                                         }
                                     )),
+                                    "res.cli" => Some(Act::GetCLiRes(path)),
+                                    "res.gfx" => Some(Act::GetGfxRes(path)),
                                     _ => None
                                 },
                             Or::Second((s, msg)) =>
