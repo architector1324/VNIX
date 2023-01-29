@@ -25,12 +25,20 @@ struct Inp {
 }
 
 #[derive(Debug, Clone)]
+struct Say {
+    msg: Unit,
+    shrt: Option<usize>,
+    nl: bool
+}
+
+
+#[derive(Debug, Clone)]
 enum Act {
     Clear,
     Nl,
     GetKey(Option<Vec<String>>),
     Trc,
-    Say(Unit),
+    Say(Say),
     Inp(Inp)
 }
 
@@ -63,7 +71,24 @@ impl Act {
             Act::Clear => term.clear(kern)?,
             Act::Nl => term.print("\n", kern)?,
             Act::Trc => term.print(format!("{}", msg).as_str(), kern)?,
-            Act::Say(msg) => term.out(&msg, kern)?,
+            Act::Say(say) => {
+                match say.msg {
+                    Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
+                    _ => {
+                        if let Some(shrt) = say.shrt {
+                            term.print(format!("{}", DisplayShort(&say.msg, shrt)).as_str(), kern)?;
+                        } else {
+                            term.print(format!("{}", say.msg).as_str(), kern)?;
+                        }
+                    }
+                }
+
+                if say.nl {
+                    term.print(format!("\n").as_str(), kern)?;
+                }
+
+                return Ok(None);
+            },
             Act::GetKey(may_path) => {
                 if let Some(key) = term.get_key(kern)? {
                     if let Some(path) = may_path {
@@ -208,13 +233,6 @@ impl Term {
         let key = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
         Ok(key)
     }
-
-    fn out(&mut self, msg: &Unit, kern: &mut Kern) -> Result<(), KernErr> {
-        match self.mode {
-            Mode::Cli => write!(kern.cli, "{}", msg).map_err(|_| KernErr::CLIErr(CLIErr::Write)),
-            Mode::Gfx => self.print(format!("{}", msg).as_str(), kern),
-        }
-    }
 }
 
 impl Default for TermBase {
@@ -264,6 +282,36 @@ impl FromUnit for Inp {
     }
 }
 
+impl FromUnit for Say {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapSecondRequire(
+            SchemaMapEntry(Unit::Str("say".into()), SchemaUnit),
+            SchemaMap(
+                SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
+                SchemaMapEntry(Unit::Str("nl".into()), SchemaBool)
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|(msg, (shrt, nl))| {
+            let msg = if let Some(msg) = msg {
+                msg
+            } else {
+                Unit::find_ref(vec!["msg".into()].into_iter(), glob)?
+            };
+
+            Some(Say {
+                msg,
+                shrt: shrt.map(|shrt| shrt as usize),
+                nl: nl.unwrap_or(false)
+            })
+        })
+    }
+}
+
 impl FromUnit for Act {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -289,7 +337,13 @@ impl FromUnit for Act {
                     "key" => Some(Act::GetKey(None)),
                     "nl" => Some(Act::Nl),
                     "trc" => Some(Act::Trc),
-                    "say" => Some(Act::Say(Unit::find_ref(vec!["msg".into()].into_iter(), glob)?)),
+                    "say" => Some(Act::Say(
+                        Say {
+                            msg: Unit::find_ref(vec!["msg".into()].into_iter(), glob)?,
+                            shrt: None,
+                            nl: false
+                        }
+                    )),
                     _ => None
                 },
                 Or::Second(or) =>
@@ -299,11 +353,24 @@ impl FromUnit for Act {
                             Or::First((s, path)) =>
                                 match s.as_str() {
                                     "key" => Some(Act::GetKey(Some(path))),
+                                    "say" => Some(Act::Say(
+                                        Say {
+                                            msg: Unit::find_ref(path.into_iter(), glob)?,
+                                            shrt: None,
+                                            nl: false
+                                        }
+                                    )),
                                     _ => None
                                 },
                             Or::Second((s, msg)) =>
                                 match s.as_str() {
-                                    "say" => Some(Act::Say(msg)),
+                                    "say" => Some(Act::Say(
+                                        Say {
+                                            msg,
+                                            shrt: None,
+                                            nl: false
+                                        }
+                                    )),
                                     "inp" => Some(Act::Inp(
                                         Inp {
                                             pmt: msg.as_str()?,
@@ -315,7 +382,17 @@ impl FromUnit for Act {
                                     _ => None
                                 }
                         },
-                        Or::Second(u) => Some(Act::Inp(Inp::from_unit(glob, &u)?))
+                        Or::Second(u) => {
+                            if let Some(inp) = Inp::from_unit(glob, &u) {
+                                return Some(Act::Inp(inp));
+                            }
+
+                            if let Some(say) = Say::from_unit(glob, &u) {
+                                return Some(Act::Say(say));
+                            }
+
+                            None
+                        }
                     }
             }
         })
@@ -398,7 +475,11 @@ impl ServHlr for Term {
             }
         } else {
             if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
-                let act = Act::Say(_msg);
+                let act = Act::Say(Say {
+                    msg: _msg,
+                    shrt: None,
+                    nl: false
+                });
                 out_u = act.act(self, &msg, kern)?;
             }
         }
