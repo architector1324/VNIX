@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr, SchemaMapSeq, SchemaByte};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -247,6 +247,33 @@ impl Default for Term {
     }
 }
 
+impl FromUnit for Font {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapEntry(
+            Unit::Str("font".into()),
+            SchemaMapSeq(
+                SchemaStr,
+                SchemaSeq(SchemaByte)
+            )
+        );
+
+        schm.find_deep(glob, u).map(|glyths| {
+            let glyths = glyths.iter().filter_map(|(s, v)| {
+                let dat = v.iter().cloned().map(|v| v as u8).collect::<Vec<_>>().try_into().ok()?;
+                Some((s.chars().next()?, dat))}
+            ).collect();
+
+            Font {
+                glyths
+            }
+        })
+    }
+}
+
 impl FromUnit for Act {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -329,7 +356,6 @@ impl FromUnit for Act {
                             if let Some(img) = ui::Img::from_unit(glob, &u) {
                                 return Some(Act::Img(img));
                             }
-
                             None
                         }
                     }
@@ -357,6 +383,8 @@ impl FromUnit for Term {
                 schm_acts
             )
         );
+
+        Font::from_unit(u, u).map(|font| term.font = font);
 
         schm.find_loc(u).map(|or| {
             let acts = match or {
