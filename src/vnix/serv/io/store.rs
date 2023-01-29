@@ -3,23 +3,145 @@ use alloc::vec::Vec;
 use alloc::string::String;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaUnit, SchemaPair, Schema, SchemaRef, SchemaMapSecondRequire};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, SchemaPair, Schema, SchemaRef, SchemaStr, SchemaOr, SchemaSeq, Or, SchemaMapFirstRequire, SchemaMapRequire};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
 
+
+#[derive(Debug, Clone)]
+struct Load {
+    from: Vec<String>,
+    to: Vec<String>
+}
+
+#[derive(Debug, Clone)]
+struct Save {
+    msg: Unit,
+    to: Vec<String>
+}
+
+#[derive(Debug, Clone)]
+enum Act {
+    Load(Load),
+    Save(Save)
+}
+
 #[derive(Debug)]
 pub struct Store {
-    load: Option<(Vec<String>, Vec<String>)>,
-    save: Option<(Vec<String>, Unit)>
+    act: Option<Vec<Act>>
 }
 
 impl Default for Store {
     fn default() -> Self {
         Store {
-            load: None,
-            save: None
+            act: None
         }
+    }
+}
+
+impl Act {
+    fn act(&self, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+        match self {
+            Act::Load(load) => {
+                let u = kern.db_ram.load(Unit::Ref(load.from.clone())).ok_or(KernErr::DbLoadFault)?;
+                let m = Unit::merge_ref(load.to.clone().into_iter(), u, Unit::Map(Vec::new())).ok_or(KernErr::DbLoadFault)?;
+
+                Ok(Some(m))
+            },
+            Act::Save(save) => {
+                kern.db_ram.save(Unit::Ref(save.to.clone()), save.msg.clone());
+                Ok(None)
+            }
+        }
+    }
+}
+
+impl FromUnit for Load {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapFirstRequire(
+            SchemaMapEntry(Unit::Str("load".into()), SchemaRef),
+            SchemaMapEntry(Unit::Str("out".into()), SchemaRef)
+        );
+
+        schm.find_deep(glob, u).map(|(from, to)| {
+            Load {
+                from,
+                to: to.unwrap_or(vec!["msg".into()])
+            }
+        })
+    }
+}
+
+impl FromUnit for Save {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapRequire(
+            SchemaMapEntry(Unit::Str("save".into()), SchemaUnit),
+            SchemaMapEntry(Unit::Str("out".into()), SchemaRef)
+        );
+
+        schm.find_deep(glob, u).map(|(msg, to)| {
+            Save {
+                msg,
+                to
+            }
+        })
+    }
+}
+
+impl FromUnit for Act {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaOr(
+            SchemaPair(
+                SchemaStr,
+                SchemaRef
+            ),
+            SchemaUnit
+        );
+
+        schm.find_deep(glob, u).and_then(|or| {
+            match or {
+                Or::First((act, path)) => {
+                    match act.as_str() {
+                        "load" => Some(Act::Load(
+                            Load {
+                                from: path,
+                                to: vec!["msg".into()]
+                            }
+                        )),
+                        "save" => Some(Act::Save(
+                            Save {
+                                msg: Unit::find_ref(vec!["msg".into()].into_iter(), glob)?,
+                                to: path
+                            }
+                        )),
+                        _ => None
+                    }
+                },
+                Or::Second(u) => {
+                    if let Some(load) = Load::from_unit(glob, &u) {
+                        return Some(Act::Load(load));
+                    }
+
+                    if let Some(save) = Save::from_unit(glob, &u) {
+                        return Some(Act::Save(save));
+                    }
+                    None
+                }
+            }
+        })
     }
 }
 
@@ -27,33 +149,28 @@ impl FromUnit for Store {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut store = Store::default();
 
-        let schm = SchemaMapSecondRequire(
-            SchemaMapEntry(
-                Unit::Str("load".into()),
-                SchemaRef,
-            ),
-            SchemaMap(
-                SchemaMapEntry(
-                    Unit::Str("load".into()),
-                    SchemaPair(SchemaRef, SchemaRef)
-                ),
-                SchemaMapEntry(
-                    Unit::Str("save".into()),
-                    SchemaPair(SchemaRef, SchemaUnit)
-                )
+        let schm = SchemaMapEntry(
+            Unit::Str("store".into()),
+            SchemaOr(
+                SchemaSeq(SchemaUnit),
+                SchemaUnit
             )
         );
 
-        schm.find_loc(u).map(|(load_ref, (load, save))| {
-            store.save = save;
+        schm.find_loc(u).map(|or| {
+            let lst = match or {
+                Or::First(seq) => seq,
+                Or::Second(act) => vec![act]
+            };
 
-            load_ref.map(|path| {
-                store.load = Some((path, vec!["msg".into()]))
+            let acts = lst.into_iter().filter_map(|act| Act::from_unit(u, &act));
+
+            acts.for_each(|act| {
+                match store.act.as_mut() {
+                    Some(acts) => acts.push(act),
+                    None => store.act = Some(vec![act]),
+                }
             });
-
-            load.map(|(path, to)| {
-                store.load = Some((path, to))
-            })
         });
 
         Some(store)
@@ -63,7 +180,7 @@ impl FromUnit for Store {
 impl ServHlr for Store {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:(txt.doc `Some beautiful text`) task:io.store} # save text to `txt.doc` path\n{load:txt.doc task:io.store}".into())
+            ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {store:{save:`Some beautiful text` out:txt.doc} task:io.store} # save text to `txt.doc` path\n{load:txt.doc task:io.store}".into())
         };
 
         let m = Unit::Map(vec![(
@@ -75,15 +192,18 @@ impl ServHlr for Store {
     }
 
     fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some((path, val)) = &self.save {
-            kern.db_ram.save(Unit::Ref(path.clone()), val.clone());
+        let mut out_u: Option<Unit> = None;
+
+        if let Some(acts) = self.act.clone() {
+            for act in acts {
+                act.act(kern)?.map(|u| {
+                    out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
+                });
+            }
         }
 
-        if let Some((path, to)) = &self.load {
-            let u = kern.db_ram.load(Unit::Ref(path.clone())).ok_or(KernErr::DbLoadFault)?;
-            let m = Unit::merge_ref(to.clone().into_iter(), u, msg.msg).ok_or(KernErr::DbLoadFault)?;
-
-            return Ok(Some(kern.msg(&msg.ath, m)?));
+        if let Some(u) = out_u {
+            return Ok(Some(kern.msg(&msg.ath, u)?));
         }
 
         Ok(Some(msg))
