@@ -60,11 +60,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         kern.db_ram.save(path, u);
     }
 
-    let s = "{term.gfx:[cls (say `Hello, vnix!`) key nl trc nl say] msg:abc}";
+    let s = "{term.gfx:[cls (say `Hello, vnix!`) (key @msg) nl trc nl say]} msg:abc";
     let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let msg = kern.msg("super", u)?;
-    kern.send("io.term", msg)?;
+    let msg = kern.send("io.term", msg)?;
+
+    msg.map(|msg| writeln!(kern.cli, "{:?}", msg.msg.as_map_find("msg")));
 
     Ok(())
 

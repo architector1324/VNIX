@@ -22,7 +22,7 @@ use crate::vnix::utils;
 pub enum Act {
     Clear,
     Nl,
-    GetKey,
+    GetKey(Option<Vec<String>>),
     Trc,
     Say(Unit)
 }
@@ -51,14 +51,22 @@ struct Font {
 }
 
 impl Act {
-    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<(), KernErr> {
+    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         match self {
-            Act::Clear => term.clear(kern),
-            Act::Nl => term.print("\n", kern),
-            Act::Trc => term.print(format!("{}", msg).as_str(), kern),
-            Act::Say(msg) => term.out(&msg, kern),
-            Act::GetKey => term.get_key(kern)
+            Act::Clear => term.clear(kern)?,
+            Act::Nl => term.print("\n", kern)?,
+            Act::Trc => term.print(format!("{}", msg).as_str(), kern)?,
+            Act::Say(msg) => term.out(&msg, kern)?,
+            Act::GetKey(may_path) => {
+                if let Some(key) = term.get_key(kern)? {
+                    if let Some(path) = may_path {
+                        let u = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), Unit::Map(Vec::new()));
+                        return Ok(u);
+                    }
+                }
+            }
         }
+        Ok(None)
     }
 }
 
@@ -140,9 +148,9 @@ impl Term {
         }
     }
 
-    fn get_key(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
-        let _key = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
-        Ok(())
+    fn get_key(&mut self, kern: &mut Kern) -> Result<Option<TermKey>, KernErr> {
+        let key = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
+        Ok(key)
     }
 
     fn out(&mut self, msg: &Unit, kern: &mut Kern) -> Result<(), KernErr> {
@@ -179,7 +187,10 @@ impl FromUnit for Act {
     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaOr(
             SchemaStr,
-            SchemaPair(SchemaStr, SchemaUnit)
+            SchemaOr(
+                SchemaPair(SchemaStr, SchemaRef),
+                SchemaPair(SchemaStr, SchemaUnit)
+            )
         );
 
         schm.find(glob, u).and_then(|or| {
@@ -187,16 +198,24 @@ impl FromUnit for Act {
                 Or::First(s) =>
                 match s.as_str() {
                     "cls" => Some(Act::Clear),
-                    "key" => Some(Act::GetKey),
+                    "key" => Some(Act::GetKey(None)),
                     "nl" => Some(Act::Nl),
                     "trc" => Some(Act::Trc),
                     "say" => Some(Act::Say(Unit::find_ref(vec!["msg".into()].into_iter(), glob)?)),
                     _ => None
                 },
-                Or::Second((s, msg)) =>
-                    match s.as_str() {
-                        "say" => Some(Act::Say(msg)),
-                        _ => None
+                Or::Second(or) =>
+                    match or {
+                        Or::First((s, path)) =>
+                            match s.as_str() {
+                                "key" => Some(Act::GetKey(Some(path))),
+                                _ => None
+                            },
+                        Or::Second((s, msg)) =>
+                            match s.as_str() {
+                                "say" => Some(Act::Say(msg)),
+                                _ => None
+                            }
                     }
             }
         })
@@ -269,15 +288,23 @@ impl ServHlr for Term {
     }
 
     fn handle(&mut self, msg: Msg, serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
+        let mut out_u: Option<Unit> = None;
+
         if let Some(acts) = self.act.clone() {
             for act in acts {
-                act.act(self, &msg, kern)?;
+                act.act(self, &msg, kern)?.map(|u| {
+                    out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
+                });
             }
         } else {
             if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
                 let act = Act::Say(_msg);
-                act.act(self, &msg, kern)?;
+                out_u = act.act(self, &msg, kern)?;
             }
+        }
+
+        if let Some(u) = out_u {
+            return Ok(Some(kern.msg(&msg.ath, u)?));
         }
 
         Ok(Some(msg))
