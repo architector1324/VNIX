@@ -1,3 +1,4 @@
+use alloc::vec;
 use alloc::vec::Vec;
 
 use super::msg::Msg;
@@ -182,6 +183,16 @@ impl<'a> Kern<'a> {
         Ok(None)
     }
 
+    fn help_serv(&self, ath: &str) -> Result<Msg, KernErr> {
+        let serv = self.services.iter().cloned().map(|serv| Unit::Str(serv.name)).collect();
+        let u = Unit::Map(vec![(
+            Unit::Str("msg".into()),
+            Unit::Lst(serv)
+        )]);
+
+        self.msg(ath, u)
+    }
+
     pub fn send<'b>(&'b mut self, serv: &str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
         // verify msg 
         let usr = self.get_usr(&msg.ath)?;
@@ -201,6 +212,7 @@ impl<'a> Kern<'a> {
         if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
             match topic.as_str() {
                 "info" => return inst.help(&msg.ath, ServHelpTopic::Info, self).map(|m| Some(m)),
+                "serv" => return self.help_serv(&msg.ath).map(|m| Some(m)),
                 _ => return Err(KernErr::HelpTopicNotFound)
             }
         }
