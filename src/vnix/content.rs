@@ -1,7 +1,7 @@
 pub mod task {
-    pub static LOGIN: &'static str = "{term:[say nl {pmt:`login: ` out:@ath} nl {pmt:`pub key: ` out:@pub} nl {pmt:`priv key: ` out:@priv} nl] msg:`Hello, vnix!` task:[io.term sys.usr]}";
+    pub static LOGIN: &'static str = "{term:[say nl {pmt:`login: ` out:@ath} nl {pmt:`pub key: ` out:@pub} nl {pmt:`priv key: ` sct:t out:@priv} nl] msg:`Hello, vnix!` task:[io.term sys.usr]}";
     pub static LAMBDA: &'static str = "{term.gfx:[say nl {pmt:`$ ` prs:t} nl] msg:`Welcome to lambda shell!\\nTry enter: {help:info task:io.term}` shrt:32 task:[io.term sys.task io.term]}";
-    pub static GFX_LOGIN: &'static str = "{term.gfx:[say nl {pmt:`login: ` out:@ath} nl {pmt:`pub key: ` out:@pub} nl {pmt:`priv key: ` out:@priv} nl] msg:`Hello, vnix!` task:[io.term sys.usr]}";
+    pub static GFX_LOGIN: &'static str = "{term.gfx:[say nl {pmt:`login: ` out:@ath} nl {pmt:`pub key: ` out:@pub} nl {pmt:`priv key: ` sct:t out:@priv} nl] msg:`Hello, vnix!` task:[io.term sys.usr]}";
     pub static GFX_LAMBDA: &'static str = "{term.gfx:[say nl {pmt:`λ ` prs:t} nl] msg:`Welcome to lambda shell!\\nTry enter: {help:info task:io.term}` shrt:32 task:[io.term sys.task io.term]}";
 }
 

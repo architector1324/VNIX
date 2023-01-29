@@ -20,6 +20,7 @@ use crate::vnix::utils;
 struct Inp {
     pmt: String,
     prs: bool,
+    sct: bool,
     out: Vec<String>
 }
 
@@ -73,7 +74,7 @@ impl Act {
             },
             Act::Inp(inp) => {
                 term.print(inp.pmt.as_str(), kern)?;
-                let out = term.input(kern)?;
+                let out = term.input(inp.sct, kern)?;
 
                 if out.is_empty() {
                     return Ok(None);
@@ -140,7 +141,7 @@ impl Term {
         }
     }
 
-    fn input(&mut self, kern: &mut Kern) -> Result<String, KernErr> {
+    fn input(&mut self, secret: bool, kern: &mut Kern) -> Result<String, KernErr> {
         let mut out = String::new();
 
         let save_cur = kern.term.pos.clone();
@@ -155,7 +156,9 @@ impl Term {
                         self.print(format!("{}", c).as_str(), kern)?;
                     } else if !c.is_ascii_control() {
                         write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-                        self.print(format!("{}", c).as_str(), kern)?;
+                        if !secret {
+                            self.print(format!("{}", c).as_str(), kern)?;
+                        }
                     }
                 }
             }
@@ -240,16 +243,21 @@ impl FromUnit for Inp {
     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaMapRequire(
             SchemaMapEntry(Unit::Str("pmt".into()), SchemaStr),
-            SchemaMap(
+            SchemaMapSecondRequire(
                 SchemaMapEntry(Unit::Str("prs".into()), SchemaBool),
-                SchemaMapEntry(Unit::Str("out".into()), SchemaRef),
+                SchemaMap(
+                    SchemaMapEntry(Unit::Str("sct".into()), SchemaBool),
+                    SchemaMapEntry(Unit::Str("out".into()), SchemaRef),
+
+                )
             )
         );
 
-        schm.find_deep(glob, u).map(|(pmt, (prs, out))| {
+        schm.find_deep(glob, u).map(|(pmt, (prs, (sct, out)))| {
             Inp {
                 pmt,
                 prs: prs.unwrap_or(false),
+                sct: sct.unwrap_or(false),
                 out: out.unwrap_or(vec!["msg".into()])
             }
         })
@@ -300,6 +308,7 @@ impl FromUnit for Act {
                                         Inp {
                                             pmt: msg.as_str()?,
                                             prs: false,
+                                            sct: false,
                                             out: vec!["msg".into()]
                                         }
                                     )),
