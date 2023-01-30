@@ -33,10 +33,11 @@ enum Act {
     Inp(ui::Inp),
     Put(ui::Put),
     Img(ui::Img),
-    Spr(ui::Sprite)
+    Spr(ui::Sprite),
+    Win(ui::Win)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Mode {
     Cli,
     Gfx,
@@ -97,7 +98,8 @@ impl TermAct for Act {
             Act::Inp(inp) => return inp.act(term, msg, kern),
             Act::Put(put) => return put.act(term, msg, kern),
             Act::Img(img) => return img.act(term, msg, kern),
-            Act::Spr(spr) => return spr.act(term, msg, kern)
+            Act::Spr(spr) => return spr.act(term, msg, kern),
+            Act::Win(win) => return win.act(term, msg, kern)
         }
         Ok(None)
     }
@@ -357,6 +359,10 @@ impl FromUnit for Act {
 
                             if let Some(spr) = ui::Sprite::from_unit(glob, &u) {
                                 return Some(Act::Spr(spr));
+                            }
+
+                            if let Some(win) = ui::Win::from_unit(glob, &u) {
+                                return Some(Act::Win(win));
                             }
                             None
                         }
