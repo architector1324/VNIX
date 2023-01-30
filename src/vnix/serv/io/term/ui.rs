@@ -79,19 +79,7 @@ pub enum UI {
 
 impl Img {
     fn draw(&self, pos: (i32, i32), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
-        let w = self.size.0;
-        let h = self.size.1;
-
-        for x in 0..w {
-            for y in 0..h {
-                if let Some(px) = self.img.get(x + w * y) {
-                    if *px != src && x as i32 + pos.0 < w as i32 && y as i32 + pos.1 < h as i32 {
-                        kern.disp.px(*px, (x as i32 + pos.0) as usize, (y as i32 + pos.1) as usize).map_err(|e| KernErr::DispErr(e))?;
-                    }
-                }
-            }
-        }
-        Ok(())
+        kern.disp.blk(pos, self.size, src, &self.img).map_err(|e| KernErr::DispErr(e))
     }
 }
 
@@ -410,6 +398,7 @@ impl TermAct for Sprite {
 
 impl TermAct for Win {
     fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+        // render
         if self.border {
             match self.mode {
                 Mode::Cli => {
@@ -451,8 +440,38 @@ impl TermAct for Win {
 
         loop {
             if let Mode::Gfx = self.mode {
+                // render
+                if self.border {
+                    match self.mode {
+                        Mode::Cli => {
+                            let res = match term.mode {
+                                Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+                                Mode::Gfx => {
+                                    let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                                    (res.0 / 8, res.1 / 16)
+                                }
+                            };
+
+                            let size = self.size.unwrap_or(res);
+                            let pos = self.pos.unwrap_or((0, 0));
+        
+                            self.ui_act(pos, size, term, kern)?;
+                        },
+                        Mode::Gfx => {
+                            let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        
+                            let size = self.size.unwrap_or(res);
+                            let pos = self.pos.unwrap_or((0, 0));
+        
+                            self.ui_gfx_act(pos, size, term, kern)?;
+                        }
+                    }
+                } else {
+                    term.clear(kern)?;
+                }
+
                 // mouse
-                let mouse = kern.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
+                let mouse = kern.disp.mouse(true).map_err(|e| KernErr::DispErr(e))?;
                 if let Some(mouse) = mouse {
                     mouse_pos.0 += mouse.dpos.0 / 8196;
                     mouse_pos.1 += mouse.dpos.1 / 8196;
@@ -518,23 +537,34 @@ impl UIAct for Win {
     }
 
     fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
-        for x in 0..size.0 {
+        {
+            let mut tmp = Vec::with_capacity(size.0 * size.1);
+    
             for y in 0..size.1 {
-                let col = if x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4 {
-                    0x2a2e32
-                } else {
-                    0x18191d
-                };
-
-                kern.disp.px(col, pos.0 as usize + x, pos.1 as usize + y).map_err(|e| KernErr::DispErr(e))?;
+                for x in 0..size.0 {
+                    let col = if x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4 {
+                        0x2a2e32
+                    } else {
+                        0x18191d
+                    };
+                    tmp.push(col);
+                }
             }
+
+            kern.disp.blk(pos, size, 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
         }
 
         if self.border {
-            for x in 0..size.0 {
-                for y in 0..16 {
-                    kern.disp.px(0x2a2e32, pos.0 as usize + x, pos.1 as usize + y).map_err(|e| KernErr::DispErr(e))?;
+            {
+                let mut tmp = Vec::with_capacity(size.0 * 16);
+
+                for _ in 0..16 {
+                    for _ in 0..size.0 {
+                        tmp.push(0x2a2e32);
+                    }
                 }
+
+                kern.disp.blk(pos, (size.0, 16), 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
             }
 
             if let Some(title) = &self.title {

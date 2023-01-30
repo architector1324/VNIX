@@ -113,16 +113,16 @@ impl Term {
             },
             Mode::Gfx => {
                 let img = self.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
-        
+
+                let mut tmp = Vec::with_capacity(8 * 16);
+
                 for y in 0..16 {
                     for x in 0..8 {
                         let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
-
-                        if px != src {
-                            kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
-                        }
+                        tmp.push(px);
                     }
                 }
+                kern.disp.blk((pos.0 as i32, pos.1 as i32), (8, 16), src, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
             }
         }
         Ok(())

@@ -178,6 +178,40 @@ impl Disp for UefiDisp {
         Ok(())
     }
 
+    fn blk(&mut self, pos: (i32, i32), img_size: (usize, usize), src: u32, img: &[u32]) -> Result<(), DispErr> {
+        unsafe {
+            let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
+                OpenProtocolParams {
+                    handle: self.disp_hlr,
+                    agent: self.st.boot_services().image_handle(),
+                    controller: None
+                },
+                OpenProtocolAttributes::GetProtocol
+            ).map_err(|_| DispErr::SetPixel)?;
+
+            let res = disp.current_mode_info().resolution();
+            let mut fb = disp.frame_buffer();
+
+            for x in 0..img_size.0 {
+                for y in 0..img_size.1 {
+                    if x as i32 + pos.0 >= res.0 as i32 || x as i32 + pos.0 < 0 || y as i32 + pos.1 >= res.1 as i32 || y as i32 + pos.1 < 0 {
+                        continue;
+                    }
+
+                    let offs = ((pos.0 + x as i32) + res.0 as i32 * (pos.1 + y as i32)) as usize;
+
+                    if let Some(px) = img.get(x + img_size.0 * y) {
+                        if *px != src {
+                            fb.write_value(4 * offs, *px);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
         unsafe {
             let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(

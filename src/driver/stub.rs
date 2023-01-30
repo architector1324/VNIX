@@ -14,6 +14,10 @@ impl Disp for StubDisp {
         Ok(())
     }
 
+    fn blk(&mut self, _pos: (i32, i32), _img_size: (usize, usize), _src: u32, _img: &[u32]) -> Result<(), DispErr> {
+        Ok(())
+    }
+
     fn fill(&mut self, _f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
         Ok(())
     }
