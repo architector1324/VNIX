@@ -202,19 +202,24 @@ impl Disp for UefiDisp {
         Ok(())
     }
 
-    fn mouse(&mut self) -> Result<Option<Mouse>, DispErr> {
+    fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr> {
         let mut mouse = self.st.boot_services().open_protocol_exclusive::<Pointer>(self.mouse_hlr).map_err(|_| DispErr::GetMouseState)?;
 
         mouse.reset(false).map_err(|_| DispErr::GetMouseState)?;
 
-        unsafe {
-            let e = mouse.wait_for_input_event().unsafe_clone();
-            self.st.boot_services().wait_for_event(&mut [e]).map_err(|_| DispErr::GetMouseState)?;
+        if block {
+            unsafe {
+                let e = mouse.wait_for_input_event().unsafe_clone();
+                self.st.boot_services().wait_for_event(&mut [e]).map_err(|_| DispErr::GetMouseState)?;
+            }
         }
+
+        let mode = mouse.mode().clone();
 
         let state = mouse.read_state().map_err(|_| DispErr::GetMouseState)?.map(|state| {
             Mouse {
-                pos: (state.relative_movement.0, state.relative_movement.1),
+                dpos: (state.relative_movement.0, state.relative_movement.1),
+                res: (mode.resolution.0 as usize, mode.resolution.1 as usize),
                 click: (state.button.0, state.button.1)
             }
         });

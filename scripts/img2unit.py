@@ -22,7 +22,7 @@ def read_img(filename):
     return ((w, h), dim, dat)
 
 
-def convert(size, dim, dat, zip):
+def convert(size, dat, zip):
     img = []
 
     for px in dat:
@@ -43,15 +43,33 @@ def convert(size, dim, dat, zip):
     return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
 
 
+def convert_sys(size, dat):
+    img = []
+
+    for px in dat:
+        b = struct.pack('<BBB', px[0], px[1], px[2])
+        v = int.from_bytes(b, 'big')
+        img.append(v)
+
+    img_s = f'[{",".join([str(e) for e in img])}]'
+
+    return (img_s, len(img))
+
+
 # parse args
 parser = argparse.ArgumentParser()
 parser.add_argument('img', help='Image filename')
+parser.add_argument('--sys', action='store_true', help='Convert to system img array')
 parser.add_argument('-z', '--zip', action='store_true', help='Compress image with gunzip')
 
 args = parser.parse_args()
 
 # process image
-(size, dim, img) = read_img(args.img)
-vnix_img = convert(size, dim, img, args.zip)
+(size, _, img) = read_img(args.img)
+
+if args.sys:
+    vnix_img = convert_sys(size, img)
+else:
+    vnix_img = convert(size, img, args.zip)
 
 print(vnix_img)

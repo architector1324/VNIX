@@ -68,7 +68,7 @@ impl TermAct for Act {
             Act::Trc => term.print(format!("{}", msg).as_str(), kern)?,
             Act::Say(say) => return say.act(term, msg, kern),
             Act::GetKey(may_path) => {
-                if let Some(key) = term.get_key(kern)? {
+                if let Some(key) = term.get_key(true, kern)? {
                     if let Some(path) = may_path {
                         let u = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), Unit::Map(Vec::new()));
                         return Ok(u);
@@ -117,7 +117,10 @@ impl Term {
                 for y in 0..16 {
                     for x in 0..8 {
                         let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
-                        kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
+
+                        if px > 0 {
+                            kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
+                        }
                     }
                 }
             }
@@ -250,8 +253,8 @@ impl Term {
         }
     }
 
-    fn get_key(&mut self, kern: &mut Kern) -> Result<Option<TermKey>, KernErr> {
-        let key = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))?;
+    fn get_key(&mut self, block: bool, kern: &mut Kern) -> Result<Option<TermKey>, KernErr> {
+        let key = kern.cli.get_key(block).map_err(|e| KernErr::CLIErr(e))?;
         Ok(key)
     }
 }

@@ -11,8 +11,12 @@ use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapSecondRequire, SchemaMapE
 
 use crate::vnix::utils;
 
-use super::{TermAct, Mode, Term};
+use super::{TermAct, Mode, Term, content};
 
+
+pub struct Skin {
+    cursor: Img
+}
 
 trait UIAct {
     fn ui_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr>;
@@ -72,6 +76,27 @@ pub enum UI {
     Win(Win)
 }
 
+
+impl Img {
+    fn draw(&self, pos: (i32, i32), kern: &mut Kern) -> Result<(), KernErr> {
+        let w = self.size.0;
+        let h = self.size.1;
+
+        for x in 0..w {
+            for y in 0..h {
+                if let Some(px) = self.img.get(x + w * y) {
+                    let x_offs = (pos.0 - (w as i32 / 2)) as usize;
+                    let y_offs = (pos.1 - (h as i32 / 2)) as usize;
+
+                    if *px > 0 {
+                        kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 impl FromUnit for Inp {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
@@ -298,7 +323,7 @@ impl FromUnit for UI {
 }
 
 impl TermAct for Say {
-    fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, crate::vnix::core::kern::KernErr> {
+    fn act(self, term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         match self.msg {
             Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
             _ => {
@@ -319,7 +344,7 @@ impl TermAct for Say {
 }
 
 impl TermAct for Inp {
-    fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, crate::vnix::core::kern::KernErr> {
+    fn act(self, term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         term.print(self.pmt.as_str(), kern)?;
         let out = term.input(self.sct, kern)?;
 
@@ -339,7 +364,7 @@ impl TermAct for Inp {
 }
 
 impl TermAct for Put {
-    fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         match term.mode {
             Mode::Cli => {
                 let (w, h) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
@@ -367,39 +392,21 @@ impl TermAct for Put {
 }
 
 impl TermAct for Img {
-    fn act(self, _term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
-        for x in 0..self.size.0 {
-            for y in 0..self.size.1 {
-                if let Some(px) = self.img.get(x + self.size.0 * y) {
-                    kern.disp.px(*px, x, y).map_err(|e| KernErr::DispErr(e))?;
-                }
-            }
-        }
+    fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+        self.draw((0, 0), kern)?;
         Ok(None)
     }
 }
 
 impl TermAct for Sprite {
-    fn act(self, _term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
-        let w = self.img.size.0;
-        let h = self.img.size.1;
-
-        for x in 0..w {
-            for y in 0..h {
-                if let Some(px) = self.img.img.get(x + w * y) {
-                    let x_offs = (self.pos.0 - (w as i32 / 2)) as usize;
-                    let y_offs = (self.pos.1 - (h as i32 / 2)) as usize;
-
-                    kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
-                }
-            }
-        }
+    fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+        self.img.draw(self.pos, kern)?;
         Ok(None)
     }
 }
 
 impl TermAct for Win {
-    fn act(self, term: &mut super::Term, msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         if self.border {
             match self.mode {
                 Mode::Cli => {
@@ -429,8 +436,33 @@ impl TermAct for Win {
             term.clear(kern)?;
         }
 
+        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        let mut mouse_pos = ((res.0 / 2) as i32, (res.1 / 2) as i32);
+
+        let skin = Skin {
+            cursor: Img {
+                size: (32, 32),
+                img: Vec::from(content::CURSOR)
+            }
+        };
+
         loop {
-            if let Some(key) = term.get_key(kern)? {
+            if let Mode::Gfx = self.mode {
+                // mouse
+                let mouse = kern.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
+                if let Some(mouse) = mouse {
+                    mouse_pos.0 += mouse.dpos.0 / 8196;
+                    mouse_pos.1 += mouse.dpos.1 / 8196;
+
+                    // writeln!(kern.cli, "{:?}", mouse_pos);
+                    // term.print_glyth('@', (mouse_pos.0 as usize, mouse_pos.1 as usize), kern)?;
+
+                    skin.cursor.draw(mouse_pos, kern)?;
+                }
+            }
+
+            // wait for esc key
+            if let Some(key) = term.get_key(false, kern)? {
                 if let TermKey::Esc = key{
                     break;
                 }
@@ -483,7 +515,38 @@ impl UIAct for Win {
     }
 
     fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
-        todo!()
+        for x in 0..size.0 {
+            for y in 0..size.1 {
+                let col = if x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4 {
+                    0x2a2e32
+                } else {
+                    0x18191d
+                };
+
+                kern.disp.px(col, pos.0 as usize + x, pos.1 as usize + y).map_err(|e| KernErr::DispErr(e))?;
+            }
+        }
+
+        if self.border {
+            for x in 0..size.0 {
+                for y in 0..16 {
+                    kern.disp.px(0x2a2e32, pos.0 as usize + x, pos.1 as usize + y).map_err(|e| KernErr::DispErr(e))?;
+                }
+            }
+
+            if let Some(title) = &self.title {
+                for (i, ch) in title.chars().enumerate() {
+                    let offs = pos.0 as usize + (size.0 - title.len() * 8) / 2;
+                    term.print_glyth(ch, (offs + i * 8, pos.1 as usize), kern)?;
+                }
+            }
+        }
+
+        if let Some(ui) = &self.content {
+            ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), term, kern)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -512,6 +575,25 @@ impl UIAct for UI {
     }
 
     fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
-        todo!()
+        match self {
+            UI::HStack(hstack) => {
+                for (i, ui) in hstack.iter().enumerate() {
+                    let size = (size.0 / hstack.len(), size.1);
+                    let pos = (pos.0 + (i * size.0) as i32, pos.1);
+
+                    ui.ui_gfx_act(pos, size, term, kern)?;
+                }
+            },
+            UI::VStack(vstack) => {
+                for (i, ui) in vstack.iter().enumerate() {
+                    let size = (size.0, size.1 / vstack.len());
+                    let pos = (pos.0, pos.1 + (i * size.1) as i32);
+
+                    ui.ui_gfx_act(pos, size, term, kern)?;
+                }
+            },
+            UI::Win(win) => return win.ui_gfx_act(pos, size, term, kern)
+        }
+        Ok(())
     }
 }

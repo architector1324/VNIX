@@ -50,8 +50,9 @@ pub enum TermKey {
 
 #[derive(Debug)]
 pub struct Mouse {
-    pos: (i32, i32),
-    click: (bool, bool)
+    pub dpos: (i32, i32),
+    pub res: (usize, usize),
+    pub click: (bool, bool)
 }
 
 pub trait Time {
@@ -73,7 +74,7 @@ pub trait Disp {
     fn res(&self) -> Result<(usize, usize), DispErr>;
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
-    fn mouse(&mut self) -> Result<Option<Mouse>, DispErr>;
+    fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr>;
 }
 
 
