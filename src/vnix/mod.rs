@@ -60,47 +60,58 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         kern.db_ram.save(path, u);
     }
 
+    // test
+    let s = "{term:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.msg("super", u)?;
+
+    kern.send("io.term", msg)?;
+
+    let s = "{term.gfx:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.msg("super", u)?;
+
+    kern.send("io.term", msg)?;
+
     let s = "{term.gfx:{win.gfx:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
     let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     let msg = kern.msg("super", u)?;
 
     kern.send("io.term", msg)?;
 
-    Ok(())
+    // login task
+    let mut ath: String = "super".into();
 
-    // // login task
-    // let mut ath: String = "super".into();
+    'login: loop {
+        let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    // 'login: loop {
-    //     let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    //     let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
-    //     let msg = kern.msg("super", u)?;
+        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
+        let msg = kern.msg("super", u)?;
     
-    //     let go = kern.task(msg);
+        let go = kern.task(msg);
 
-    //     match go {
-    //         Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
-    //         Ok(msg) => {
-    //             if let Some(msg) = msg {
-    //                 ath = msg.ath;
-    //                 break 'login;
-    //             }
-    //         }
-    //     }
-    // }
+        match go {
+            Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+            Ok(msg) => {
+                if let Some(msg) = msg {
+                    ath = msg.ath;
+                    break 'login;
+                }
+            }
+        }
+    }
 
-    // loop {
-    //     // prepare message
-    //     // λ
-    //     let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    loop {
+        // prepare message
+        // λ
+        let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    //     let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
-    //     let msg = kern.msg(&ath, u)?;
+        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
+        let msg = kern.msg(&ath, u)?;
 
-    //     // run
-    //     if let Err(e) = kern.task(msg) {
-    //         writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-    //     }
-    // }
+        // run
+        if let Err(e) = kern.task(msg) {
+            writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        }
+    }
 }

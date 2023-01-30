@@ -78,7 +78,7 @@ pub enum UI {
 
 
 impl Img {
-    fn draw(&self, pos: (i32, i32), kern: &mut Kern) -> Result<(), KernErr> {
+    fn draw(&self, pos: (i32, i32), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
         let w = self.size.0;
         let h = self.size.1;
 
@@ -88,7 +88,7 @@ impl Img {
                     let x_offs = (pos.0 - (w as i32 / 2)) as usize;
                     let y_offs = (pos.1 - (h as i32 / 2)) as usize;
 
-                    if *px > 0 {
+                    if *px != src {
                         kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
@@ -371,7 +371,7 @@ impl TermAct for Put {
 
                 if self.pos.0 < w as i32 && self.pos.1 < h as i32 {
                     if let Some(ch) = self.str.chars().next() {
-                        term.print_glyth(ch, ((self.pos.0 * 8) as usize, (self.pos.1 * 16) as usize), kern)?;
+                        term.print_glyth(ch, ((self.pos.0 * 8) as usize, (self.pos.1 * 16) as usize), 0x00ff00, kern)?;
                     }
                 }
             },
@@ -381,7 +381,7 @@ impl TermAct for Put {
 
                 if self.pos.0 < w as i32 && self.pos.1 < h as i32 {
                     if let Some(ch) = self.str.chars().next() {
-                        term.print_glyth(ch, ((self.pos.0 * 8) as usize, (self.pos.1 * 16) as usize), kern)?;
+                        term.print_glyth(ch, ((self.pos.0 * 8) as usize, (self.pos.1 * 16) as usize), 0x00ff00, kern)?;
                     }
                 }
             }
@@ -393,14 +393,14 @@ impl TermAct for Put {
 
 impl TermAct for Img {
     fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
-        self.draw((0, 0), kern)?;
+        self.draw((0, 0), 0x00ff00, kern)?;
         Ok(None)
     }
 }
 
 impl TermAct for Sprite {
     fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
-        self.img.draw(self.pos, kern)?;
+        self.img.draw(self.pos, 0x00ff00, kern)?;
         Ok(None)
     }
 }
@@ -457,7 +457,7 @@ impl TermAct for Win {
                     // writeln!(kern.cli, "{:?}", mouse_pos);
                     // term.print_glyth('@', (mouse_pos.0 as usize, mouse_pos.1 as usize), kern)?;
 
-                    skin.cursor.draw(mouse_pos, kern)?;
+                    skin.cursor.draw(mouse_pos, 0, kern)?;
                 }
             }
 
@@ -495,14 +495,14 @@ impl UIAct for Win {
                         ' '
                     };
 
-                    term.print_glyth(ch, ((pos.0 as usize + x) * 8, (pos.1 as usize + y) * 16), kern)?;
+                    term.print_glyth(ch, ((pos.0 as usize + x) * 8, (pos.1 as usize + y) * 16), 0x00ff00, kern)?;
                 }
             }
 
             if let Some(title) = &self.title {
                 for (i, ch) in title.chars().enumerate() {
                     let offs = pos.0 as usize + (size.0 - title.len()) / 2;
-                    term.print_glyth(ch, ((offs + i) * 8, (pos.1 as usize) * 16), kern)?;
+                    term.print_glyth(ch, ((offs + i) * 8, (pos.1 as usize) * 16), 0x00ff00, kern)?;
                 }
             }
         }
@@ -537,7 +537,7 @@ impl UIAct for Win {
             if let Some(title) = &self.title {
                 for (i, ch) in title.chars().enumerate() {
                     let offs = pos.0 as usize + (size.0 - title.len() * 8) / 2;
-                    term.print_glyth(ch, (offs + i * 8, pos.1 as usize), kern)?;
+                    term.print_glyth(ch, (offs + i * 8, pos.1 as usize), 0, kern)?;
                 }
             }
         }

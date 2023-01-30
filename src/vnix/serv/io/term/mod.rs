@@ -106,7 +106,7 @@ impl TermAct for Act {
 }
 
 impl Term {
-    fn print_glyth(&mut self, ch: char, pos: (usize, usize), kern: &mut Kern) -> Result<(), KernErr> {
+    fn print_glyth(&mut self, ch: char, pos: (usize, usize), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
             Mode::Cli => {
                 kern.cli.glyth(ch, (pos.0 / 8, pos.1 / 16)).map_err(|e| KernErr::CLIErr(e))?;
@@ -118,7 +118,7 @@ impl Term {
                     for x in 0..8 {
                         let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
 
-                        if px > 0 {
+                        if px != src {
                             kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
                         }
                     }
@@ -174,9 +174,9 @@ impl Term {
                         } else {
                             kern.term.pos.0 -= 1;
                         }
-                        self.print_glyth(' ', (kern.term.pos.0 * 8, kern.term.pos.1 * 16), kern)?;
+                        self.print_glyth(' ', (kern.term.pos.0 * 8, kern.term.pos.1 * 16), 0x00ff00, kern)?;
                     } else {
-                        self.print_glyth(ch, (kern.term.pos.0 * 8, kern.term.pos.1 * 16), kern)?;
+                        self.print_glyth(ch, (kern.term.pos.0 * 8, kern.term.pos.1 * 16), 0x00ff00, kern)?;
                         kern.term.pos.0 += 1;
                     }
 
