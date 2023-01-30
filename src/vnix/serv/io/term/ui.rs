@@ -85,11 +85,8 @@ impl Img {
         for x in 0..w {
             for y in 0..h {
                 if let Some(px) = self.img.get(x + w * y) {
-                    let x_offs = (pos.0 - (w as i32 / 2)) as usize;
-                    let y_offs = (pos.1 - (h as i32 / 2)) as usize;
-
-                    if *px != src {
-                        kern.disp.px(*px, x + x_offs, y + y_offs).map_err(|e| KernErr::DispErr(e))?;
+                    if *px != src && x as i32 + pos.0 < w as i32 && y as i32 + pos.1 < h as i32 {
+                        kern.disp.px(*px, (x as i32 + pos.0) as usize, (y as i32 + pos.1) as usize).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
             }
@@ -400,7 +397,13 @@ impl TermAct for Img {
 
 impl TermAct for Sprite {
     fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
-        self.img.draw(self.pos, 0x00ff00, kern)?;
+        let w = self.img.size.0;
+        let h = self.img.size.1;
+
+        let x_offs = self.pos.0 - (w as i32 / 2);
+        let y_offs = self.pos.1 - (h as i32 / 2);
+
+        self.img.draw((x_offs, y_offs), 0x00ff00, kern)?;
         Ok(None)
     }
 }
