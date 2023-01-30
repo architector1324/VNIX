@@ -2,7 +2,6 @@ use alloc::boxed::Box;
 use alloc::{vec, format};
 use alloc::string::String;
 use alloc::vec::Vec;
-use uefi_services::println;
 
 
 use crate::driver::TermKey;
@@ -343,8 +342,13 @@ impl TermAct for Put {
     fn act(self, term: &mut super::Term, _msg: &Msg, kern: &mut crate::vnix::core::kern::Kern) -> Result<Option<Unit>, KernErr> {
         match term.mode {
             Mode::Cli => {
-                let (_w, _h) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
-                unimplemented!()
+                let (w, h) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+
+                if self.pos.0 < w as i32 && self.pos.1 < h as i32 {
+                    if let Some(ch) = self.str.chars().next() {
+                        term.print_glyth(ch, ((self.pos.0 * 8) as usize, (self.pos.1 * 16) as usize), kern)?;
+                    }
+                }
             },
             Mode::Gfx => {
                 let (w, h) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
@@ -399,7 +403,13 @@ impl TermAct for Win {
         if self.border {
             match self.mode {
                 Mode::Cli => {
-                    let res = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                    let res = match term.mode {
+                        Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+                        Mode::Gfx => {
+                            let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                            (res.0 / 8, res.1 / 16)
+                        }
+                    };
 
                     let size = self.size.unwrap_or(res);
                     let pos = self.pos.unwrap_or((0, 0));
@@ -408,7 +418,7 @@ impl TermAct for Win {
                 },
                 Mode::Gfx => {
                     let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-        
+
                     let size = self.size.unwrap_or(res);
                     let pos = self.pos.unwrap_or((0, 0));
 
@@ -485,8 +495,6 @@ impl UIAct for UI {
                     let size = (size.0 / hstack.len(), size.1);
                     let pos = (pos.0 + (i * size.0) as i32, pos.1);
 
-                    println!("hstack {}: {{pos:{:?} size:{:?}}}", i, pos, size);
-
                     ui.ui_act(pos, size, term, kern)?;
                 }
             },
@@ -494,8 +502,6 @@ impl UIAct for UI {
                 for (i, ui) in vstack.iter().enumerate() {
                     let size = (size.0, size.1 / vstack.len());
                     let pos = (pos.0, pos.1 + (i * size.1) as i32);
-
-                    println!("vstack {}: {{pos:{:?} size:{:?}}}", i, pos, size);
 
                     ui.ui_act(pos, size, term, kern)?;
                 }

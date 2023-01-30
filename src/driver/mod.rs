@@ -60,6 +60,7 @@ pub trait Time {
 
 pub trait CLI: Write {
     fn res(&self) -> Result<(usize, usize), CLIErr>;
+    fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr>;
     fn get_key(&mut self, block: bool) -> Result<Option<TermKey>, CLIErr>;
     fn clear(&mut self) -> Result<(), CLIErr>;
 }

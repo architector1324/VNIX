@@ -92,6 +92,17 @@ impl CLI for UefiCLI {
         Ok((out.columns(), out.rows()))
     }
 
+    fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr> {
+        let cli = self.st.stdout();
+        let save = cli.cursor_position();
+
+        cli.set_cursor_position(pos.0, pos.1).map_err(|_| CLIErr::Write)?;
+        write!(cli, "{ch}").map_err(|_| CLIErr::Write)?;
+        cli.set_cursor_position(save.0, save.1).map_err(|_| CLIErr::Write)?;
+
+        Ok(())
+    }
+
     fn get_key(&mut self, block: bool) -> Result<Option<crate::driver::TermKey>, CLIErr> {
         // let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 

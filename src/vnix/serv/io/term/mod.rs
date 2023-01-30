@@ -107,12 +107,19 @@ impl TermAct for Act {
 
 impl Term {
     fn print_glyth(&mut self, ch: char, pos: (usize, usize), kern: &mut Kern) -> Result<(), KernErr> {
-        let img = self.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
-
-        for y in 0..16 {
-            for x in 0..8 {
-                let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
-                kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
+        match self.mode {
+            Mode::Cli => {
+                kern.cli.glyth(ch, (pos.0 / 8, pos.1 / 16)).map_err(|e| KernErr::CLIErr(e))?;
+            },
+            Mode::Gfx => {
+                let img = self.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
+        
+                for y in 0..16 {
+                    for x in 0..8 {
+                        let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
+                        kern.disp.px(px as u32, x + pos.0, y + pos.1).map_err(|e| KernErr::DispErr(e))?;
+                    }
+                }
             }
         }
         Ok(())
