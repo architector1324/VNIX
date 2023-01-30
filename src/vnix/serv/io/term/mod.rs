@@ -120,7 +120,35 @@ impl Term {
 
     fn print(&mut self, s: &str, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
-            Mode::Cli => write!(kern.cli, "{s}").map_err(|_| KernErr::CLIErr(CLIErr::Write)),
+            Mode::Cli => {
+                let (w, _) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+
+                for ch in s.chars() {
+                    if ch == '\n' {
+                        kern.term.pos.1 += 1;
+                        kern.term.pos.0 = 0;
+                    } else if ch == '\r' {
+                        self.clear_line(kern)?;
+                    } else if ch == '\u{8}' {
+                        if kern.term.pos.0 == 0 && kern.term.pos.1 > 0 {
+                            kern.term.pos.1 -= 1;
+                        } else {
+                            kern.term.pos.0 -= 1;
+                        }
+                    } else {
+                        
+                        kern.term.pos.0 += 1;
+                    }
+
+                    if kern.term.pos.0 >= w {
+                        kern.term.pos.1 += 1;
+                        kern.term.pos.0 = 0;
+                    }
+
+                    write!(kern.cli, "{}", ch).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                }
+                Ok(())
+            },
             Mode::Gfx => {
                 let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
