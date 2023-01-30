@@ -1,6 +1,6 @@
 pub mod task {
     pub static LOGIN: &'static str = "{term:[say nl {pmt:`login: ` out:@ath} nl {pmt:`pub key: ` out:@pub} nl {pmt:`priv key: ` sct:t out:@priv} nl] msg:`Hello, vnix!` task:[io.term sys.usr]}";
-    pub static LAMBDA: &'static str = "{term:[{shrt:32 nl:t} {pmt:`λ ` prs:t} nl] msg:`Welcome to lambda shell!\\nTry enter: {help:info task:io.term}` task:[io.term sys.task io.term]}";
+    pub static LAMBDA: &'static str = "{term:[{shrt:32 nl:t} {pmt:`$ ` prs:t} nl] msg:`Welcome to lambda shell!\\nTry enter: {help:info task:io.term}` task:[io.term sys.task io.term]}";
     pub static GFX_LOGIN: &'static str = "{term.gfx:[say nl {pmt:`login: ` out:@ath} nl {pmt:`pub key: ` out:@pub} nl {pmt:`priv key: ` sct:t out:@priv} nl] msg:`Hello, vnix!` task:[io.term sys.usr]}";
     pub static GFX_LAMBDA: &'static str = "{term.gfx:[{shrt:32 nl:t} {pmt:`λ ` prs:t} nl] msg:`Welcome to lambda shell!\\nTry enter: {help:info task:io.term}` task:[io.term sys.task io.term]}";
 }

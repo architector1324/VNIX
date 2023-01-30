@@ -79,8 +79,8 @@ impl UefiRnd {
 
 impl Write for UefiCLI {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| core::fmt::Error)?;
-        write!(cli, "{}", s)
+        // let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| core::fmt::Error)?;
+        write!(self.st.stdout(), "{}", s)
     }
 }
 
