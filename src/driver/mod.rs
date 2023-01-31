@@ -15,7 +15,8 @@ pub enum CLIErr {
 pub enum DispErr {
     GetResolution,
     SetPixel,
-    GetMouseState
+    GetMouseState,
+    Flush
 }
 
 #[derive(Debug)]
@@ -72,10 +73,12 @@ pub trait Rnd {
 
 pub trait Disp {
     fn res(&self) -> Result<(usize, usize), DispErr>;
+    fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr>;
+
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
     fn blk(&mut self, pos: (i32, i32), img_size: (usize, usize), src: u32, img: &[u32]) -> Result<(), DispErr>;
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
-    fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr>;
+    fn flush(&mut self) -> Result<(), DispErr>;
 }
 
 

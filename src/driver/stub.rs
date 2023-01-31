@@ -22,6 +22,10 @@ impl Disp for StubDisp {
         Ok(())
     }
 
+    fn flush(&mut self) -> Result<(), DispErr> {
+        Ok(())
+    }
+
     fn mouse(&mut self, _block: bool) -> Result<Option<super::Mouse>, DispErr> {
         Ok(None)
     }

@@ -414,6 +414,10 @@ impl TermAct for Win {
                     let pos = self.pos.unwrap_or((0, 0));
 
                     self.ui_act(pos, size, term, kern)?;
+
+                    if let Mode::Gfx = term.mode {
+                        kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                    }
                 },
                 Mode::Gfx => {
                     let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
@@ -422,6 +426,8 @@ impl TermAct for Win {
                     let pos = self.pos.unwrap_or((0, 0));
 
                     self.ui_gfx_act(pos, size, term, kern)?;
+
+                    kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                 }
             }
         } else {
@@ -471,16 +477,15 @@ impl TermAct for Win {
                 }
 
                 // mouse
-                let mouse = kern.disp.mouse(true).map_err(|e| KernErr::DispErr(e))?;
+                let mouse = kern.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
                 if let Some(mouse) = mouse {
                     mouse_pos.0 += mouse.dpos.0 / 8196;
                     mouse_pos.1 += mouse.dpos.1 / 8196;
 
-                    // writeln!(kern.cli, "{:?}", mouse_pos);
-                    // term.print_glyth('@', (mouse_pos.0 as usize, mouse_pos.1 as usize), kern)?;
-
-                    skin.cursor.draw(mouse_pos, 0, kern)?;
                 }
+                skin.cursor.draw(mouse_pos, 0, kern)?;
+
+                kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
             }
 
             // wait for esc key

@@ -1,7 +1,8 @@
 use core::fmt::Write;
 
+use alloc::vec::Vec;
 use uefi::Handle;
-use uefi::proto::console::gop::GraphicsOutput;
+use uefi::proto::console::gop::{GraphicsOutput, BltPixel, BltOp, BltRegion};
 use uefi::proto::console::pointer::Pointer;
 use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
 use uefi::proto::rng::{Rng, RngAlgorithmType};
@@ -20,7 +21,10 @@ pub struct UefiCLI {
 pub struct UefiDisp {
     st: SystemTable<Boot>,
     disp_hlr: Handle,
-    mouse_hlr: Handle
+    mouse_hlr: Handle,
+
+    buffer: Vec<BltPixel>,
+    res: (usize, usize)
 }
 
 pub struct UefiTime {
@@ -51,10 +55,25 @@ impl UefiDisp {
         let disp_hlr = st.boot_services().get_handle_for_protocol::<GraphicsOutput>().map_err(|_| DrvErr::HandleFault)?;
         let mouse_hlr = st.boot_services().get_handle_for_protocol::<Pointer>().map_err(|_| DrvErr::HandleFault)?;
 
+        let res = unsafe {
+            let disp = st.boot_services().open_protocol::<GraphicsOutput>(
+                OpenProtocolParams {
+                    handle: disp_hlr,
+                    agent: st.boot_services().image_handle(),
+                    controller: None
+                },
+                OpenProtocolAttributes::GetProtocol
+            ).map_err(|_| DrvErr::Disp(DispErr::SetPixel))?;
+    
+            disp.current_mode_info().resolution()
+        };
+
         Ok(UefiDisp {
             st,
             disp_hlr,
-            mouse_hlr
+            mouse_hlr,
+            buffer: (0..res.0*res.1).map(|_| BltPixel::new(0, 0, 0)).collect(),
+            res
         })
     }
 }
@@ -140,69 +159,34 @@ impl CLI for UefiCLI {
 
 impl Disp for UefiDisp {
     fn res(&self) -> Result<(usize, usize), DispErr> {
-        unsafe {
-            let disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
-                OpenProtocolParams {
-                    handle: self.disp_hlr,
-                    agent: self.st.boot_services().image_handle(),
-                    controller: None
-                },
-                OpenProtocolAttributes::GetProtocol
-            ).map_err(|_| DispErr::SetPixel)?;
-    
-            Ok(disp.current_mode_info().resolution())
-        }
+        Ok(self.res)
     }
 
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr> {
-        unsafe {
-            let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
-                OpenProtocolParams {
-                    handle: self.disp_hlr,
-                    agent: self.st.boot_services().image_handle(),
-                    controller: None
-                },
-                OpenProtocolAttributes::GetProtocol
-            ).map_err(|_| DispErr::SetPixel)?;
+        if x + self.res.0 * y >= self.res.0 * self.res.1 {
+            return Err(DispErr::SetPixel)
+        }
 
-            let res = disp.current_mode_info().resolution();
-
-            if x + res.0 * y >= res.0 * res.1 {
-                return Err(DispErr::SetPixel)
-            }
-
-            let mut fb = disp.frame_buffer();
-            fb.write_value(4 * (x + res.0 * y), px);
+        if let Some(v) = self.buffer.get_mut(x + self.res.0 * y) {
+            *v = BltPixel::new((px >> 16) as u8, (px >> 8) as u8, px as u8);
         }
 
         Ok(())
     }
 
     fn blk(&mut self, pos: (i32, i32), img_size: (usize, usize), src: u32, img: &[u32]) -> Result<(), DispErr> {
-        unsafe {
-            let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
-                OpenProtocolParams {
-                    handle: self.disp_hlr,
-                    agent: self.st.boot_services().image_handle(),
-                    controller: None
-                },
-                OpenProtocolAttributes::GetProtocol
-            ).map_err(|_| DispErr::SetPixel)?;
+        for x in 0..img_size.0 {
+            for y in 0..img_size.1 {
+                if x as i32 + pos.0 >= self.res.0 as i32 || x as i32 + pos.0 < 0 || y as i32 + pos.1 >= self.res.1 as i32 || y as i32 + pos.1 < 0 {
+                    continue;
+                }
 
-            let res = disp.current_mode_info().resolution();
-            let mut fb = disp.frame_buffer();
+                let offs = ((pos.0 + x as i32) + self.res.0 as i32 * (pos.1 + y as i32)) as usize;
 
-            for x in 0..img_size.0 {
-                for y in 0..img_size.1 {
-                    if x as i32 + pos.0 >= res.0 as i32 || x as i32 + pos.0 < 0 || y as i32 + pos.1 >= res.1 as i32 || y as i32 + pos.1 < 0 {
-                        continue;
-                    }
-
-                    let offs = ((pos.0 + x as i32) + res.0 as i32 * (pos.1 + y as i32)) as usize;
-
-                    if let Some(px) = img.get(x + img_size.0 * y) {
-                        if *px != src {
-                            fb.write_value(4 * offs, *px);
+                if let Some(px) = img.get(x + img_size.0 * y) {
+                    if *px != src {
+                        if let Some(v) = self.buffer.get_mut(offs) {
+                            *v = BltPixel::new((*px >> 16) as u8, (*px >> 8) as u8, *px as u8);
                         }
                     }
                 }
@@ -213,6 +197,19 @@ impl Disp for UefiDisp {
     }
 
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
+        for x in 0..self.res.0 {
+            for y in 0..self.res.1 {
+                let px = f(x, y);
+                if let Some(v) = self.buffer.get_mut(x + self.res.0 * y) {
+                    *v = BltPixel::new((px >> 16) as u8, (px >> 8) as u8, px as u8);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), DispErr> {
         unsafe {
             let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
                 OpenProtocolParams {
@@ -223,14 +220,12 @@ impl Disp for UefiDisp {
                 OpenProtocolAttributes::GetProtocol
             ).map_err(|_| DispErr::SetPixel)?;
 
-            let res = disp.current_mode_info().resolution();
-            let mut fb = disp.frame_buffer();
-
-            for x in 0..res.0 {
-                for y in 0..res.1 {
-                    fb.write_value(4 * (x + res.0 * y), f(x, y));
-                }
-            }
+            disp.blt(BltOp::BufferToVideo {
+                buffer: &self.buffer,
+                src: BltRegion::Full,
+                dest: (0, 0),
+                dims: (self.res.0, self.res.1)
+            }).map_err(|_| DispErr::Flush)?;
         }
 
         Ok(())

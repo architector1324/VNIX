@@ -68,6 +68,8 @@ impl TermAct for Act {
             Act::Trc => term.print(format!("{}", msg).as_str(), kern)?,
             Act::Say(say) => return say.act(term, msg, kern),
             Act::GetKey(may_path) => {
+                term.flush(kern)?;
+
                 if let Some(key) = term.get_key(true, kern)? {
                     if let Some(path) = may_path {
                         let u = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), Unit::Map(Vec::new()));
@@ -190,10 +192,19 @@ impl Term {
         }
     }
 
+    fn flush(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
+        if let Mode::Gfx = self.mode {
+            kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+        }
+        Ok(())
+    }
+
     fn input(&mut self, secret: bool, kern: &mut Kern) -> Result<String, KernErr> {
         let mut out = String::new();
 
         let save_cur = kern.term.pos.clone();
+
+        self.flush(kern)?;
 
         loop {
             if let Some(key) = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
@@ -203,10 +214,12 @@ impl Term {
                     } else if c == '\u{8}' && kern.term.pos.0 > save_cur.0 {
                         out.pop();
                         self.print(format!("{}", c).as_str(), kern)?;
+                        self.flush(kern)?;
                     } else if !c.is_ascii_control() {
                         write!(out, "{}", c).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                         if !secret {
                             self.print(format!("{}", c).as_str(), kern)?;
+                            self.flush(kern)?;
                         }
                     }
                 }
@@ -237,18 +250,7 @@ impl Term {
         match self.mode {
             Mode::Cli => kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
             Mode::Gfx => {
-                let (_, h) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-
-                kern.term.pos.1 = 0;
-
-                for _ in 0..(h / 16 - 1) {
-                    self.clear_line(kern)?;
-                    kern.term.pos.1 += 1;
-                }
-
-                kern.term.pos.1 = 0;
-
-                Ok(())
+                kern.disp.fill(&|_, _| 0x000000).map_err(|e| KernErr::DispErr(e))
             }
         }
     }
@@ -496,6 +498,8 @@ impl ServHlr for Term {
                 out_u = act.act(self, &msg, kern)?;
             }
         }
+
+        self.flush(kern)?;
 
         if let Some(u) = out_u {
             return Ok(Some(kern.msg(&msg.ath, u)?));
