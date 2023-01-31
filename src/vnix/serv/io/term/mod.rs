@@ -250,6 +250,7 @@ impl Term {
         match self.mode {
             Mode::Cli => kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
             Mode::Gfx => {
+                kern.term.pos = (0, 0);
                 kern.disp.fill(&|_, _| 0x000000).map_err(|e| KernErr::DispErr(e))
             }
         }

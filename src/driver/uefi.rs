@@ -231,6 +231,31 @@ impl Disp for UefiDisp {
         Ok(())
     }
 
+    fn flush_blk(&mut self, pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr> {
+        unsafe {
+            let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
+                OpenProtocolParams {
+                    handle: self.disp_hlr,
+                    agent: self.st.boot_services().image_handle(),
+                    controller: None
+                },
+                OpenProtocolAttributes::GetProtocol
+            ).map_err(|_| DispErr::SetPixel)?;
+
+            disp.blt(BltOp::BufferToVideo {
+                buffer: &self.buffer,
+                src: BltRegion::SubRectangle {
+                    coords: (pos.0 as usize, pos.1 as usize),
+                    px_stride: self.res.0
+                },
+                dest: (pos.0 as usize, pos.1 as usize),
+                dims: size
+            }).map_err(|_| DispErr::Flush)?;
+        }
+
+        Ok(())
+    }
+
     fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr> {
         let mut mouse = self.st.boot_services().open_protocol_exclusive::<Pointer>(self.mouse_hlr).map_err(|_| DispErr::GetMouseState)?;
 

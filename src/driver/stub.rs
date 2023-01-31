@@ -2,7 +2,6 @@ use rand::{rngs::StdRng, SeedableRng, RngCore};
 
 use crate::driver::{DispErr, Disp, Rnd, RndErr};
 
-
 pub struct StubDisp;
 
 impl Disp for StubDisp {
@@ -23,6 +22,10 @@ impl Disp for StubDisp {
     }
 
     fn flush(&mut self) -> Result<(), DispErr> {
+        Ok(())
+    }
+
+    fn flush_blk(&mut self, _pos: (i32, i32), _size: (usize, usize)) -> Result<(), DispErr> {
         Ok(())
     }
 

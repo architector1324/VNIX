@@ -444,6 +444,11 @@ impl TermAct for Win {
             }
         };
 
+        if let Mode::Gfx = self.mode {
+            skin.cursor.draw(mouse_pos, 0, kern)?;
+            kern.disp.flush_blk(mouse_pos, skin.cursor.size).map_err(|e| KernErr::DispErr(e))?;
+        }
+
         loop {
             if let Mode::Gfx = self.mode {
                 // render
@@ -479,13 +484,14 @@ impl TermAct for Win {
                 // mouse
                 let mouse = kern.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
                 if let Some(mouse) = mouse {
-                    mouse_pos.0 += mouse.dpos.0 / 8196;
-                    mouse_pos.1 += mouse.dpos.1 / 8196;
+                    kern.disp.flush_blk(mouse_pos, skin.cursor.size).map_err(|e| KernErr::DispErr(e))?;
 
+                    mouse_pos.0 += mouse.dpos.0 / 4096;
+                    mouse_pos.1 += mouse.dpos.1 / 4096;
+
+                    skin.cursor.draw(mouse_pos, 0, kern)?;
+                    kern.disp.flush_blk(mouse_pos, skin.cursor.size).map_err(|e| KernErr::DispErr(e))?;
                 }
-                skin.cursor.draw(mouse_pos, 0, kern)?;
-
-                kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
             }
 
             // wait for esc key

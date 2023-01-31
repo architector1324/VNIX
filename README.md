@@ -54,18 +54,20 @@ cargo build --release --target=aarch64-unknown-uefi
 ```
 
 ## Run on QEMU
-1. Prepare boot iso:
+1. Prepare boot img:
 ```bash
-mkdir -p ./out
+mkdir -p out
 
-dd if=/dev/zero of=./out/vnix.img bs=1048576 count=256
-mkfs.fat out/vnix.img
+dd if=/dev/zero of=./out/vnix.img bs=1048576 count=128
+
+parted ./out/vnix.img -s -a minimal mklabel gpt
+parted ./out/vnix.img -s -a minimal mkpart EFI FAT32 2048s 93716s
+parted ./out/vnix.img -s -a minimal toggle 1 boot
+
+mkfs.vfat ./out/vnix.img
 mmd -i ./out/vnix.img ::/EFI
 mmd -i ./out/vnix.img ::/EFI/BOOT
 mcopy -i ./out/vnix.img target/x86_64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/BOOTX64.EFI
-
-xorriso -as mkisofs -R -f -e vnix.img -no-emul-boot -o ./out/vnix.iso out
-rm out/vnix.img
 ```
 
 2. Run VM:
@@ -74,6 +76,12 @@ qemu-system-x86_64 -enable-kvm -m 512M -full-screen -serial mon:stdio -vga virti
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF.fd \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF_VARS.fd \
     -cdrom ./out/vnix.iso
+```
+
+
+## Burn USB Flash
+```bash
+dd if=./iso/vnix.img of=/dev/<usb> status=progress
 ```
 
 ## FAQ

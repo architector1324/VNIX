@@ -61,17 +61,17 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     }
 
     // test
-    let s = "{term:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg = kern.msg("super", u)?;
+    // let s = "{term:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
+    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let msg = kern.msg("super", u)?;
 
-    kern.send("io.term", msg)?;
+    // kern.send("io.term", msg)?;
 
-    let s = "{term.gfx:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg = kern.msg("super", u)?;
+    // let s = "{term.gfx:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
+    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let msg = kern.msg("super", u)?;
 
-    kern.send("io.term", msg)?;
+    // kern.send("io.term", msg)?;
 
     let s = "{term.gfx:{win.gfx:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
     let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;

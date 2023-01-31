@@ -79,6 +79,7 @@ pub trait Disp {
     fn blk(&mut self, pos: (i32, i32), img_size: (usize, usize), src: u32, img: &[u32]) -> Result<(), DispErr>;
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr>;
     fn flush(&mut self) -> Result<(), DispErr>;
+    fn flush_blk(&mut self, pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr>;
 }
 
 
