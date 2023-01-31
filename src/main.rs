@@ -24,6 +24,9 @@ fn main(_image: Handle, mut st: SystemTable<Boot>) -> Status {
 
     st.stdout().clear().unwrap();
 
+    // disable watchdog timer to avoid reboot after 5 minutes
+    st.boot_services().set_watchdog_timer(0, 0xffff + 1, None).unwrap();
+
     unsafe {
         // load drivers
 

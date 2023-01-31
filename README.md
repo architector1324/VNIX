@@ -75,13 +75,18 @@ mcopy -i ./out/vnix.img target/x86_64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/
 qemu-system-x86_64 -enable-kvm -m 512M -full-screen -serial mon:stdio -vga virtio -device virtio-rng-pci \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF.fd \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF_VARS.fd \
-    -cdrom ./out/vnix.iso
+    -cdrom ./out/vnix.img
+```
+
+3. Also can be converted to ISO with PowerISO:
+```bash
+poweriso convert out/vnix.img -o out/vnix.iso
 ```
 
 
 ## Burn USB Flash
 ```bash
-dd if=./iso/vnix.img of=/dev/<usb> status=progress
+dd if=./out/vnix.img of=/dev/<usb> status=progress
 ```
 
 ## FAQ
