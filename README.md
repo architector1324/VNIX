@@ -54,20 +54,26 @@ cargo build --release --target=aarch64-unknown-uefi
 ```
 
 ## Run on QEMU
-1. Prepare boot folder:
+1. Prepare boot iso:
 ```bash
-mkdir -p ./boot/esp/efi/boot/
-mv target/x86_64-unknown-uefi/release/vnix.efi ./boot/esp/efi/boot/bootx64.efi
+mkdir -p ./out
 
-cp /usr/share/OVMF/x64/OVMF_CODE.fd ./boot
-cp /usr/share/OVMF/x64/OVMF_VARS.fd ./boot
+dd if=/dev/zero of=./out/vnix.img bs=1048576 count=256
+mkfs.fat out/vnix.img
+mmd -i ./out/vnix.img ::/EFI
+mmd -i ./out/vnix.img ::/EFI/BOOT
+mcopy -i ./out/vnix.img target/x86_64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/BOOTX64.EFI
+
+xorriso -as mkisofs -R -f -e vnix.img -no-emul-boot -o ./out/vnix.iso out
+rm out/vnix.img
 ```
 
 2. Run VM:
 ```bash
-qemu-system-x86_64 -m 1024M -device virtio-rng-pci -drive if=pflash,format=raw,readonly=on,file=boot/OVMF_CODE.fd \
-    -drive if=pflash,format=raw,readonly=on,file=boot/OVMF_VARS.fd \
-    -drive format=raw,file=fat:rw:boot/esp
+qemu-system-x86_64 -enable-kvm -m 512M -full-screen -serial mon:stdio -vga virtio -device virtio-rng-pci \
+    -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF.fd \
+    -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF_VARS.fd \
+    -cdrom ./out/vnix.iso
 ```
 
 ## FAQ
