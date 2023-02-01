@@ -30,12 +30,19 @@ enum GetRes {
 }
 
 #[derive(Debug, Clone)]
+enum SetRes {
+    Cli,
+    Gfx
+}
+
+#[derive(Debug, Clone)]
 enum Act {
     Clear,
     Nl,
     GetKey(Option<Vec<String>>),
     Trc,
     GetRes(GetRes, Vec<String>),
+    SetRes(SetRes, (usize, usize)),
     Say(ui::Say),
     Inp(ui::Inp),
     Put(ui::Put),
@@ -129,6 +136,11 @@ impl TermAct for Act {
                 let u = Unit::merge_ref(path.into_iter(), u, Unit::Map(Vec::new()));
                 return Ok(u);
             },
+            Act::SetRes(which, res) =>
+                match which {
+                    SetRes::Cli => kern.cli.set_res(res).map_err(|e| KernErr::CLIErr(e))?,
+                    SetRes::Gfx => kern.disp.set_res(res).map_err(|e| KernErr::DispErr(e))?
+                }
             Act::Inp(inp) => return inp.act(term, msg, kern),
             Act::Put(put) => return put.act(term, msg, kern),
             Act::Img(img) => return img.act(term, msg, kern),
@@ -414,6 +426,15 @@ impl FromUnit for Act {
                                             out: vec!["msg".into()]
                                         }
                                     )),
+                                    "set.res.cli" | "set.res.gfx" => {
+                                        let res = msg.as_pair().into_iter().filter_map(|(u0, u1)| Some((u0.as_int()? as usize, u1.as_int()? as usize))).next()?;
+
+                                        match s.as_str() {
+                                            "set.res.cli" => Some(Act::SetRes(SetRes::Cli, res)),
+                                            "set.res.gfx" => Some(Act::SetRes(SetRes::Gfx, res)),
+                                            _ => None
+                                        }
+                                    } 
                                     _ => None
                                 }
                         },

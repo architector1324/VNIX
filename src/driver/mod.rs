@@ -10,12 +10,14 @@ pub enum CLIErr {
     Clear,
     Write,
     GetKey,
-    GetResolution
+    GetResolution,
+    SetResolution
 }
 
 #[derive(Debug)]
 pub enum DispErr {
     GetResolution,
+    SetResolution,
     SetPixel,
     GetMouseState,
     Flush
@@ -65,6 +67,7 @@ pub trait Time {
 pub trait CLI: Write {
     fn res(&self) -> Result<(usize, usize), CLIErr>;
     fn res_list(&self) -> Result<Vec<(usize, usize)>, CLIErr>;
+    fn set_res(&mut self, res: (usize, usize)) -> Result<(), CLIErr>;
 
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr>;
     fn get_key(&mut self, block: bool) -> Result<Option<TermKey>, CLIErr>;
@@ -78,6 +81,8 @@ pub trait Rnd {
 pub trait Disp {
     fn res(&self) -> Result<(usize, usize), DispErr>;
     fn res_list(&self) -> Result<Vec<(usize, usize)>, DispErr>;
+    fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr>; 
+
     fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr>;
 
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;

@@ -118,6 +118,13 @@ impl CLI for UefiCLI {
         Ok(out)
     }
 
+    fn set_res(&mut self, res: (usize, usize)) -> Result<(), CLIErr> {
+        let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| CLIErr::SetResolution)?;
+        let mode = cli.modes().find(|m| m.columns() == res.0 && m.rows() == res.1).ok_or(CLIErr::SetResolution)?;
+
+        cli.set_mode(mode).map_err(|_| CLIErr::SetResolution)
+    }
+
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr> {
         let cli = self.st.stdout();
         let save = cli.cursor_position();
@@ -181,6 +188,27 @@ impl Disp for UefiDisp {
             ).map_err(|_| DispErr::GetResolution)?;
     
             Ok(disp.modes().map(|m| m.info().resolution()).collect())
+        }
+    }
+
+    fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr> {
+        unsafe {
+            let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
+                OpenProtocolParams {
+                    handle: self.disp_hlr,
+                    agent: self.st.boot_services().image_handle(),
+                    controller: None
+                },
+                OpenProtocolAttributes::GetProtocol
+            ).map_err(|_| DispErr::GetResolution)?;
+    
+            let mode = disp.modes().find(|m| m.info().resolution() == res).ok_or(DispErr::SetResolution)?;
+            disp.set_mode(&mode).map_err(|_| DispErr::SetResolution)?;
+            
+            self.buffer = (0..res.0*res.1).map(|_| BltPixel::new(0, 0, 0)).collect();
+            self.res = res;
+
+            Ok(())
         }
     }
 

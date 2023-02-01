@@ -14,6 +14,10 @@ impl Disp for StubDisp {
         Ok(Vec::new())
     }
 
+    fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr> {
+        Ok(())
+    }
+
     fn px(&mut self, _px: u32, _x: usize, _y: usize) -> Result<(), DispErr> {
         Ok(())
     }
