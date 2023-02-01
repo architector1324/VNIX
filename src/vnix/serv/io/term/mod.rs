@@ -22,13 +22,20 @@ pub trait TermAct {
 }
 
 #[derive(Debug, Clone)]
+enum GetRes {
+    Cli,
+    Gfx,
+    ListCli,
+    ListGfx
+}
+
+#[derive(Debug, Clone)]
 enum Act {
     Clear,
     Nl,
     GetKey(Option<Vec<String>>),
     Trc,
-    GetCLiRes(Vec<String>),
-    GetGfxRes(Vec<String>),
+    GetRes(GetRes, Vec<String>),
     Say(ui::Say),
     Inp(ui::Inp),
     Put(ui::Put),
@@ -77,22 +84,47 @@ impl TermAct for Act {
                     }
                 }
             },
-            Act::GetCLiRes(path) => {
-                let res = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
-                let u = Unit::Pair(
-                    Box::new(Unit::Int(res.0 as i32)),
-                    Box::new(Unit::Int(res.1 as i32))
-                );
-
-                let u = Unit::merge_ref(path.into_iter(), u, Unit::Map(Vec::new()));
-                return Ok(u);
-            },
-            Act::GetGfxRes(path) => {
-                let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-                let u = Unit::Pair(
-                    Box::new(Unit::Int(res.0 as i32)),
-                    Box::new(Unit::Int(res.1 as i32))
-                );
+            Act::GetRes(which, path) => {
+                let u = match which {
+                    GetRes::Cli => {
+                        let res = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                        Unit::Pair(
+                            Box::new(Unit::Int(res.0 as i32)),
+                            Box::new(Unit::Int(res.1 as i32))
+                        )
+                    },
+                    GetRes::Gfx => {
+                        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                        Unit::Pair(
+                            Box::new(Unit::Int(res.0 as i32)),
+                            Box::new(Unit::Int(res.1 as i32))
+                        )
+                    },
+                    GetRes::ListCli => {
+                        let lst = kern.cli.res_list().map_err(|e| KernErr::CLIErr(e))?;
+                        
+                        Unit::Lst(
+                            lst.into_iter().map(|(w, h)| {
+                                Unit::Pair(
+                                    Box::new(Unit::Int(w as i32)),
+                                    Box::new(Unit::Int(h as i32))
+                                )
+                            }).collect()
+                        )
+                    },
+                    GetRes::ListGfx => {
+                        let lst = kern.disp.res_list().map_err(|e| KernErr::DispErr(e))?;
+                        
+                        Unit::Lst(
+                            lst.into_iter().map(|(w, h)| {
+                                Unit::Pair(
+                                    Box::new(Unit::Int(w as i32)),
+                                    Box::new(Unit::Int(h as i32))
+                                )
+                            }).collect()
+                        )
+                    }
+                };
 
                 let u = Unit::merge_ref(path.into_iter(), u, Unit::Map(Vec::new()));
                 return Ok(u);
@@ -339,8 +371,10 @@ impl FromUnit for Act {
                             nl: false
                         }
                     )),
-                    "res.cli" => Some(Act::GetCLiRes(vec!["msg".into()])),
-                    "res.gfx" => Some(Act::GetGfxRes(vec!["msg".into()])),
+                    "res.cli" => Some(Act::GetRes(GetRes::Cli, vec!["msg".into()])),
+                    "res.gfx" => Some(Act::GetRes(GetRes::Gfx, vec!["msg".into()])),
+                    "res.cli.lst" => Some(Act::GetRes(GetRes::ListCli, vec!["msg".into()])),
+                    "res.gfx.lst" => Some(Act::GetRes(GetRes::ListGfx, vec!["msg".into()])),
                     _ => None
                 },
                 Or::Second(or) =>
@@ -357,8 +391,10 @@ impl FromUnit for Act {
                                             nl: false
                                         }
                                     )),
-                                    "res.cli" => Some(Act::GetCLiRes(path)),
-                                    "res.gfx" => Some(Act::GetGfxRes(path)),
+                                    "res.cli" => Some(Act::GetRes(GetRes::Cli, path)),
+                                    "res.gfx" => Some(Act::GetRes(GetRes::Gfx, path)),
+                                    "res.cli.lst" => Some(Act::GetRes(GetRes::ListCli, path)),
+                                    "res.gfx.lst" => Some(Act::GetRes(GetRes::ListGfx, path)),
                                     _ => None
                                 },
                             Or::Second((s, msg)) =>

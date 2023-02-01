@@ -111,6 +111,13 @@ impl CLI for UefiCLI {
         Ok((out.columns(), out.rows()))
     }
 
+    fn res_list(&self) -> Result<Vec<(usize, usize)>, CLIErr> {
+        let mut cli = self.st.boot_services().open_protocol_exclusive::<Output>(self.cli_out_hlr).map_err(|_| CLIErr::GetResolution)?;
+        let out = cli.modes().map(|m| (m.columns(), m.rows())).collect();
+
+        Ok(out)
+    }
+
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr> {
         let cli = self.st.stdout();
         let save = cli.cursor_position();
@@ -160,6 +167,21 @@ impl CLI for UefiCLI {
 impl Disp for UefiDisp {
     fn res(&self) -> Result<(usize, usize), DispErr> {
         Ok(self.res)
+    }
+
+    fn res_list(&self) -> Result<Vec<(usize, usize)>, DispErr> {
+        unsafe {
+            let disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
+                OpenProtocolParams {
+                    handle: self.disp_hlr,
+                    agent: self.st.boot_services().image_handle(),
+                    controller: None
+                },
+                OpenProtocolAttributes::GetProtocol
+            ).map_err(|_| DispErr::GetResolution)?;
+    
+            Ok(disp.modes().map(|m| m.info().resolution()).collect())
+        }
     }
 
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr> {

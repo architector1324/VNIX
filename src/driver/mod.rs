@@ -3,6 +3,8 @@ pub mod stub;
 
 use core::fmt::{Write, Display};
 
+use alloc::vec::Vec;
+
 #[derive(Debug)]
 pub enum CLIErr {
     Clear,
@@ -62,6 +64,8 @@ pub trait Time {
 
 pub trait CLI: Write {
     fn res(&self) -> Result<(usize, usize), CLIErr>;
+    fn res_list(&self) -> Result<Vec<(usize, usize)>, CLIErr>;
+
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr>;
     fn get_key(&mut self, block: bool) -> Result<Option<TermKey>, CLIErr>;
     fn clear(&mut self) -> Result<(), CLIErr>;
@@ -73,6 +77,7 @@ pub trait Rnd {
 
 pub trait Disp {
     fn res(&self) -> Result<(usize, usize), DispErr>;
+    fn res_list(&self) -> Result<Vec<(usize, usize)>, DispErr>;
     fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr>;
 
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;

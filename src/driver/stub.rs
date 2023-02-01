@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use rand::{rngs::StdRng, SeedableRng, RngCore};
 
 use crate::driver::{DispErr, Disp, Rnd, RndErr};
@@ -7,6 +8,10 @@ pub struct StubDisp;
 impl Disp for StubDisp {
     fn res(&self) -> Result<(usize, usize), DispErr> {
         Ok((0, 0))
+    }
+
+    fn res_list(&self) -> Result<alloc::vec::Vec<(usize, usize)>, DispErr> {
+        Ok(Vec::new())
     }
 
     fn px(&mut self, _px: u32, _x: usize, _y: usize) -> Result<(), DispErr> {
