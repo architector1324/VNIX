@@ -120,7 +120,7 @@ impl FromUnit for Say {
     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaMapSecondRequire(
             SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
-            SchemaMap(
+            SchemaMapSecondRequire(
                 SchemaMapEntry(Unit::Str("nl".into()), SchemaBool),
                 SchemaOr(
                     SchemaMapEntry(Unit::Str("say".into()), SchemaRef),
@@ -130,13 +130,9 @@ impl FromUnit for Say {
         );
 
         schm.find_deep(glob, u).and_then(|(shrt, (nl, or))| {
-            let msg = if let Some(or) = or {
-                match or {
-                    Or::First(path) => Unit::Ref(path),
-                    Or::Second(u) => u
-                }
-            } else {
-                Unit::Ref(vec!["msg".into()])
+            let msg = match or {
+                Or::First(path) => Unit::Ref(path),
+                Or::Second(u) => u
             };
 
             Some(Say {
