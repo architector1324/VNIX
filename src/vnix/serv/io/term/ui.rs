@@ -32,10 +32,17 @@ pub struct Inp {
 }
 
 #[derive(Debug, Clone)]
+pub enum SayMode {
+    Norm,
+    Fmt,
+}
+
+#[derive(Debug, Clone)]
 pub struct Say {
     pub msg: Unit,
     pub shrt: Option<usize>,
-    pub nl: bool
+    pub nl: bool,
+    pub mode: SayMode
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +90,17 @@ impl Img {
     }
 }
 
+impl Say {
+    fn say(&self, msg: &Unit, term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
+        if let Some(shrt) = self.shrt {
+            term.print(format!("{}", DisplayShort(&msg, shrt)).as_str(), kern)?;
+        } else {
+            term.print(format!("{}", msg).as_str(), kern)?;
+        }
+        Ok(())
+    }
+}
+
 impl FromUnit for Inp {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -123,13 +141,24 @@ impl FromUnit for Say {
             SchemaMapSecondRequire(
                 SchemaMapEntry(Unit::Str("nl".into()), SchemaBool),
                 SchemaOr(
-                    SchemaMapEntry(Unit::Str("say".into()), SchemaRef),
-                    SchemaMapEntry(Unit::Str("say".into()), SchemaUnit),
+                    SchemaOr(
+                        SchemaMapEntry(Unit::Str("say".into()), SchemaRef),
+                        SchemaMapEntry(Unit::Str("say".into()), SchemaUnit),
+                    ),
+                    SchemaOr(
+                        SchemaMapEntry(Unit::Str("say.fmt".into()), SchemaRef),
+                        SchemaMapEntry(Unit::Str("say.fmt".into()), SchemaUnit),
+                    ),
                 )
             )
         );
 
         schm.find_deep(glob, u).and_then(|(shrt, (nl, or))| {
+            let (or, mode) = match or {
+                Or::First(or) => (or, SayMode::Norm),
+                Or::Second(or) => (or, SayMode::Fmt)
+            };
+
             let msg = match or {
                 Or::First(path) => Unit::Ref(path),
                 Or::Second(u) => u
@@ -138,7 +167,8 @@ impl FromUnit for Say {
             Some(Say {
                 msg,
                 shrt: shrt.map(|shrt| shrt as usize),
-                nl: nl.unwrap_or(false)
+                nl: nl.unwrap_or(false),
+                mode
             })
         })
     }
@@ -311,7 +341,7 @@ impl FromUnit for UI {
 
 impl TermAct for Say {
     fn act(mut self, term: &mut Term, orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
-        match self.msg {
+        match self.msg.clone() {
             Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
             Unit::Ref(path) => {
                 if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
@@ -319,13 +349,24 @@ impl TermAct for Say {
                     return self.act(term, orig, msg, kern);
                 }
             },
-            _ => {
-                if let Some(shrt) = self.shrt {
-                    term.print(format!("{}", DisplayShort(&self.msg, shrt)).as_str(), kern)?;
-                } else {
-                    term.print(format!("{}", self.msg).as_str(), kern)?;
-                }
-            }
+            Unit::Lst(lst) => 
+                match self.mode {
+                    SayMode::Norm => self.say(&Unit::Lst(lst), term, kern)?,
+                    SayMode::Fmt => {
+                        for u in lst {
+                            match u {
+                                Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
+                                Unit::Ref(path) => {
+                                    if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
+                                        self.say(&_msg, term, kern)?
+                                    }
+                                },
+                                _ => self.say(&u, term, kern)?
+                            }
+                        }
+                    }
+                },
+            _ => self.say(&self.msg, term, kern)?
         }
 
         if self.nl {

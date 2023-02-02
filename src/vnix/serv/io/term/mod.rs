@@ -382,7 +382,16 @@ impl FromUnit for Act {
                         ui::Say {
                             msg: Unit::Ref(vec!["msg".into()]),
                             shrt: None,
-                            nl: false
+                            nl: false,
+                            mode: ui::SayMode::Norm
+                        }
+                    )),
+                    "say.fmt" => Some(Act::Say(
+                        ui::Say {
+                            msg: Unit::Ref(vec!["msg".into()]),
+                            shrt: None,
+                            nl: false,
+                            mode: ui::SayMode::Fmt
                         }
                     )),
                     "res.cli" => Some(Act::GetRes(GetRes::Cli, vec!["msg".into()])),
@@ -402,7 +411,16 @@ impl FromUnit for Act {
                                         ui::Say {
                                             msg: Unit::Ref(vec!["msg".into()]),
                                             shrt: None,
-                                            nl: false
+                                            nl: false,
+                                            mode: ui::SayMode::Norm
+                                        }
+                                    )),
+                                    "say.fmt" => Some(Act::Say(
+                                        ui::Say {
+                                            msg: Unit::Ref(vec!["msg".into()]),
+                                            shrt: None,
+                                            nl: false,
+                                            mode: ui::SayMode::Fmt
                                         }
                                     )),
                                     "res.cli" => Some(Act::GetRes(GetRes::Cli, path)),
@@ -417,7 +435,16 @@ impl FromUnit for Act {
                                         ui::Say {
                                             msg,
                                             shrt: None,
-                                            nl: false
+                                            nl: false,
+                                            mode: ui::SayMode::Norm
+                                        }
+                                    )),
+                                    "say.fmt" => Some(Act::Say(
+                                        ui::Say {
+                                            msg,
+                                            shrt: None,
+                                            nl: false,
+                                            mode: ui::SayMode::Fmt
                                         }
                                     )),
                                     "inp" => Some(Act::Inp(
@@ -556,7 +583,8 @@ impl ServHlr for Term {
                 let act = Act::Say(ui::Say {
                     msg: _msg,
                     shrt: None,
-                    nl: false
+                    nl: false,
+                    mode: ui::SayMode::Norm
                 });
                 out_u = act.act(self, &msg, out_u, kern)?;
 
