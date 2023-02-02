@@ -730,16 +730,14 @@ impl Unit {
             match u {
                 Unit::Map(m) => {
                     if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
-                        let val = Unit::merge_ref(path, val, next.clone());
-                        if let Some(val) = val {
+                        if let Some(val) = Unit::merge_ref(path, val, next.clone()) {
                             let val = next.clone().merge(val);
                             let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
 
                             return Some(Unit::Map(m).merge(u))
                         }
                     } else {
-                        let val = Unit::merge_ref(path, val, Unit::Map(Vec::new()));
-                        if let Some(val) = val {
+                        if let Some(val) = Unit::merge_ref(path, val, Unit::Map(Vec::new())) {
                             let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
                             return Some(Unit::Map(m).merge(u))
                         }
@@ -776,9 +774,7 @@ impl Unit {
                     }
                 },
                 _ => {
-                    let val = Unit::merge_ref(path, val, Unit::Map(Vec::new()));
-
-                    if let Some(val) = val {
+                    if let Some(val) = Unit::merge_ref(path, val, Unit::Map(Vec::new())) {
                         let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
                         return Some(u)
                     }
@@ -882,7 +878,7 @@ impl Unit {
     }
 
     pub fn merge(self, u: Unit) -> Unit {
-        match u {
+        match u.clone() {
             Unit::Map(m) => {
                 if let Some(mut tmp) = self.as_map() {
                     tmp.retain(|(u, _)| {
@@ -925,7 +921,7 @@ impl Unit {
             },
             _ => return u
         }
-        self
+        u
     }
 }
 

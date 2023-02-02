@@ -14,7 +14,7 @@ impl Disp for StubDisp {
         Ok(Vec::new())
     }
 
-    fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr> {
+    fn set_res(&mut self, _res: (usize, usize)) -> Result<(), DispErr> {
         Ok(())
     }
 

@@ -18,7 +18,7 @@ use crate::vnix::core::kern::{KernErr, Kern};
 
 
 pub trait TermAct {
-    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr>;
+    fn act(self, term: &mut Term, orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr>;
 }
 
 #[derive(Debug, Clone)]
@@ -75,19 +75,20 @@ struct Font {
 }
 
 impl TermAct for Act {
-    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, term: &mut Term, orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         match self {
             Act::Clear => term.clear(kern)?,
             Act::Nl => term.print("\n", kern)?,
-            Act::Trc => term.print(format!("{}", msg).as_str(), kern)?,
-            Act::Say(say) => return say.act(term, msg, kern),
+            Act::Trc => term.print(format!("{}", orig).as_str(), kern)?,
+            Act::Say(say) => return say.act(term, orig, msg, kern),
             Act::GetKey(may_path) => {
                 term.flush(kern)?;
 
                 if let Some(key) = term.get_key(true, kern)? {
                     if let Some(path) = may_path {
-                        let u = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), Unit::Map(Vec::new()));
-                        return Ok(u);
+                        if let Some(u) = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), msg.clone()) {
+                            return Ok(u);
+                        }
                     }
                 }
             },
@@ -133,21 +134,22 @@ impl TermAct for Act {
                     }
                 };
 
-                let u = Unit::merge_ref(path.into_iter(), u, Unit::Map(Vec::new()));
-                return Ok(u);
+                if let Some(u) = Unit::merge_ref(path.into_iter(), u, msg.clone()) {
+                    return Ok(u);
+                }
             },
             Act::SetRes(which, res) =>
                 match which {
                     SetRes::Cli => kern.cli.set_res(res).map_err(|e| KernErr::CLIErr(e))?,
                     SetRes::Gfx => kern.disp.set_res(res).map_err(|e| KernErr::DispErr(e))?
                 }
-            Act::Inp(inp) => return inp.act(term, msg, kern),
-            Act::Put(put) => return put.act(term, msg, kern),
-            Act::Img(img) => return img.act(term, msg, kern),
-            Act::Spr(spr) => return spr.act(term, msg, kern),
-            Act::Win(win) => return win.act(term, msg, kern)
+            Act::Inp(inp) => return inp.act(term, orig, msg, kern),
+            Act::Put(put) => return put.act(term, orig, msg, kern),
+            Act::Img(img) => return img.act(term, orig, msg, kern),
+            Act::Spr(spr) => return spr.act(term, orig, msg, kern),
+            Act::Win(win) => return win.act(term, orig, msg, kern)
         }
-        Ok(None)
+        Ok(msg)
     }
 }
 
@@ -378,7 +380,7 @@ impl FromUnit for Act {
                     "trc" => Some(Act::Trc),
                     "say" => Some(Act::Say(
                         ui::Say {
-                            msg: Unit::find_ref(vec!["msg".into()].into_iter(), glob)?,
+                            msg: Unit::Ref(vec!["msg".into()]),
                             shrt: None,
                             nl: false
                         }
@@ -398,7 +400,7 @@ impl FromUnit for Act {
                                     "key" => Some(Act::GetKey(Some(path))),
                                     "say" => Some(Act::Say(
                                         ui::Say {
-                                            msg: Unit::find_ref(path.into_iter(), glob)?,
+                                            msg: Unit::Ref(vec!["msg".into()]),
                                             shrt: None,
                                             nl: false
                                         }
@@ -538,29 +540,29 @@ impl ServHlr for Term {
     }
 
     fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        let mut out_u: Option<Unit> = None;
-
         if let Some(acts) = self.act.clone() {
+            let mut out_u = msg.msg.clone();
+
             for act in acts {
-                act.act(self, &msg, kern)?.map(|u| {
-                    out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
-                });
+                out_u = act.act(self, &msg, out_u, kern)?;
             }
+
+            self.flush(kern)?;
+            return Ok(Some(kern.msg(&msg.ath, out_u)?));
         } else {
             if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
+                let mut out_u = msg.msg.clone();
+
                 let act = Act::Say(ui::Say {
                     msg: _msg,
                     shrt: None,
                     nl: false
                 });
-                out_u = act.act(self, &msg, kern)?;
+                out_u = act.act(self, &msg, out_u, kern)?;
+
+                self.flush(kern)?;
+                return Ok(Some(kern.msg(&msg.ath, out_u)?));
             }
-        }
-
-        self.flush(kern)?;
-
-        if let Some(u) = out_u {
-            return Ok(Some(kern.msg(&msg.ath, u)?));
         }
 
         Ok(Some(msg))

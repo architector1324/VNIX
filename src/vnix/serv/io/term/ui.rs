@@ -119,18 +119,24 @@ impl FromUnit for Say {
 
     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaMapSecondRequire(
-            SchemaMapEntry(Unit::Str("say".into()), SchemaUnit),
+            SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
             SchemaMap(
-                SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
-                SchemaMapEntry(Unit::Str("nl".into()), SchemaBool)
+                SchemaMapEntry(Unit::Str("nl".into()), SchemaBool),
+                SchemaOr(
+                    SchemaMapEntry(Unit::Str("say".into()), SchemaRef),
+                    SchemaMapEntry(Unit::Str("say".into()), SchemaUnit),
+                )
             )
         );
 
-        schm.find_deep(glob, u).and_then(|(msg, (shrt, nl))| {
-            let msg = if let Some(msg) = msg {
-                msg
+        schm.find_deep(glob, u).and_then(|(shrt, (nl, or))| {
+            let msg = if let Some(or) = or {
+                match or {
+                    Or::First(path) => Unit::Ref(path),
+                    Or::Second(u) => u
+                }
             } else {
-                Unit::find_ref(vec!["msg".into()].into_iter(), glob)?
+                Unit::Ref(vec!["msg".into()])
             };
 
             Some(Say {
@@ -308,9 +314,15 @@ impl FromUnit for UI {
 }
 
 impl TermAct for Say {
-    fn act(self, term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(mut self, term: &mut Term, orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         match self.msg {
             Unit::Str(s) => term.print(format!("{}", s.replace("\\n", "\n").replace("\\r", "\r")).as_str(), kern)?,
+            Unit::Ref(path) => {
+                if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
+                    self.msg = _msg;
+                    return self.act(term, orig, msg, kern);
+                }
+            },
             _ => {
                 if let Some(shrt) = self.shrt {
                     term.print(format!("{}", DisplayShort(&self.msg, shrt)).as_str(), kern)?;
@@ -324,17 +336,17 @@ impl TermAct for Say {
             term.print(format!("\n").as_str(), kern)?;
         }
 
-        Ok(None)
+        Ok(msg)
     }
 }
 
 impl TermAct for Inp {
-    fn act(self, term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         term.print(self.pmt.as_str(), kern)?;
         let out = term.input(self.sct, kern)?;
 
         if out.is_empty() {
-            return Ok(None);
+            return Ok(msg);
         }
 
         let out = if self.prs {
@@ -343,13 +355,15 @@ impl TermAct for Inp {
             Unit::Str(out)
         };
 
-        let u = Unit::merge_ref(self.out.into_iter(), out, Unit::Map(Vec::new()));
-        Ok(u)
+        if let Some(u) = Unit::merge_ref(self.out.into_iter(), out, msg.clone()) {
+            return Ok(u);
+        }
+        Ok(msg)
     }
 }
 
 impl TermAct for Put {
-    fn act(self, term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         match term.mode {
             Mode::Cli => {
                 let (w, h) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
@@ -372,19 +386,19 @@ impl TermAct for Put {
             }
         }
 
-        Ok(None)
+        Ok(msg)
     }
 }
 
 impl TermAct for Img {
-    fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, _term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         self.draw((0, 0), 0x00ff00, kern)?;
-        Ok(None)
+        Ok(msg)
     }
 }
 
 impl TermAct for Sprite {
-    fn act(self, _term: &mut Term, _msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, _term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         let w = self.img.size.0;
         let h = self.img.size.1;
 
@@ -392,12 +406,12 @@ impl TermAct for Sprite {
         let y_offs = self.pos.1 - (h as i32 / 2);
 
         self.img.draw((x_offs, y_offs), 0x00ff00, kern)?;
-        Ok(None)
+        Ok(msg)
     }
 }
 
 impl TermAct for Win {
-    fn act(self, term: &mut Term, msg: &Msg, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
+    fn act(self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         // render
         if self.border {
             match self.mode {
@@ -503,7 +517,7 @@ impl TermAct for Win {
         }
 
         term.clear(kern)?;
-        Ok(None)
+        Ok(msg)
     }
 }
 
