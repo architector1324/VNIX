@@ -429,7 +429,13 @@ impl TermAct for Put {
 
 impl TermAct for Img {
     fn act(self, _term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
-        self.draw((0, 0), 0x00ff00, kern)?;
+        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        let pos = (
+            (res.0 - self.size.0) as i32 / 2,
+            (res.1 - self.size.1) as i32 / 2
+        );
+        
+        self.draw(pos, 0x00ff00, kern)?;
         Ok(msg)
     }
 }
