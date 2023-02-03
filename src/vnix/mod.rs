@@ -58,13 +58,17 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     // kern.send("io.term", msg)?;
 
-    // let s = "{store:(load @vid.blender.bunny) term:@msg task:[io.store io.term]}";
-    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let msg = kern.msg("super", u)?;
+    let s = "{term.gfx:(set.res.gfx (1920 1080)) task:io.term}";
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.msg("super", u)?;
 
-    // kern.task(msg)?;
+    kern.task(msg)?;
 
-    // Ok(())
+    let s = "{store:(load @vid.blender.charge) term.gfx:[@msg cls] task:[io.store io.term]}";
+    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.msg("super", u)?;
+
+    kern.task(msg)?;
 
     // login task
     let mut ath: String = "super".into();

@@ -48,6 +48,7 @@ enum Act {
     Put(ui::Put),
     Img(ui::Img),
     Spr(ui::Sprite),
+    Vid(ui::Video),
     Win(ui::Win)
 }
 
@@ -147,6 +148,7 @@ impl TermAct for Act {
             Act::Put(put) => return put.act(term, orig, msg, kern),
             Act::Img(img) => return img.act(term, orig, msg, kern),
             Act::Spr(spr) => return spr.act(term, orig, msg, kern),
+            Act::Vid(vid) => return vid.act(term, orig, msg, kern),
             Act::Win(win) => return win.act(term, orig, msg, kern)
         }
         Ok(msg)
@@ -486,6 +488,10 @@ impl FromUnit for Act {
 
                             if let Some(spr) = ui::Sprite::from_unit(glob, &u) {
                                 return Some(Act::Spr(spr));
+                            }
+
+                            if let Some(vid) = ui::Video::from_unit(glob, &u) {
+                                return Some(Act::Vid(vid));
                             }
 
                             if let Some(win) = ui::Win::from_unit(glob, &u) {

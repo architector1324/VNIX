@@ -47,20 +47,31 @@ pub struct Say {
 
 #[derive(Debug, Clone)]
 pub struct Put {
-    pub pos: (i32, i32),
-    pub str: String
+    pos: (i32, i32),
+    str: String
 }
 
 #[derive(Debug, Clone)]
 pub struct Img {
-    pub size: (usize, usize),
-    pub img: Vec<u32>
+    size: (usize, usize),
+    img: Vec<u32>
 }
 
 #[derive(Debug, Clone)]
 pub struct Sprite {
-    pub pos: (i32, i32),
-    pub img: Img
+    pos: (i32, i32),
+    img: Img
+}
+
+#[derive(Debug, Clone)]
+struct VidFrameDiff {
+    diff: Vec<((usize, usize), i32)>
+}
+
+#[derive(Debug, Clone)]
+pub struct Video {
+    img: Img,
+    frames: Vec<VidFrameDiff>
 }
 
 
@@ -265,6 +276,69 @@ impl FromUnit for Sprite {
     }
 }
 
+impl FromUnit for VidFrameDiff {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaOr(
+            SchemaStr,
+            SchemaSeq(
+                SchemaPair(
+                    SchemaPair(SchemaInt, SchemaInt),
+                    SchemaInt
+                )
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|or| {
+            let diff = match or {
+                Or::First(s) => {
+                    let diff0 = utils::decompress(s.as_str()).ok()?;
+                    let diff_s = utils::decompress(diff0.as_str()).ok()?;
+                    let diff_u = Unit::parse(diff_s.chars()).ok()?.0.as_vec()?;
+
+                    diff_u.iter().filter_map(|u| u.as_pair())
+                        .filter_map(|(p, diff)| Some((p.as_pair()?, diff.as_int()?)))
+                        .filter_map(|((x, y), diff)| Some(((x.as_int()?, y.as_int()?), diff)))
+                        .map(|((x, y), diff)| ((x as usize, y as usize), diff)).collect()
+                },
+                Or::Second(seq) => seq.into_iter().map(|((x, y), diff)| ((x as usize, y as usize), diff)).collect()
+            };
+            Some(VidFrameDiff {
+                diff
+            })
+        })
+    }
+}
+
+impl FromUnit for Video {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapRequire(
+            SchemaMapEntry(Unit::Str("img".into()), SchemaUnit),
+            SchemaMapEntry(
+                Unit::Str("fms".into()),
+                SchemaSeq(SchemaUnit)
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|(img, fms)| {
+            let img = Img::from_unit(glob, &img)?;
+            let frames = fms.into_iter().filter_map(|u| VidFrameDiff::from_unit(glob, &u)).collect();
+
+            Some(Video {
+                img,
+                frames
+            })
+        })
+    }
+}
+
 impl FromUnit for Win {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -449,6 +523,38 @@ impl TermAct for Sprite {
         let y_offs = self.pos.1 - (h as i32 / 2);
 
         self.img.draw((x_offs, y_offs), 0x00ff00, kern)?;
+        Ok(msg)
+    }
+}
+
+impl TermAct for Video {
+    fn act(self, term: &mut Term, orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
+        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        let pos = (
+            (res.0 - self.img.size.0) as i32 / 2,
+            (res.1 - self.img.size.1) as i32 / 2
+        );
+
+        // render first frame
+        self.img.draw(pos, 0x00ff00, kern)?;
+        kern.disp.flush_blk(pos, self.img.size).map_err(|e| KernErr::DispErr(e))?;
+
+        // render next frames        
+        let mut img = self.img.clone();
+
+        for diff in self.frames {
+            for ((x, y), diff) in diff.diff {
+                if let Some(px) = img.img.get_mut(x + y * img.size.0) {
+                    *px = (*px as i32 + diff) as u32;
+                    // kern.disp.px(*px, (pos.0 + x as i32) as usize, (pos.1 + y as i32) as usize).map_err(|e| KernErr::DispErr(e))?;
+                }
+            }
+            img.draw(pos, 0x00ff00, kern)?;
+            kern.disp.flush_blk(pos, self.img.size).map_err(|e| KernErr::DispErr(e))?;
+
+            kern.time.wait(30000).map_err(|e| KernErr::TimeErr(e))?;
+        }
+
         Ok(msg)
     }
 }
