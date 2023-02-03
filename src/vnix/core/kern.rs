@@ -10,7 +10,7 @@ use super::user::Usr;
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
 use crate::vnix::serv::io::term::TermBase;
-use crate::vnix::utils::RamDB;
+use crate::vnix::utils::RamStore;
 
 #[derive(Debug)]
 pub enum KernErr {
@@ -50,7 +50,7 @@ pub struct Kern<'a> {
     pub rnd: &'a mut dyn Rnd,
 
     pub term: TermBase,
-    pub db_ram: RamDB,
+    pub ram_store: RamStore,
 
     // vnix
     users: Vec<Usr>,
@@ -64,7 +64,7 @@ impl<'a> Kern<'a> {
             disp,
             time,
             rnd,
-            db_ram: RamDB::default(),
+            ram_store: RamStore::default(),
             term: TermBase::default(),
             users: Vec::new(),
             services: Vec::new()

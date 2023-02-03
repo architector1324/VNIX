@@ -13,7 +13,7 @@ def read_img(filename):
     dim = img[3]['planes']
 
     if dim == 3:
-        dat = [tuple(img[2][n : n + 3]) for n in range(0, len(img[2]), 3)]
+        dat = [tuple(img[2][n : n + 3], 255) for n in range(0, len(img[2]), 3)]
     elif dim == 4:
         dat = [tuple(img[2][n : n + 4]) for n in range(0, len(img[2]), 4)]
     else:
@@ -22,13 +22,17 @@ def read_img(filename):
     return ((w, h), dim, dat)
 
 
+def pack_pixel(px):
+    b = struct.pack('<BBBB', px[0], px[1], px[2], px[3])
+    return int.from_bytes(b, 'big')
+
+
+
 def convert(size, dat, zip):
     img = []
 
     for px in dat:
-        b = struct.pack('<BBB', px[0], px[1], px[2])
-        v = int.from_bytes(b, 'big')
-        img.append(v)
+        img.append(pack_pixel(px))
 
     img_s = f'[{" ".join([str(e) for e in img])}]'
 

@@ -44,13 +44,13 @@ impl Act {
     fn act(&self, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         match self {
             Act::Load(load) => {
-                let u = kern.db_ram.load(Unit::Ref(load.from.clone())).ok_or(KernErr::DbLoadFault)?;
+                let u = kern.ram_store.load(Unit::Ref(load.from.clone())).ok_or(KernErr::DbLoadFault)?;
                 let m = Unit::merge_ref(load.to.clone().into_iter(), u, Unit::Map(Vec::new())).ok_or(KernErr::DbLoadFault)?;
 
                 Ok(Some(m))
             },
             Act::Save(save) => {
-                kern.db_ram.save(Unit::Ref(save.to.clone()), save.msg.clone());
+                kern.ram_store.save(Unit::Ref(save.to.clone()), save.msg.clone());
                 Ok(None)
             }
         }

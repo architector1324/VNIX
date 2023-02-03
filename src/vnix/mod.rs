@@ -1,7 +1,6 @@
 pub mod core;
 pub mod serv;
 pub mod utils;
-pub mod content;
 
 use alloc::string::String;
 use alloc::vec;
@@ -40,26 +39,6 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-    // prepare ram db
-    let content = vec![
-        ("@task.login", content::task::LOGIN),
-        ("@task.lambda", content::task::LAMBDA),
-        ("@task.gfx.login", content::task::GFX_LOGIN),
-        ("@task.gfx.lambda", content::task::GFX_LAMBDA),
-        ("@img.minecraft.grass", content::img::MINECRAFT_GRASS),
-        ("@img.vnix.logo", content::img::VNIX_LOGO),
-        ("@img.wall.ai", content::img::WALL_AI),
-        ("@font.sys.ascii", content::font::SYS_ASCII),
-        // ("@font.sys", content::font::SYS)
-    ];
-
-    for (path, s) in content {
-        let path = Unit::parse(path.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-        kern.db_ram.save(path, u);
-    }
-
     // test
     // let s = "{term:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
     // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
@@ -73,11 +52,19 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     // kern.send("io.term", msg)?;
 
-    let s = "{term.gfx:{win.gfx:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg = kern.msg("super", u)?;
+    // let s = "{term.gfx:{win.gfx:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
+    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let msg = kern.msg("super", u)?;
 
-    kern.send("io.term", msg)?;
+    // kern.send("io.term", msg)?;
+
+    // let s = "{store:(load @vid.blender.bunny) term:@msg task:[io.store io.term]}";
+    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let msg = kern.msg("super", u)?;
+
+    // kern.task(msg)?;
+
+    // Ok(())
 
     // login task
     let mut ath: String = "super".into();
@@ -85,7 +72,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     'login: loop {
         let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
+        let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg("super", u)?;
     
         let go = kern.task(msg);
@@ -106,7 +93,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // λ
         let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-        let u = kern.db_ram.load(path).ok_or(KernErr::DbLoadFault)?;
+        let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg(&ath, u)?;
 
         // run

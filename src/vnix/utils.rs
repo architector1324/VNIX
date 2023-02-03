@@ -33,19 +33,19 @@ pub fn hex_to_u32(s: &str) -> Option<u32> {
 }
 
 #[derive(Debug)]
-pub struct RamDB {
+pub struct RamStore {
     pub data: Unit
 }
 
-impl Default for RamDB {
+impl Default for RamStore {
     fn default() -> Self {
-        RamDB {
+        RamStore {
             data: Unit::Map(Vec::new())
         }
     }
 }
 
-impl RamDB {
+impl RamStore {
     pub fn load(&self, key: Unit) -> Option<Unit> {
         if let Unit::Ref(path) = key {
             return Unit::find_ref(path.into_iter(), &self.data);
