@@ -12,7 +12,7 @@ use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapSecondRequire, SchemaMapE
 
 use crate::vnix::utils;
 
-use super::{TermAct, Mode, Term, content};
+use super::{TermAct, Mode, Term};
 
 
 #[derive(Debug, Clone)]
@@ -116,16 +116,9 @@ impl TermAct for Win {
         let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
         let mut mouse_pos = ((res.0 / 2) as i32, (res.1 / 2) as i32);
 
-        let skin = super::Skin {
-            cursor: media::Img {
-                size: (32, 32),
-                img: Vec::from(content::CURSOR)
-            }
-        };
-
         if let Mode::Gfx = self.mode {
-            skin.cursor.draw(mouse_pos, 0, kern)?;
-            kern.disp.flush_blk(mouse_pos, skin.cursor.size).map_err(|e| KernErr::DispErr(e))?;
+            term.res.cur.draw(mouse_pos, 0, kern)?;
+            kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
         }
 
         loop {
@@ -159,13 +152,13 @@ impl TermAct for Win {
                 // mouse
                 let mouse = kern.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
                 if let Some(mouse) = mouse {
-                    kern.disp.flush_blk(mouse_pos, skin.cursor.size).map_err(|e| KernErr::DispErr(e))?;
+                    kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
 
                     mouse_pos.0 += mouse.dpos.0 / 4096;
                     mouse_pos.1 += mouse.dpos.1 / 4096;
 
-                    skin.cursor.draw(mouse_pos, 0, kern)?;
-                    kern.disp.flush_blk(mouse_pos, skin.cursor.size).map_err(|e| KernErr::DispErr(e))?;
+                    term.res.cur.draw(mouse_pos, 0, kern)?;
+                    kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
                 }
             }
 

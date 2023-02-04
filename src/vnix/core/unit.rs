@@ -126,7 +126,7 @@ pub struct SchemaOr<A, B>(pub A, pub B) where A: Schema, B: Schema;
 pub trait FromUnit: Sized {
     fn from_unit_loc(u: &Unit) -> Option<Self>;
 
-    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+    fn from_unit(_glob: &Unit, u: &Unit) -> Option<Self> {
         Self::from_unit_loc(u)
     }
 }

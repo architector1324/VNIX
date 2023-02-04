@@ -64,14 +64,20 @@ pub struct TermBase {
 }
 
 #[derive(Debug)]
+pub struct TermRes {
+    pub font: Font,
+    pub cur: ui::media::Img
+}
+
+#[derive(Debug)]
 pub struct Term {
     mode: Mode,
-    font: Font,
+    res: TermRes,
     act: Option<Vec<Act>>
 }
 
 #[derive(Debug)]
-struct Font {
+pub struct Font {
     glyths: Vec<(char, [u8; 16])>
 }
 
@@ -162,7 +168,7 @@ impl Term {
                 kern.cli.glyth(ch, (pos.0 / 8, pos.1 / 16)).map_err(|e| KernErr::CLIErr(e))?;
             },
             Mode::Gfx => {
-                let img = self.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
+                let img = self.res.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
 
                 let mut tmp = Vec::with_capacity(8 * 16);
 
@@ -322,7 +328,15 @@ impl Default for Term {
     fn default() -> Self {
         Term {
             mode: Mode::Cli,
-            font: Font{glyths: Vec::from(content::SYS_FONT)},
+            res: TermRes {
+                font: Font{
+                    glyths: Vec::from(content::SYS_FONT)
+                },
+                cur: ui::media::Img {
+                    size: (32, 32),
+                    img: Vec::from(content::CURSOR)
+                }
+            },
             act: None
         }
     }
@@ -525,7 +539,7 @@ impl FromUnit for Term {
             )
         );
 
-        Font::from_unit(u, u).map(|font| term.font = font);
+        Font::from_unit(u, u).map(|font| term.res.font = font);
 
         schm.find_loc(u).map(|or| {
             let acts = match or {

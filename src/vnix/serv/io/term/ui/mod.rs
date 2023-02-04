@@ -7,12 +7,8 @@ use alloc::vec::Vec;
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, SchemaSeq, Or};
 
-use super::{TermAct, Mode, Term, content};
+use super::{TermAct, Mode, Term};
 
-
-pub struct Skin {
-    cursor: media::Img
-}
 
 trait UIAct {
     fn ui_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr>;
