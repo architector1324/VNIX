@@ -72,7 +72,7 @@ mcopy -i ./out/vnix.img target/x86_64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/
 
 2. Run VM:
 ```bash
-qemu-system-x86_64 -enable-kvm -m 512M -full-screen -serial mon:stdio -vga virtio -device virtio-rng-pci \
+qemu-system-x86_64 -enable-kvm -m 1024M -full-screen -serial mon:stdio -vga virtio -device virtio-rng-pci \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF.fd \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/x64/OVMF_VARS.fd \
     -cdrom ./out/vnix.img

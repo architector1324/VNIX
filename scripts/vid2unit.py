@@ -7,7 +7,10 @@ import argparse
 
 
 def read_frame(cap):
-    _, frame = cap.read()
+    res, frame = cap.read()
+
+    if not res:
+        return None
 
     h, w, dim = frame.shape
     img = frame.flatten()
@@ -21,6 +24,15 @@ def pack_pixel(px):
     return int.from_bytes(b, 'big')
 
 
+def zip_str(s):
+    tmp0 = gzip.compress(bytes(s, 'utf-8'))
+    tmp0 = base64.b64encode(tmp0).decode()
+
+    tmp_s = gzip.compress(bytes(tmp0, 'utf-8'))
+    tmp_s = base64.b64encode(tmp_s).decode()
+    return f'`{tmp_s}`'
+
+
 def convert_img(size, dat, zip):
     img = []
 
@@ -30,12 +42,7 @@ def convert_img(size, dat, zip):
     img_s = f'[{" ".join([str(e) for e in img])}]'
 
     if zip:
-        img0 = gzip.compress(bytes(img_s, 'utf-8'))
-        img0 = base64.b64encode(img0).decode()
-
-        img_s = gzip.compress(bytes(img0, 'utf-8'))
-        img_s = base64.b64encode(img_s).decode()
-        img_s = f'`{img_s}`'
+        img_s = zip_str(img_s)
 
     return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
 
@@ -51,12 +58,7 @@ def convert_diff(size, diff, zip):
     lst_s = f'[{" ".join([f"(({x} {y}) {dpx})" for ((x, y), dpx) in lst])}]'
 
     if zip:
-        lst0 = gzip.compress(bytes(lst_s, 'utf-8'))
-        lst0 = base64.b64encode(lst0).decode()
-
-        lst_s = gzip.compress(bytes(lst0, 'utf-8'))
-        lst_s = base64.b64encode(lst_s).decode()
-        lst_s = f'`{lst_s}`'
+        lst_s = zip_str(lst_s)
 
     return lst_s
      
@@ -78,8 +80,14 @@ img_s = convert_img((w, h), dat, args.zip)
 # get next frame difference
 frames_diff = []
 
-for _ in range(120):
-    (_, _, _, next_dat) = read_frame(cap)
+while cap.isOpened():
+    res = read_frame(cap)
+
+    if res is None:
+        break
+
+    (_, _, _, next_dat) = res
+
     diff = [pack_pixel(next_dat[i]) - pack_pixel(dat[i]) for i in range(0, len(dat))]
     diff_s = convert_diff((w, h), diff, args.zip)
     dat = next_dat
@@ -87,6 +95,8 @@ for _ in range(120):
     frames_diff.append(diff_s)
 
 frames_s = f'[{" ".join([s for s in frames_diff])}]'
+if args.zip:
+    frames_s = zip_str(frames_s)
 
 # final
 vid_s = f'{{img:{img_s} fms:{frames_s}}}'

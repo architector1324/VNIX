@@ -299,7 +299,7 @@ impl FromUnit for VidFrameDiff {
                     let diff_s = utils::decompress(diff0.as_str()).ok()?;
                     let diff_u = Unit::parse(diff_s.chars()).ok()?.0.as_vec()?;
 
-                    diff_u.iter().filter_map(|u| u.as_pair())
+                    diff_u.into_iter().filter_map(|u| u.as_pair())
                         .filter_map(|(p, diff)| Some((p.as_pair()?, diff.as_int()?)))
                         .filter_map(|((x, y), diff)| Some(((x.as_int()?, y.as_int()?), diff)))
                         .map(|((x, y), diff)| ((x as usize, y as usize), diff)).collect()
@@ -323,13 +323,26 @@ impl FromUnit for Video {
             SchemaMapEntry(Unit::Str("img".into()), SchemaUnit),
             SchemaMapEntry(
                 Unit::Str("fms".into()),
-                SchemaSeq(SchemaUnit)
+                SchemaOr(
+                    SchemaStr,
+                    SchemaSeq(SchemaUnit)
+                )
             )
         );
 
-        schm.find_deep(glob, u).and_then(|(img, fms)| {
+        schm.find_deep(glob, u).and_then(|(img, or)| {
             let img = Img::from_unit(glob, &img)?;
-            let frames = fms.into_iter().filter_map(|u| VidFrameDiff::from_unit(glob, &u)).collect();
+
+            let frames = match or {
+                Or::First(s) => {
+                    let fms0 = utils::decompress(s.as_str()).ok()?;
+                    let fms_s = utils::decompress(fms0.as_str()).ok()?;
+                    let fms_u = Unit::parse(fms_s.chars()).ok()?.0.as_vec()?;
+
+                    fms_u.into_iter().filter_map(|u| VidFrameDiff::from_unit(glob, &u)).collect()
+                },
+                Or::Second(seq) => seq.into_iter().filter_map(|u| VidFrameDiff::from_unit(glob, &u)).collect()
+            };
 
             Some(Video {
                 img,
@@ -562,39 +575,35 @@ impl TermAct for Video {
 impl TermAct for Win {
     fn act(self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         // render
-        if self.border {
-            match self.mode {
-                Mode::Cli => {
-                    let res = match term.mode {
-                        Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
-                        Mode::Gfx => {
-                            let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-                            (res.0 / 8, res.1 / 16)
-                        }
-                    };
-
-                    let size = self.size.unwrap_or(res);
-                    let pos = self.pos.unwrap_or((0, 0));
-
-                    self.ui_act(pos, size, term, kern)?;
-
-                    if let Mode::Gfx = term.mode {
-                        kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+        match self.mode {
+            Mode::Cli => {
+                let res = match term.mode {
+                    Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+                    Mode::Gfx => {
+                        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                        (res.0 / 8, res.1 / 16)
                     }
-                },
-                Mode::Gfx => {
-                    let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                };
 
-                    let size = self.size.unwrap_or(res);
-                    let pos = self.pos.unwrap_or((0, 0));
+                let size = self.size.unwrap_or(res);
+                let pos = self.pos.unwrap_or((0, 0));
 
-                    self.ui_gfx_act(pos, size, term, kern)?;
+                self.ui_act(pos, size, term, kern)?;
 
+                if let Mode::Gfx = term.mode {
                     kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                 }
+            },
+            Mode::Gfx => {
+                let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+                let size = self.size.unwrap_or(res);
+                let pos = self.pos.unwrap_or((0, 0));
+
+                self.ui_gfx_act(pos, size, term, kern)?;
+
+                kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
             }
-        } else {
-            term.clear(kern)?;
         }
 
         let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
@@ -615,33 +624,29 @@ impl TermAct for Win {
         loop {
             if let Mode::Gfx = self.mode {
                 // render
-                if self.border {
-                    match self.mode {
-                        Mode::Cli => {
-                            let res = match term.mode {
-                                Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
-                                Mode::Gfx => {
-                                    let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-                                    (res.0 / 8, res.1 / 16)
-                                }
-                            };
+                match self.mode {
+                    Mode::Cli => {
+                        let res = match term.mode {
+                            Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+                            Mode::Gfx => {
+                                let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                                (res.0 / 8, res.1 / 16)
+                            }
+                        };
 
-                            let size = self.size.unwrap_or(res);
-                            let pos = self.pos.unwrap_or((0, 0));
-        
-                            self.ui_act(pos, size, term, kern)?;
-                        },
-                        Mode::Gfx => {
-                            let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
-        
-                            let size = self.size.unwrap_or(res);
-                            let pos = self.pos.unwrap_or((0, 0));
-        
-                            self.ui_gfx_act(pos, size, term, kern)?;
-                        }
+                        let size = self.size.unwrap_or(res);
+                        let pos = self.pos.unwrap_or((0, 0));
+    
+                        self.ui_act(pos, size, term, kern)?;
+                    },
+                    Mode::Gfx => {
+                        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+    
+                        let size = self.size.unwrap_or(res);
+                        let pos = self.pos.unwrap_or((0, 0));
+    
+                        self.ui_gfx_act(pos, size, term, kern)?;
                     }
-                } else {
-                    term.clear(kern)?;
                 }
 
                 // mouse
@@ -716,7 +721,7 @@ impl UIAct for Win {
     
             for y in 0..size.1 {
                 for x in 0..size.0 {
-                    let col = if x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4 {
+                    let col = if self.border && (x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4) {
                         0x2a2e32
                     } else {
                         0x18191d
@@ -729,18 +734,6 @@ impl UIAct for Win {
         }
 
         if self.border {
-            {
-                let mut tmp = Vec::with_capacity(size.0 * 16);
-
-                for _ in 0..16 {
-                    for _ in 0..size.0 {
-                        tmp.push(0x2a2e32);
-                    }
-                }
-
-                kern.disp.blk(pos, (size.0, 16), 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
-            }
-
             if let Some(title) = &self.title {
                 for (i, ch) in title.chars().enumerate() {
                     let offs = pos.0 as usize + (size.0 - title.len() * 8) / 2;

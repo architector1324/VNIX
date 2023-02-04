@@ -39,37 +39,6 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-    // test
-    // let s = "{term:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
-    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let msg = kern.msg("super", u)?;
-
-    // kern.send("io.term", msg)?;
-
-    // let s = "{term.gfx:{win:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
-    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let msg = kern.msg("super", u)?;
-
-    // kern.send("io.term", msg)?;
-
-    // let s = "{term.gfx:{win.gfx:{hstack:[{vstack:[{win:- brd:t} {win:- title:Widget1 brd:t}]} {win:- title:Widget0 brd:t}]} title:`My App` brd:t}}";
-    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let msg = kern.msg("super", u)?;
-
-    // kern.send("io.term", msg)?;
-
-    let s = "{term.gfx:(set.res.gfx (1920 1080)) task:io.term}";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg = kern.msg("super", u)?;
-
-    kern.task(msg)?;
-
-    let s = "{store:(load @vid.blender.charge) term.gfx:[@msg cls] task:[io.store io.term]}";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg = kern.msg("super", u)?;
-
-    kern.task(msg)?;
-
     // login task
     let mut ath: String = "super".into();
 
@@ -92,9 +61,16 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         }
     }
 
+    // zen
+    let path = Unit::parse("@task.gfx.desk.zen".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+
+    let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    let msg = kern.msg(&ath, u)?;
+
+    kern.task(msg)?;
+
+    // λ
     loop {
-        // prepare message
-        // λ
         let path = Unit::parse("@task.gfx.lambda".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
         let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
