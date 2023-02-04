@@ -95,8 +95,6 @@ while cap.isOpened():
     frames_diff.append(diff_s)
 
 frames_s = f'[{" ".join([s for s in frames_diff])}]'
-if args.zip:
-    frames_s = zip_str(frames_s)
 
 # final
 vid_s = f'{{img:{img_s} fms:{frames_s}}}'
