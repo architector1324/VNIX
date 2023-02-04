@@ -14,6 +14,13 @@ pub fn compress(s: &str) -> Result<String, KernErr> {
     Ok(Base64::encode_string(&compressed))
 }
 
+pub fn compress_bytes(b: &[u8]) -> Result<String, KernErr> {
+    let mut enc = GZipEncoder::new();
+    let compressed = b.into_iter().cloned().encode(&mut enc, Action::Finish).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::CompressionFault)?;
+
+    Ok(Base64::encode_string(&compressed))
+}
+
 pub fn decompress(s: &str) -> Result<String, KernErr> {
     let mut dec = GZipDecoder::new();
 
@@ -21,6 +28,15 @@ pub fn decompress(s: &str) -> Result<String, KernErr> {
     let decompressed = v.iter().cloned().decode(&mut dec).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::DecompressionFault)?;
 
     String::from_utf8(decompressed).map_err(|_| KernErr::DecodeFault)
+}
+
+pub fn decompress_bytes(s: &str) -> Result<Vec<u8>, KernErr> {
+    let mut dec = GZipDecoder::new();
+
+    let v = Base64::decode_vec(s).map_err(|_| KernErr::DecodeFault)?;
+    let decompressed = v.iter().cloned().decode(&mut dec).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::DecompressionFault)?;
+
+    Ok(decompressed)
 }
 
 pub fn hex_to_u32(s: &str) -> Option<u32> {

@@ -1,4 +1,3 @@
-use alloc::format;
 use alloc::string::String;
 
 use core::fmt::{Display, Formatter};
@@ -9,6 +8,7 @@ use base64ct::{Base64, Encoding};
 use super::kern::KernErr;
 use super::unit::Unit;
 use super::user::Usr;
+
 
 #[derive(Debug)]
 pub struct Msg {
@@ -26,9 +26,7 @@ impl Display for Msg {
 
 impl Msg {
     pub fn new(usr: Usr, msg: Unit) -> Result<Self, KernErr> {
-        let s = format!("{}", msg);
-
-        let h = Sha3_256::digest(s.as_bytes());
+        let h = Sha3_256::digest(msg.as_bytes());
 
         let hash = Base64::encode_string(&h[..]);
         let sign = usr.sign(&msg)?;

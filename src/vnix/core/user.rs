@@ -77,9 +77,9 @@ impl Usr {
             let priv_key_b = Base64::decode_vec(priv_key_s.as_str()).map_err(|_| KernErr::DecodeFault)?;
             let priv_key = SigningKey::from_bytes(priv_key_b.as_slice()).map_err(|_| KernErr::CreatePrivKeyFault)?;
 
-            let msg = format!("{}", u);
+            let msg = u.as_bytes();
 
-            let sign_b = priv_key.sign(msg.as_bytes());
+            let sign_b = priv_key.sign(&msg);
             let sign = Base64::encode_string(&sign_b.as_bytes());
 
             return Ok(sign)
@@ -94,15 +94,15 @@ impl Usr {
         let pub_key_b = Base64::decode_vec(self.pub_key.as_str()).map_err(|_| KernErr::DecodeFault)?;
         let pub_key = VerifyingKey::from_sec1_bytes(&pub_key_b.as_slice()).map_err(|_| KernErr::CreatePubKeyFault)?;
 
-        let msg = format!("{}", u);
+        let msg = u.as_bytes();
 
-        let h = Sha3_256::digest(msg.as_bytes());
+        let h = Sha3_256::digest(&msg);
         let _hash = Base64::encode_string(&h[..]);
 
         if _hash != hash {
             return Err(KernErr::HashVerifyFault);
         }
 
-        pub_key.verify(msg.as_bytes(), &sign).map_err(|_| KernErr::SignVerifyFault)
+        pub_key.verify(&msg, &sign).map_err(|_| KernErr::SignVerifyFault)
     }
 }
