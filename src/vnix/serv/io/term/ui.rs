@@ -74,12 +74,21 @@ pub struct Video {
     frames: Vec<VidFrameDiff>
 }
 
+#[derive(Debug, Clone)]
+pub enum Tex {
+    Color(u32),
+    Img(Img),
+    Vid(Video)
+}
 
 #[derive(Debug, Clone)]
 pub struct Win {
     title: Option<String>,
     border: bool,
     mode: Mode,
+
+    border_col: u32,
+    back_tex: Tex,
 
     pos: Option<(i32, i32)>,
     size: Option<(usize, usize)>,
@@ -352,6 +361,36 @@ impl FromUnit for Video {
     }
 }
 
+impl FromUnit for Tex {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaOr(
+            SchemaStr,
+            SchemaUnit
+        );
+
+        schm.find_deep(glob, &u).and_then(|or| {
+            match or {
+                Or::First(s) => Some(Tex::Color(utils::hex_to_u32(s.as_str())?)),
+                Or::Second(u) => {
+                    if let Some(img) = Img::from_unit(glob, &u) {
+                        return Some(Tex::Img(img));
+                    }
+
+                    if let Some(vid) = Video::from_unit(glob, &u) {
+                        return Some(Tex::Vid(vid));
+                    }
+
+                    None
+                }
+            }
+        })
+    }
+}
+
 impl FromUnit for Win {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -361,24 +400,35 @@ impl FromUnit for Win {
         let schm = SchemaMapSecondRequire(
             SchemaMapEntry(Unit::Str("brd".into()), SchemaBool),
             SchemaMapSecondRequire(
-                SchemaMapEntry(Unit::Str("title".into()), SchemaStr),
-                SchemaOr(
-                    SchemaMapEntry(Unit::Str("win".into()), SchemaUnit),
-                    SchemaMapEntry(Unit::Str("win.gfx".into()), SchemaUnit)
+                SchemaMapEntry(Unit::Str("brd.col".into()), SchemaStr),
+                SchemaMapSecondRequire(
+                    SchemaMapEntry(Unit::Str("title".into()), SchemaStr),
+                    SchemaMapSecondRequire(
+                        SchemaMapEntry(Unit::Str("tex".into()), SchemaUnit),
+                        SchemaOr(
+                            SchemaMapEntry(Unit::Str("win".into()), SchemaUnit),
+                            SchemaMapEntry(Unit::Str("win.gfx".into()), SchemaUnit)
+                        )
+                    )
                 )
             )
         );
 
-        schm.find_deep(glob, u).map(|(brd, (title, or))| {
+        schm.find_deep(glob, u).map(|(brd, (brd_col, (title, (tex, or))))| {
             let (mode, content) = match or {
                 Or::First(u) => (Mode::Cli, u),
                 Or::Second(u) => (Mode::Gfx, u)
             };
 
+            let tex = tex.and_then(|u| Tex::from_unit(glob, &u));
+
             Win {
                 title,
                 border: brd.unwrap_or(false),
                 mode,
+
+                border_col: brd_col.and_then(|col| utils::hex_to_u32(col.as_str())).unwrap_or(0x2a2e32),
+                back_tex: tex.unwrap_or(Tex::Color(0x18191d)),
 
                 pos: None,
                 size: None,
@@ -718,13 +768,17 @@ impl UIAct for Win {
     fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
         {
             let mut tmp = Vec::with_capacity(size.0 * size.1);
-    
+
             for y in 0..size.1 {
                 for x in 0..size.0 {
                     let col = if self.border && (x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4) {
                         0x2a2e32
                     } else {
-                        0x18191d
+                        match &self.back_tex {
+                            Tex::Color(col) => *col,
+                            Tex::Img(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
+                            Tex::Vid(vid) => todo!()
+                        }
                     };
                     tmp.push(col);
                 }

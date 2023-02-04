@@ -411,7 +411,7 @@ impl FromUnit for Act {
                                     "key" => Some(Act::GetKey(Some(path))),
                                     "say" => Some(Act::Say(
                                         ui::Say {
-                                            msg: Unit::Ref(vec!["msg".into()]),
+                                            msg: Unit::Ref(path),
                                             shrt: None,
                                             nl: false,
                                             mode: ui::SayMode::Norm
@@ -419,7 +419,7 @@ impl FromUnit for Act {
                                     )),
                                     "say.fmt" => Some(Act::Say(
                                         ui::Say {
-                                            msg: Unit::Ref(vec!["msg".into()]),
+                                            msg: Unit::Ref(path),
                                             shrt: None,
                                             nl: false,
                                             mode: ui::SayMode::Fmt
