@@ -43,13 +43,13 @@ enum Act {
     Trc,
     GetRes(GetRes, Vec<String>),
     SetRes(SetRes, (usize, usize)),
-    Say(ui::Say),
-    Inp(ui::Inp),
-    Put(ui::Put),
-    Img(ui::Img),
-    Spr(ui::Sprite),
-    Vid(ui::Video),
-    Win(ui::Win)
+    Say(ui::text::Say),
+    Inp(ui::text::Inp),
+    Put(ui::text::Put),
+    Img(ui::media::Img),
+    Spr(ui::media::Sprite),
+    Vid(ui::media::Video),
+    Win(ui::win::Win)
 }
 
 #[derive(Debug, Clone)]
@@ -381,19 +381,19 @@ impl FromUnit for Act {
                     "nl" => Some(Act::Nl),
                     "trc" => Some(Act::Trc),
                     "say" => Some(Act::Say(
-                        ui::Say {
+                        ui::text::Say {
                             msg: Unit::Ref(vec!["msg".into()]),
                             shrt: None,
                             nl: false,
-                            mode: ui::SayMode::Norm
+                            mode: ui::text::SayMode::Norm
                         }
                     )),
                     "say.fmt" => Some(Act::Say(
-                        ui::Say {
+                        ui::text::Say {
                             msg: Unit::Ref(vec!["msg".into()]),
                             shrt: None,
                             nl: false,
-                            mode: ui::SayMode::Fmt
+                            mode: ui::text::SayMode::Fmt
                         }
                     )),
                     "res.cli" => Some(Act::GetRes(GetRes::Cli, vec!["msg".into()])),
@@ -410,19 +410,19 @@ impl FromUnit for Act {
                                 match s.as_str() {
                                     "key" => Some(Act::GetKey(Some(path))),
                                     "say" => Some(Act::Say(
-                                        ui::Say {
+                                        ui::text::Say {
                                             msg: Unit::Ref(path),
                                             shrt: None,
                                             nl: false,
-                                            mode: ui::SayMode::Norm
+                                            mode: ui::text::SayMode::Norm
                                         }
                                     )),
                                     "say.fmt" => Some(Act::Say(
-                                        ui::Say {
+                                        ui::text::Say {
                                             msg: Unit::Ref(path),
                                             shrt: None,
                                             nl: false,
-                                            mode: ui::SayMode::Fmt
+                                            mode: ui::text::SayMode::Fmt
                                         }
                                     )),
                                     "res.cli" => Some(Act::GetRes(GetRes::Cli, path)),
@@ -434,23 +434,23 @@ impl FromUnit for Act {
                             Or::Second((s, msg)) =>
                                 match s.as_str() {
                                     "say" => Some(Act::Say(
-                                        ui::Say {
+                                        ui::text::Say {
                                             msg,
                                             shrt: None,
                                             nl: false,
-                                            mode: ui::SayMode::Norm
+                                            mode: ui::text::SayMode::Norm
                                         }
                                     )),
                                     "say.fmt" => Some(Act::Say(
-                                        ui::Say {
+                                        ui::text::Say {
                                             msg,
                                             shrt: None,
                                             nl: false,
-                                            mode: ui::SayMode::Fmt
+                                            mode: ui::text::SayMode::Fmt
                                         }
                                     )),
                                     "inp" => Some(Act::Inp(
-                                        ui::Inp {
+                                        ui::text::Inp {
                                             pmt: msg.as_str()?,
                                             prs: false,
                                             sct: false,
@@ -470,31 +470,31 @@ impl FromUnit for Act {
                                 }
                         },
                         Or::Second(u) => {
-                            if let Some(inp) = ui::Inp::from_unit(glob, &u) {
+                            if let Some(inp) = ui::text::Inp::from_unit(glob, &u) {
                                 return Some(Act::Inp(inp));
                             }
 
-                            if let Some(put) = ui::Put::from_unit(glob, &u) {
+                            if let Some(put) = ui::text::Put::from_unit(glob, &u) {
                                 return Some(Act::Put(put));
                             }
 
-                            if let Some(say) = ui::Say::from_unit(glob, &u) {
+                            if let Some(say) = ui::text::Say::from_unit(glob, &u) {
                                 return Some(Act::Say(say));
                             }
 
-                            if let Some(img) = ui::Img::from_unit(glob, &u) {
+                            if let Some(img) = ui::media::Img::from_unit(glob, &u) {
                                 return Some(Act::Img(img));
                             }
 
-                            if let Some(spr) = ui::Sprite::from_unit(glob, &u) {
+                            if let Some(spr) = ui::media::Sprite::from_unit(glob, &u) {
                                 return Some(Act::Spr(spr));
                             }
 
-                            if let Some(vid) = ui::Video::from_unit(glob, &u) {
+                            if let Some(vid) = ui::media::Video::from_unit(glob, &u) {
                                 return Some(Act::Vid(vid));
                             }
 
-                            if let Some(win) = ui::Win::from_unit(glob, &u) {
+                            if let Some(win) = ui::win::Win::from_unit(glob, &u) {
                                 return Some(Act::Win(win));
                             }
                             None
@@ -586,11 +586,11 @@ impl ServHlr for Term {
             if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
                 let mut out_u = msg.msg.clone();
 
-                let act = Act::Say(ui::Say {
+                let act = Act::Say(ui::text::Say {
                     msg: _msg,
                     shrt: None,
                     nl: false,
-                    mode: ui::SayMode::Norm
+                    mode: ui::text::SayMode::Norm
                 });
                 out_u = act.act(self, &msg, out_u, kern)?;
 
