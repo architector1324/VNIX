@@ -880,13 +880,17 @@ impl Unit {
     pub fn merge(self, u: Unit) -> Unit {
         match u.clone() {
             Unit::Map(m) => {
-                if let Some(mut tmp) = self.as_map() {
-                    tmp.retain(|(u, _)| {
-                        m.iter().find(|(n, _)| u == n).is_none()
+                if let Some(tmp) = self.as_map() {
+                    let it = m.into_iter().map(|(u0, u1)| {
+                        if let Some((_, next)) = tmp.iter().find(|(n, _)| n.clone() == u0) {
+                            let u1 = next.clone().merge(u1);
+                            return (u0, u1);
+                        }
+                        (u0, u1)
                     });
 
-                    tmp.extend(m);
-                    return Unit::Map(tmp);
+                    let res = tmp.iter().cloned().filter(|(n, _)| it.clone().find(|(prev, _)| n.clone() == prev.clone()).is_none()).chain(it.clone()).collect();
+                    return Unit::Map(res);
                 }
             },
             Unit::Pair(u0, u1) => {
