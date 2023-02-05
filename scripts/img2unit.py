@@ -28,14 +28,32 @@ def pack_pixel(px):
     b = struct.pack('<BBB', px[0], px[1], px[2])
     return int.from_bytes(b, 'big')
 
+def convert_int_to_bytes(v):
+    if v == 0:
+        lst = [10]
+    elif -128 <= v <= 127:
+        lst = [11]
+        lst.extend(v.to_bytes(1, 'little', signed=True))
+    elif 0 <= v <= 255:
+        lst = [13]
+        lst.extend(v.to_bytes(1, 'little', signed=False))
+    elif -32768 <= v <= 32767:
+        lst = [12]
+        lst.extend(v.to_bytes(2, 'little', signed=True))
+    elif 0 <= v <= 65535:
+        lst = [14]
+        lst.extend(v.to_bytes(2, 'little', signed=False))
+    else: 
+        lst = [3]
+        lst.extend(v.to_bytes(4, 'little', signed=True))
+    return lst
 
 def convert_to_bytes(dat):
     lst = [8]
     lst.extend(len(dat).to_bytes(4, 'little', signed=False))
 
     for px in dat:
-        lst.append(3)
-        lst.extend(px.to_bytes(4, 'little', signed=True))
+        lst.extend(convert_int_to_bytes(px))
 
     return lst
 
