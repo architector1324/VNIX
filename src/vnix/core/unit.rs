@@ -276,6 +276,17 @@ impl<'a> Display for DisplayShort<'a> {
 }
 
 impl Unit {
+    pub fn size(&self) -> usize {
+        match self {
+            Unit::None | Unit::Bool(_) | Unit::Byte(_) | Unit::Int(_) | Unit::Dec(_) => core::mem::size_of::<Unit>(),
+            Unit::Str(s) => s.len() + core::mem::size_of::<Unit>(),
+            Unit::Ref(path) => path.into_iter().fold(0, |prev, s| prev + s.len()) + core::mem::size_of::<Unit>(),
+            Unit::Pair(u0, u1) => u0.size() + u1.size() + core::mem::size_of::<Unit>(),
+            Unit::Lst(lst) => lst.into_iter().fold(0, |prev, u| prev + u.size()) + core::mem::size_of::<Unit>(),
+            Unit::Map(m) => m.into_iter().fold(0, |prev, (u0, u1)| prev + u0.size() + u1.size()) + core::mem::size_of::<Unit>()
+        }
+    }
+
     pub fn as_bytes(&self) -> Vec<u8> {
         match self {
             Unit::None => vec![UnitBin::None as u8],

@@ -10,6 +10,12 @@ use crate::vnix::core::kern::{KernErr, Kern};
 
 
 #[derive(Debug, Clone)]
+struct GetSize {
+    from: Vec<String>,
+    to: Vec<String>
+}
+
+#[derive(Debug, Clone)]
 struct Load {
     from: Vec<String>,
     to: Vec<String>
@@ -23,6 +29,7 @@ struct Save {
 
 #[derive(Debug, Clone)]
 enum Act {
+    GetSize(GetSize),
     Load(Load),
     Save(Save)
 }
@@ -43,6 +50,13 @@ impl Default for Store {
 impl Act {
     fn act(&self, kern: &mut Kern) -> Result<Option<Unit>, KernErr> {
         match self {
+            Act::GetSize(size) => {
+                let u = kern.ram_store.load(Unit::Ref(size.from.clone())).ok_or(KernErr::DbLoadFault)?;
+                let u = Unit::Int(u.size() as i32);
+                let m = Unit::merge_ref(size.to.clone().into_iter(), u, Unit::Map(Vec::new())).ok_or(KernErr::DbLoadFault)?;
+
+                Ok(Some(m))
+            }
             Act::Load(load) => {
                 let u = kern.ram_store.load(Unit::Ref(load.from.clone())).ok_or(KernErr::DbLoadFault)?;
                 let m = Unit::merge_ref(load.to.clone().into_iter(), u, Unit::Map(Vec::new())).ok_or(KernErr::DbLoadFault)?;
@@ -54,6 +68,26 @@ impl Act {
                 Ok(None)
             }
         }
+    }
+}
+
+impl FromUnit for GetSize {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapFirstRequire(
+            SchemaMapEntry(Unit::Str("get.size".into()), SchemaRef),
+            SchemaMapEntry(Unit::Str("out".into()), SchemaRef)
+        );
+
+        schm.find_deep(glob, u).map(|(from, to)| {
+            GetSize {
+                from,
+                to: to.unwrap_or(vec!["msg".into()])
+            }
+        })
     }
 }
 
@@ -115,6 +149,10 @@ impl FromUnit for Act {
             match or {
                 Or::First((act, path)) => {
                     match act.as_str() {
+                        "get.size" => Some(Act::GetSize(GetSize {
+                            from: path,
+                            to: vec!["msg".into()]
+                        })),
                         "load" => Some(Act::Load(
                             Load {
                                 from: path,
@@ -131,6 +169,10 @@ impl FromUnit for Act {
                     }
                 },
                 Or::Second(u) => {
+                    if let Some(size) = GetSize::from_unit(glob, &u) {
+                        return Some(Act::GetSize(size));
+                    }
+
                     if let Some(load) = Load::from_unit(glob, &u) {
                         return Some(Act::Load(load));
                     }

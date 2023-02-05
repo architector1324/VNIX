@@ -15,12 +15,13 @@ pub struct Msg {
     pub msg: Unit,
     pub ath: String,
     pub hash: String,
-    pub sign: String
+    pub sign: String,
+    pub size: usize
 }
 
 impl Display for Msg {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{{ath:{} msg:{} hsh:{} sign:{}}}", self.ath, self.msg, self.hash, self.sign)
+        write!(f, "{{ath:{} size:{} msg:{} hsh:{} sign:{}}}", self.ath, self.size, self.msg, self.hash, self.sign)
     }
 }
 
@@ -31,11 +32,14 @@ impl Msg {
         let hash = Base64::encode_string(&h[..]);
         let sign = usr.sign(&msg)?;
 
+        let size = msg.size();
+
         Ok(Msg {
             ath: usr.name,
             msg,
             hash: hash.into(),
-            sign
+            sign,
+            size
         })
     }
 }
