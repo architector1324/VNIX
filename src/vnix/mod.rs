@@ -40,7 +40,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // // test
-    // let s = "{store:(load @vid.vnix.logo) term.gfx:[@msg key] task:[io.store io.term]}";
+    // let s = "{store:(load @vid.vnix.logo) term.gfx:[(set.res.gfx (1280 720)) @msg key] task:[io.store io.term]}";
     // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // let msg = kern.msg("super", u)?;

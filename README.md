@@ -58,7 +58,7 @@ cargo build --release --target=aarch64-unknown-uefi
 ```bash
 mkdir -p out
 
-dd if=/dev/zero of=./out/vnix.img bs=1048576 count=128
+dd if=/dev/zero of=./out/vnix.img bs=1048576 count=256
 
 parted ./out/vnix.img -s -a minimal mklabel gpt
 parted ./out/vnix.img -s -a minimal mkpart EFI FAT32 2048s 93716s
@@ -68,6 +68,7 @@ mkfs.vfat ./out/vnix.img
 mmd -i ./out/vnix.img ::/EFI
 mmd -i ./out/vnix.img ::/EFI/BOOT
 mcopy -i ./out/vnix.img target/x86_64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i ./out/vnix.img content/vnix.store ::
 ```
 
 2. Run VM:

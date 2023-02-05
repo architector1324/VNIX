@@ -11,8 +11,8 @@ use super::{TermAct, Mode, Term};
 
 
 trait UIAct {
-    fn ui_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr>;
-    fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr>;
+    fn ui_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr>;
+    fn ui_gfx_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<bool, KernErr>;
 }
 
 #[derive(Debug, Clone)]
@@ -61,19 +61,22 @@ impl FromUnit for UI {
 }
 
 impl UIAct for UI {
-    fn ui_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
+    fn ui_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
         match self {
             UI::HStack(hstack) => {
-                for (i, ui) in hstack.iter().enumerate() {
-                    let size = (size.0 / hstack.len(), size.1);
+                let len = hstack.len();
+                for (i, ui) in hstack.iter_mut().enumerate() {
+                    let size = (size.0 / len, size.1);
                     let pos = (pos.0 + (i * size.0) as i32, pos.1);
 
                     ui.ui_act(pos, size, term, kern)?;
                 }
             },
             UI::VStack(vstack) => {
-                for (i, ui) in vstack.iter().enumerate() {
-                    let size = (size.0, size.1 / vstack.len());
+                let len = vstack.len();
+
+                for (i, ui) in vstack.iter_mut().enumerate() {
+                    let size = (size.0, size.1 / len);
                     let pos = (pos.0, pos.1 + (i * size.1) as i32);
 
                     ui.ui_act(pos, size, term, kern)?;
@@ -84,26 +87,34 @@ impl UIAct for UI {
         Ok(())
     }
 
-    fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
+    fn ui_gfx_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<bool, KernErr> {
         match self {
             UI::HStack(hstack) => {
-                for (i, ui) in hstack.iter().enumerate() {
-                    let size = (size.0 / hstack.len(), size.1);
+                let len = hstack.len();
+
+                for (i, ui) in hstack.iter_mut().enumerate() {
+                    let size = (size.0 / len, size.1);
                     let pos = (pos.0 + (i * size.0) as i32, pos.1);
 
-                    ui.ui_gfx_act(pos, size, term, kern)?;
+                    if ui.ui_gfx_act(pos, size, term, kern)? {
+                        kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                    }
                 }
             },
             UI::VStack(vstack) => {
-                for (i, ui) in vstack.iter().enumerate() {
-                    let size = (size.0, size.1 / vstack.len());
+                let len = vstack.len();
+
+                for (i, ui) in vstack.iter_mut().enumerate() {
+                    let size = (size.0, size.1 / len);
                     let pos = (pos.0, pos.1 + (i * size.1) as i32);
 
-                    ui.ui_gfx_act(pos, size, term, kern)?;
+                    if ui.ui_gfx_act(pos, size, term, kern)? {
+                        kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                    }
                 }
             },
             UI::Win(win) => return win.ui_gfx_act(pos, size, term, kern)
         }
-        Ok(())
+        Ok(false)
     }
 }

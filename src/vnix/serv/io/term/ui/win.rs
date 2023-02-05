@@ -80,7 +80,7 @@ impl FromUnit for Win {
 
 
 impl TermAct for Win {
-    fn act(self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
+    fn act(mut self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         // render
         match self.mode {
             Mode::Cli => {
@@ -145,7 +145,10 @@ impl TermAct for Win {
                         let size = self.size.unwrap_or(res);
                         let pos = self.pos.unwrap_or((0, 0));
     
-                        self.ui_gfx_act(pos, size, term, kern)?;
+                        if self.ui_gfx_act(pos, size, term, kern)? {
+                            term.res.cur.draw(mouse_pos, 0, kern)?;
+                            kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                        }
                     }
                 }
 
@@ -176,7 +179,7 @@ impl TermAct for Win {
 }
 
 impl UIAct for Win {
-    fn ui_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
+    fn ui_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
         if self.border {
             for x in 0..size.0 {
                 for y in 0..size.1 {
@@ -208,34 +211,44 @@ impl UIAct for Win {
             }
         }
 
-        if let Some(ui) = &self.content {
+        if let Some(ui) = &mut self.content {
             ui.ui_act((pos.0 + 1, pos.1 + 1), (size.0 - 2, size.1 - 2), term, kern)?;
         }
 
         Ok(())
     }
 
-    fn ui_gfx_act(&self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<(), KernErr> {
-        {
-            let mut tmp = Vec::with_capacity(size.0 * size.1);
+    fn ui_gfx_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<bool, KernErr> {
+        let mut tmp = Vec::with_capacity(size.0 * size.1);
 
-            for y in 0..size.1 {
-                for x in 0..size.0 {
-                    let col = if self.border && (x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4) {
-                        self.border_col
-                    } else {
-                        match &self.back_tex {
-                            media::Tex::Color(col) => *col,
-                            media::Tex::Img(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
-                            media::Tex::Vid(_vid) => todo!()
-                        }
-                    };
-                    tmp.push(col);
-                }
+        let img = if let media::Tex::Vid(vid) = &mut self.back_tex {
+            vid.next()
+        } else {
+            None
+        };
+
+        let flush = img.is_some();
+
+        for y in 0..size.1 {
+            for x in 0..size.0 {
+                let col = if self.border && (x < 4 || x >= size.0 - 4 || y < 16 || y >= size.1 - 4) {
+                    self.border_col
+                } else {
+                    match &mut self.back_tex {
+                        media::Tex::Color(col) => *col,
+                        media::Tex::Img(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
+                        media::Tex::Vid(vid) =>
+                            match &img {
+                                Some(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
+                                None => 0x18191d
+                            }
+                    }
+                };
+                tmp.push(col);
             }
-
-            kern.disp.blk(pos, size, 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
         }
+
+        kern.disp.blk(pos, size, 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
 
         if self.border {
             if let Some(title) = &self.title {
@@ -246,10 +259,10 @@ impl UIAct for Win {
             }
         }
 
-        if let Some(ui) = &self.content {
+        if let Some(ui) = &mut self.content {
             ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), term, kern)?;
         }
 
-        Ok(())
+        Ok(flush)
     }
 }

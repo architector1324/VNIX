@@ -31,7 +31,7 @@ fn load_store(image: Handle, st: SystemTable<Boot>) -> Option<Unit> {
     let mut fs = fs_hlr.open_volume().ok()?;
 
     let mut store_file = fs.open(cstr16!("vnix.store"), FileMode::Read, FileAttribute::VALID_ATTR).ok()?.into_regular_file()?;
-    let mut store_buf = Box::new([0; 128 * 1024 * 1024]);
+    let mut store_buf = Box::new([0; 256 * 1024 * 1024]);
 
     store_file.read(store_buf.as_mut()).ok()?;
     

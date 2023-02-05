@@ -1,3 +1,5 @@
+use core::iter::Cycle;
+
 use alloc::vec::Vec;
 
 use crate::vnix::core::msg::Msg;
@@ -25,7 +27,7 @@ pub struct Sprite {
 pub enum Tex {
     Color(u32),
     Img(Img),
-    Vid(Video)
+    Vid(Cycle<VideoIter>)
 }
 
 #[derive(Debug, Clone)]
@@ -35,13 +37,55 @@ struct VidFrameDiff {
 
 #[derive(Debug, Clone)]
 pub struct Video {
-    img: Img,
+    pub img: Img,
     frames: Vec<VidFrameDiff>
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoIter {
+    vid: Video,
+    img: Img,
+
+    idx: usize
 }
 
 impl Img {
     pub fn draw(&self, pos: (i32, i32), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
         kern.disp.blk(pos, self.size, src, &self.img).map_err(|e| KernErr::DispErr(e))
+    }
+}
+
+impl IntoIterator for Video {
+    type Item = Img;
+    type IntoIter = VideoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        VideoIter {
+            img: self.img.clone(),
+            vid: self,
+            idx: 0
+        }
+    }
+}
+
+impl Iterator for VideoIter {
+    type Item = Img;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.vid.frames.len() {
+            return None
+        }
+
+        let diff = self.vid.frames.get(self.idx)?;
+        self.idx += 1;
+
+        for ((x, y), diff) in &diff.diff {
+            if let Some(px) = self.img.img.get_mut(*x + *y * self.img.size.0) {
+                *px = (*px as i32 + *diff) as u32;
+            }
+        }
+
+        Some(self.img.clone())
     }
 }
 
@@ -208,7 +252,7 @@ impl FromUnit for Tex {
                     }
 
                     if let Some(vid) = Video::from_unit(glob, &u) {
-                        return Some(Tex::Vid(vid));
+                        return Some(Tex::Vid(vid.into_iter().cycle()));
                     }
 
                     None
