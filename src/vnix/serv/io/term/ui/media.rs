@@ -132,9 +132,8 @@ impl FromUnit for VidFrameDiff {
         schm.find_deep(glob, u).and_then(|or| {
             let diff = match or {
                 Or::First(s) => {
-                    let diff0 = utils::decompress(s.as_str()).ok()?;
-                    let diff_s = utils::decompress(diff0.as_str()).ok()?;
-                    let diff_u = Unit::parse(diff_s.chars()).ok()?.0.as_vec()?;
+                    let diff0 = utils::decompress_bytes(s.as_str()).ok()?;
+                    let diff_u = Unit::parse_bytes(diff0.iter()).ok()?.0.as_vec()?;
 
                     diff_u.into_iter().filter_map(|u| u.as_pair())
                         .filter_map(|(p, diff)| Some((p.as_pair()?, diff.as_int()?)))

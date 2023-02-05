@@ -33,18 +33,57 @@ def zip_str(s):
     return f'`{tmp_s}`'
 
 
+def zip_list(lst):
+    lst0 = gzip.compress(bytes(lst))
+    lst_s = base64.b64encode(lst0).decode()
+    return f'`{lst_s}`'
+
+
 def convert_img(size, dat, zip):
-    img = []
-
-    for px in dat:
-        img.append(pack_pixel(px))
-
-    img_s = f'[{" ".join([str(e) for e in img])}]'
+    img = [pack_pixel(px) for px in dat]
+    # img_s = f'[{" ".join([str(e) for e in img])}]'
 
     if zip:
-        img_s = zip_str(img_s)
+        # img_s = zip_str(img_s)
+        img_s = zip_list(convert_to_bytes_img(img))
+    else:
+        img_s = f'[{" ".join([str(e) for e in img])}]'
 
     return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
+
+
+def convert_int_to_bytes(v):
+    lst = [3]
+    lst.extend(v.to_bytes(4, 'little', signed=True))
+    return lst
+
+
+def convert_to_bytes_img(dat):
+    lst = [8]
+    lst.extend(len(dat).to_bytes(4, 'little', signed=False))
+
+    for px in dat:
+        lst.extend(convert_int_to_bytes(px))
+
+    return lst
+
+
+def convert_to_bytes_diff(dat):
+    lst = [8]
+    lst.extend(len(dat).to_bytes(4, 'little', signed=False))
+
+    for ((x, y), diff) in dat:
+        lst.append(7)
+
+        # (x y)
+        lst.append(7)
+        lst.extend(convert_int_to_bytes(x))
+        lst.extend(convert_int_to_bytes(y))
+
+        # diff
+        lst.extend(convert_int_to_bytes(diff))
+
+    return lst
 
 
 def convert_diff(size, diff, zip):
@@ -55,10 +94,13 @@ def convert_diff(size, diff, zip):
             y = i // size[0]
             lst.append(((x, y), dpx))
 
-    lst_s = f'[{" ".join([f"(({x} {y}) {dpx})" for ((x, y), dpx) in lst])}]'
+    # lst_s = f'[{" ".join([f"(({x} {y}) {dpx})" for ((x, y), dpx) in lst])}]'
 
     if zip:
-        lst_s = zip_str(lst_s)
+        # lst_s = zip_str(lst_s)
+        lst_s = zip_list(convert_to_bytes_diff(lst))
+    else:
+        lst_s = f'[{" ".join([f"(({x} {y}) {dpx})" for ((x, y), dpx) in lst])}]'
 
     return lst_s
      

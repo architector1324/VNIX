@@ -42,7 +42,7 @@ def convert_to_bytes(dat):
 
 def convert(size, dat, zip):
     img = [pack_pixel(px) for px in dat]
-    img_s = f'[{" ".join([str(e) for e in img])}]'
+
     # img_b = convert_to_bytes(img)
 
     # print(len(img_s), len(img_b))
@@ -61,6 +61,8 @@ def convert(size, dat, zip):
         # img_s = gzip.compress(bytes(img0, 'utf-8'))
         # img_s = base64.b64encode(img_s).decode()
         # img_s = f'`{img_s}`'
+    else:
+        img_s = f'[{" ".join([str(e) for e in img])}]'
 
     return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
 
