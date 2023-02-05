@@ -322,115 +322,115 @@ impl Unit {
         }
     }
 
-    fn parse_bytes_none<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_none<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotNone)?;
 
-        if b != UnitBin::None as u8 {
+        if *b != UnitBin::None as u8 {
             return Err(UnitParseErr::NotNone)
         }
         Ok((Unit::None, it))
     }
 
-    fn parse_bytes_bool<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_bool<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotByte)?;
 
-        if b != UnitBin::Bool as u8 {
+        if *b != UnitBin::Bool as u8 {
             return Err(UnitParseErr::NotByte);
         }
 
         let b = it.next().ok_or(UnitParseErr::NotByte)?;
 
-        match b {
+        match *b {
             0 => return Ok((Unit::Bool(false), it)),
             1 => return Ok((Unit::Bool(true), it)),
             _ => return Err(UnitParseErr::NotByte)
         }
     }
 
-    fn parse_bytes_byte<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_byte<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotByte)?;
 
-        if b != UnitBin::Byte as u8 {
+        if *b != UnitBin::Byte as u8 {
             return Err(UnitParseErr::NotByte);
         }
 
         let b = it.next().ok_or(UnitParseErr::NotByte)?;
-        Ok((Unit::Byte(b), it))
+        Ok((Unit::Byte(*b), it))
     }
 
-    fn parse_bytes_int<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_int<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotInt)?;
 
-        if b != UnitBin::Int as u8 {
+        if *b != UnitBin::Int as u8 {
             return Err(UnitParseErr::NotInt);
         }
 
         let bytes = [
-            it.next().ok_or(UnitParseErr::NotInt)?,
-            it.next().ok_or(UnitParseErr::NotInt)?,
-            it.next().ok_or(UnitParseErr::NotInt)?,
-            it.next().ok_or(UnitParseErr::NotInt)?
+            *it.next().ok_or(UnitParseErr::NotInt)?,
+            *it.next().ok_or(UnitParseErr::NotInt)?,
+            *it.next().ok_or(UnitParseErr::NotInt)?,
+            *it.next().ok_or(UnitParseErr::NotInt)?
         ];
 
         let v = i32::from_le_bytes(bytes);
         Ok((Unit::Int(v), it))
     }
 
-    fn parse_bytes_dec<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_dec<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotDec)?;
 
-        if b != UnitBin::Dec as u8 {
+        if *b != UnitBin::Dec as u8 {
             return Err(UnitParseErr::NotDec);
         }
 
         let bytes = [
-            it.next().ok_or(UnitParseErr::NotDec)?,
-            it.next().ok_or(UnitParseErr::NotDec)?,
-            it.next().ok_or(UnitParseErr::NotDec)?,
-            it.next().ok_or(UnitParseErr::NotDec)?
+            *it.next().ok_or(UnitParseErr::NotDec)?,
+            *it.next().ok_or(UnitParseErr::NotDec)?,
+            *it.next().ok_or(UnitParseErr::NotDec)?,
+            *it.next().ok_or(UnitParseErr::NotDec)?
         ];
 
         let v = f32::from_le_bytes(bytes);
         Ok((Unit::Dec(v), it))
     }
 
-    fn parse_bytes_str<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_str<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotStr)?;
 
-        if b != UnitBin::Str as u8 {
+        if *b != UnitBin::Str as u8 {
             return Err(UnitParseErr::NotStr);
         }
 
         let bytes = [
-            it.next().ok_or(UnitParseErr::NotStr)?,
-            it.next().ok_or(UnitParseErr::NotStr)?,
-            it.next().ok_or(UnitParseErr::NotStr)?,
-            it.next().ok_or(UnitParseErr::NotStr)?
+            *it.next().ok_or(UnitParseErr::NotStr)?,
+            *it.next().ok_or(UnitParseErr::NotStr)?,
+            *it.next().ok_or(UnitParseErr::NotStr)?,
+            *it.next().ok_or(UnitParseErr::NotStr)?
         ];
 
         let len = u32::from_le_bytes(bytes);
-        let tmp = (0..len).into_iter().filter_map(|_| it.next()).collect::<Vec<u8>>();
+        let tmp = (0..len).into_iter().filter_map(|_| it.next()).cloned().collect::<Vec<u8>>();
         let s = String::from_utf8(tmp).map_err(|_| UnitParseErr::NotStr)?;
 
         Ok((Unit::Str(s), it))
     }
 
-    fn parse_bytes_ref<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> {
+    fn parse_bytes_ref<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
         let b = it.next().ok_or(UnitParseErr::NotRef)?;
 
-        if b != UnitBin::Ref as u8 {
+        if *b != UnitBin::Ref as u8 {
             return Err(UnitParseErr::NotRef);
         }
 
         let bytes = [
-            it.next().ok_or(UnitParseErr::NotRef)?,
-            it.next().ok_or(UnitParseErr::NotRef)?,
-            it.next().ok_or(UnitParseErr::NotRef)?,
-            it.next().ok_or(UnitParseErr::NotRef)?
+            *it.next().ok_or(UnitParseErr::NotRef)?,
+            *it.next().ok_or(UnitParseErr::NotRef)?,
+            *it.next().ok_or(UnitParseErr::NotRef)?,
+            *it.next().ok_or(UnitParseErr::NotRef)?
         ];
 
         let len = u32::from_le_bytes(bytes);
-        let tmp = (0..len).into_iter().filter_map(|_| it.next()).collect::<Vec<u8>>();
+        let tmp = (0..len).into_iter().filter_map(|_| it.next()).cloned().collect::<Vec<u8>>();
         let s = String::from_utf8(tmp).map_err(|_| UnitParseErr::NotRef)?;
 
         let path = s.split(".").map(|s| s.to_string()).collect::<Vec<_>>();
@@ -444,10 +444,10 @@ impl Unit {
         Ok((Unit::Ref(path), it))
     }
 
-    fn parse_bytes_pair<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> + Clone {
+    fn parse_bytes_pair<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
         let b = it.next().ok_or(UnitParseErr::NotPair)?;
 
-        if b != UnitBin::Pair as u8 {
+        if *b != UnitBin::Pair as u8 {
             return Err(UnitParseErr::NotPair);
         }
 
@@ -457,18 +457,18 @@ impl Unit {
         Ok((Unit::Pair(Box::new(u0), Box::new(u1)), it))
     }
 
-    fn parse_bytes_lst<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> + Clone {
+    fn parse_bytes_lst<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
         let b = it.next().ok_or(UnitParseErr::NotList)?;
 
-        if b != UnitBin::Lst as u8 {
+        if *b != UnitBin::Lst as u8 {
             return Err(UnitParseErr::NotList);
         }
 
         let bytes = [
-            it.next().ok_or(UnitParseErr::NotList)?,
-            it.next().ok_or(UnitParseErr::NotList)?,
-            it.next().ok_or(UnitParseErr::NotList)?,
-            it.next().ok_or(UnitParseErr::NotList)?
+            *it.next().ok_or(UnitParseErr::NotList)?,
+            *it.next().ok_or(UnitParseErr::NotList)?,
+            *it.next().ok_or(UnitParseErr::NotList)?,
+            *it.next().ok_or(UnitParseErr::NotList)?
         ];
 
         let len = u32::from_le_bytes(bytes);
@@ -482,18 +482,18 @@ impl Unit {
         Ok((Unit::Lst(tmp), it))
     }
 
-    fn parse_bytes_map<I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> + Clone {
+    fn parse_bytes_map<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
         let b = it.next().ok_or(UnitParseErr::NotMap)?;
 
-        if b != UnitBin::Map as u8 {
+        if *b != UnitBin::Map as u8 {
             return Err(UnitParseErr::NotMap);
         }
 
         let bytes = [
-            it.next().ok_or(UnitParseErr::NotMap)?,
-            it.next().ok_or(UnitParseErr::NotMap)?,
-            it.next().ok_or(UnitParseErr::NotMap)?,
-            it.next().ok_or(UnitParseErr::NotMap)?
+            *it.next().ok_or(UnitParseErr::NotMap)?,
+            *it.next().ok_or(UnitParseErr::NotMap)?,
+            *it.next().ok_or(UnitParseErr::NotMap)?,
+            *it.next().ok_or(UnitParseErr::NotMap)?
         ];
 
         let len = u32::from_le_bytes(bytes);
@@ -508,7 +508,7 @@ impl Unit {
         Ok((Unit::Map(tmp), it))
     }
 
-    pub fn parse_bytes<I>(it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = u8> + Clone {
+    pub fn parse_bytes<'a, I>(it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
         // none
         if let Ok((u, it)) = Unit::parse_bytes_none(it.clone()) {
             return Ok((u, it));

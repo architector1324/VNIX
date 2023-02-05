@@ -68,11 +68,10 @@ impl FromUnit for Img {
         schm.find(glob, u).and_then(|(size, or)|{
             let img = match or {
                 Or::First(s) => {
-                    let img0 = utils::decompress(s.as_str()).ok()?;
-                    let img_s = utils::decompress(img0.as_str()).ok()?;
-                    let img_u = Unit::parse(img_s.chars()).ok()?.0.as_vec()?;
+                    let img0 = utils::decompress_bytes(s.as_str()).ok()?;
+                    let img_u = Unit::parse_bytes(img0.iter()).ok()?.0.as_vec()?;
 
-                    img_u.iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect()
+                    img_u.into_iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect()
                 },
                 Or::Second(seq) => seq.into_iter().map(|e| e as u32).collect()
             };
