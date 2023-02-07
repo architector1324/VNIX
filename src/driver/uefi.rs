@@ -281,7 +281,10 @@ impl Disp for UefiDisp {
         Ok(())
     }
 
-    fn flush_blk(&mut self, pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr> {
+    fn flush_blk(&mut self, mut pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr> {
+        pos.0 = pos.0.clamp(0, (self.res.0 - size.0) as i32);
+        pos.1 = pos.1.clamp(0, (self.res.1 - size.1) as i32);
+
         unsafe {
             let mut disp = self.st.boot_services().open_protocol::<GraphicsOutput>(
                 OpenProtocolParams {
@@ -308,8 +311,6 @@ impl Disp for UefiDisp {
 
     fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr> {
         let mut mouse = self.st.boot_services().open_protocol_exclusive::<Pointer>(self.mouse_hlr).map_err(|_| DispErr::GetMouseState)?;
-
-        mouse.reset(false).map_err(|_| DispErr::GetMouseState)?;
 
         if block {
             unsafe {
