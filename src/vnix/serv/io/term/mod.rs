@@ -601,7 +601,7 @@ impl FromUnit for Term {
 impl ServHlr for Term {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: {msg:hello task:io.term}".into())
+            ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: hello@io.term\nFor gfx mode: {term.gfx:(say hello)}@io.term".into())
         };
 
         let m = Unit::Map(vec![(
@@ -623,20 +623,24 @@ impl ServHlr for Term {
             self.flush(kern)?;
             return Ok(Some(kern.msg(&msg.ath, out_u)?));
         } else {
-            if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
-                let mut out_u = msg.msg.clone();
+            let _msg = if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
+                _msg
+            } else {
+                msg.msg.clone()
+            };
 
-                let act = Act::Say(ui::text::Say {
-                    msg: _msg,
-                    shrt: None,
-                    nl: false,
-                    mode: ui::text::SayMode::Norm
-                });
-                out_u = act.act(self, &msg, out_u, kern)?;
+            let mut out_u = msg.msg.clone();
 
-                self.flush(kern)?;
-                return Ok(Some(kern.msg(&msg.ath, out_u)?));
-            }
+            let act = Act::Say(ui::text::Say {
+                msg: _msg,
+                shrt: None,
+                nl: false,
+                mode: ui::text::SayMode::Norm
+            });
+            out_u = act.act(self, &msg, out_u, kern)?;
+
+            self.flush(kern)?;
+            return Ok(Some(kern.msg(&msg.ath, out_u)?));
         }
 
         Ok(Some(msg))

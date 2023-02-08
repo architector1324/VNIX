@@ -245,7 +245,7 @@ impl FromUnit for Int {
 impl ServHlr for Int {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3] task:math.int}".into())
+            ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.int".into())
         };
 
         let m = Unit::Map(vec![(

@@ -229,7 +229,7 @@ impl FromUnit for Store {
 impl ServHlr for Store {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {store:{save:`Some beautiful text` out:txt.doc} task:io.store} # save text to `txt.doc` path\n{load:txt.doc task:io.store}".into())
+            ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store".into())
         };
 
         let m = Unit::Map(vec![(

@@ -34,7 +34,7 @@ impl FromUnit for Chrono {
 impl ServHlr for Chrono {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait:1000000 task:etc.chrono} # wait for 1 sec.".into())
+            ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait:1000000}@etc.chrono # wait for 1 sec.".into())
         };
 
         let m = Unit::Map(vec![(

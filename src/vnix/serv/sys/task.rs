@@ -33,7 +33,7 @@ impl FromUnit for Task {
 impl ServHlr for Task {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Service for run task from message\nExample: {msg:{msg:hello task:io.term} task:sys.task}".into())
+            ServHelpTopic::Info => Unit::Str("Service for run task from message\nExample: {msg:{msg:hello task:io.term}}@sys.task".into())
         };
 
         let m = Unit::Map(vec![(

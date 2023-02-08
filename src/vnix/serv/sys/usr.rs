@@ -6,7 +6,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaStr, SchemaMapSecondRequire, Schema};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaStr, SchemaMapSecondRequire, Schema, SchemaOr, Or};
 use crate::vnix::core::user::Usr;
 
 
@@ -45,18 +45,26 @@ impl FromUnit for User {
         let mut pub_key = None;
         let mut priv_key = None;
 
-        let schm = SchemaMapSecondRequire(
-            SchemaMapEntry(Unit::Str("ath".into()), SchemaStr),
-            SchemaMap(
-                SchemaMapEntry(Unit::Str("pub".into()), SchemaStr),
-                SchemaMapEntry(Unit::Str("priv".into()), SchemaStr),
-            )
+        let schm = SchemaOr(
+            SchemaMapSecondRequire(
+                SchemaMapEntry(Unit::Str("ath".into()), SchemaStr),
+                SchemaMap(
+                    SchemaMapEntry(Unit::Str("pub".into()), SchemaStr),
+                    SchemaMapEntry(Unit::Str("priv".into()), SchemaStr),
+                )
+            ),
+            SchemaStr
         );
 
-        schm.find_loc(u).map(|(_ath, (_pub, _priv))| {
-            ath = _ath;
-            pub_key = _pub;
-            priv_key = _priv;
+        schm.find_loc(u).map(|or| {
+            match or {
+                Or::First((_ath, (_pub, _priv))) => {
+                    ath = _ath;
+                    pub_key = _pub;
+                    priv_key = _priv;
+                },
+                Or::Second(_ath) => ath = Some(_ath)
+            }
         });
 
         if let Some(ath) = ath {
@@ -77,7 +85,7 @@ impl FromUnit for User {
 impl ServHlr for User {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Users registration service\nExample: {ath:test task:sys.usr} # register new user with name `test`".into())
+            ServHelpTopic::Info => Unit::Str("Users registration service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr".into())
         };
 
         let m = Unit::Map(vec![(

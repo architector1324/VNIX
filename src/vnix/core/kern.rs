@@ -213,7 +213,7 @@ impl<'a> Kern<'a> {
         } else {
             return Ok(None);
         }
-        
+
         let mut serv = self.get_serv(serv)?;
         let mut inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
 
@@ -230,7 +230,7 @@ impl<'a> Kern<'a> {
             match topic.as_str() {
                 "info" => return inst.help(&msg.ath, ServHelpTopic::Info, self).map(|m| Some(m)),
                 "serv" => return self.help_serv(&msg.ath).map(|m| Some(m)),
-                _ => return Err(KernErr::HelpTopicNotFound)
+                _ => ()
             }
         }
 

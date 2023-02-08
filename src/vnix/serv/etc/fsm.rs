@@ -128,7 +128,7 @@ impl FromUnit for FSM {
 impl ServHlr for FSM {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Finite state machine service\nExample: {fsm:{a:(b hello) b:a} state:a task:etc.fsm} # switch state `a -> b` and get `hello` msg".into())
+            ServHelpTopic::Info => Unit::Str("Finite state machine service\nExample: {fsm:{a:(b hello) b:a} state:a}@etc.fsm # switch state `a -> b` and get `hello` msg".into())
         };
 
         let m = Unit::Map(vec![(

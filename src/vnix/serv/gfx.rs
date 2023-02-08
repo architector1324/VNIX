@@ -79,7 +79,7 @@ impl FromUnit for GFX2D {
 impl ServHlr for GFX2D {
     fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
         let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Service for rendering 2d graphics\nExample: {fill:#ff0000 task:gfx.2d} # fill screen with red color".into())
+            ServHelpTopic::Info => Unit::Str("Service for rendering 2d graphics\nExample: {fill:#ff0000}@gfx.2d # fill screen with red color".into())
         };
 
         let m = Unit::Map(vec![(
