@@ -120,6 +120,9 @@ pub struct SchemaStr;
 pub struct SchemaRef;
 
 #[derive(Debug, Clone)]
+pub struct SchemaStream;
+
+#[derive(Debug, Clone)]
 pub struct  SchemaUnit;
 
 #[derive(Debug, Clone)]
@@ -1374,6 +1377,17 @@ impl Schema for SchemaStr {
     fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Str(s) = u {
             return Some(s.clone());
+        }
+        None
+    }
+}
+
+impl Schema for SchemaStream {
+    type Out = (Unit, (String, Addr));
+
+    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
+        if let Unit::Stream(msg, (serv, addr)) = u {
+            return Some((*msg.clone(), (serv.clone(), addr.clone())));
         }
         None
     }

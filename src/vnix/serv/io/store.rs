@@ -191,17 +191,24 @@ impl FromUnit for Store {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut store = Store::default();
 
-        let schm = SchemaMapEntry(
-            Unit::Str("store".into()),
-            SchemaOr(
-                SchemaSeq(SchemaUnit),
-                SchemaUnit
-            )
+        let schm = SchemaOr(
+            SchemaMapEntry(
+                Unit::Str("store".into()),
+                SchemaOr(
+                    SchemaSeq(SchemaUnit),
+                    SchemaUnit
+                )
+            ),
+            SchemaUnit
         );
 
         schm.find_loc(u).map(|or| {
             let lst = match or {
-                Or::First(seq) => seq,
+                Or::First(or) => 
+                    match or {
+                        Or::First(seq) => seq,
+                        Or::Second(act) => vec![act]
+                    },
                 Or::Second(act) => vec![act]
             };
 

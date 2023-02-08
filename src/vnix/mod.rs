@@ -40,11 +40,14 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // // test
-    // let s = "{store:(load @vid.vnix.logo) term.gfx:[(set.res.gfx (1280 720)) @msg key] task:[io.store io.term]}";
+    // let s = "{term.gfx:[(set.res.gfx (1280 720)) (load @vid.vnix.logo)@io.store key]}";
     // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // let msg = kern.msg("super", u)?;
-    // kern.task(msg)?;
+    
+    // if let Some(msg) = kern.send("io.term", msg)? {
+    //     writeln!(kern.cli, "{}", DisplayShort(&msg.msg, 16));
+    // }
 
     // Ok(())
 
@@ -70,13 +73,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         }
     }
 
-    // zen
-    let path = Unit::parse("@task.gfx.desk.zen".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // // zen
+    // let path = Unit::parse("@task.gfx.desk.zen".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    let msg = kern.msg(&ath, u)?;
+    // let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    // let msg = kern.msg(&ath, u)?;
 
-    kern.task(msg)?;
+    // kern.task(msg)?;
 
     // λ
     loop {

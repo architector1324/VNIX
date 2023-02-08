@@ -14,7 +14,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr, SchemaMapSeq, SchemaByte};
 
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
-use crate::vnix::core::kern::{KernErr, Kern};
+use crate::vnix::core::kern::{KernErr, Kern, Addr};
 
 
 pub trait TermAct {
@@ -39,8 +39,9 @@ enum SetRes {
 enum Act {
     Clear,
     Nl,
-    GetKey(Option<Vec<String>>),
     Trc,
+    Source(Unit, (String, Addr)),
+    GetKey(Option<Vec<String>>),
     GetRes(GetRes, Vec<String>),
     SetRes(SetRes, (usize, usize)),
     Say(ui::text::Say),
@@ -87,6 +88,17 @@ impl TermAct for Act {
             Act::Clear => term.clear(kern)?,
             Act::Nl => term.print("\n", kern)?,
             Act::Trc => term.print(format!("{}", orig).as_str(), kern)?,
+            Act::Source(_msg, (serv, _addr)) => {
+                let _msg = kern.msg(&orig.ath, _msg)?;
+
+                if let Some(_msg) = kern.send(serv.as_str(), _msg)? {
+                    if let Some(_msg) = _msg.msg.as_map_find("msg") {
+                        if let Some(act) = Act::from_unit_loc(&_msg) {
+                            return act.act(term, orig, msg, kern);
+                        }
+                    }
+                }
+            },
             Act::Say(say) => return say.act(term, orig, msg, kern),
             Act::GetKey(may_path) => {
                 term.flush(kern)?;
@@ -484,6 +496,10 @@ impl FromUnit for Act {
                                 }
                         },
                         Or::Second(u) => {
+                            if let Unit::Stream(msg, (serv, addr)) = u {
+                                return Some(Act::Source(*msg, (serv, addr)));
+                            }
+
                             if let Some(inp) = ui::text::Inp::from_unit(glob, &u) {
                                 return Some(Act::Inp(inp));
                             }
@@ -529,26 +545,36 @@ impl FromUnit for Term {
         );
 
         let schm = SchemaOr(
-            SchemaMapEntry(
-                Unit::Str("term".into()),
-                schm_acts.clone()
+            SchemaOr(
+                SchemaMapEntry(
+                    Unit::Str("term".into()),
+                    schm_acts.clone()
+                ),
+                SchemaMapEntry(
+                    Unit::Str("term.gfx".into()),
+                    schm_acts.clone()
+                )
             ),
-            SchemaMapEntry(
-                Unit::Str("term.gfx".into()),
-                schm_acts
-            )
+            schm_acts
         );
 
         Font::from_unit(u, u).map(|font| term.res.font = font);
 
         schm.find_loc(u).map(|or| {
             let acts = match or {
-                Or::First(acts) => {
-                    term.mode = Mode::Cli;
-                    acts
-                },
+                Or::First(or) =>
+                    match or {
+                        Or::First(acts) => {
+                            term.mode = Mode::Cli;
+                            acts
+                        },
+                        Or::Second(acts) => {
+                            term.mode = Mode::Gfx;
+                            acts
+                        }
+                    },
                 Or::Second(acts) => {
-                    term.mode = Mode::Gfx;
+                    term.mode = Mode::Cli;
                     acts
                 }
             };
