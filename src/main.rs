@@ -104,9 +104,9 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
             return Status::ABORTED;
         }
 
+        // run
         writeln!(kern.cli, "INFO vnix: kernel running on `uefi` platform").unwrap();
 
-        // run
         if let Err(err) = vnix_entry(kern) {
             writeln!(cli, "ERR vnix: {:?}", err).unwrap();
         }

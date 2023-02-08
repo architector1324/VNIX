@@ -237,7 +237,7 @@ impl UIAct for Win {
                     match &mut self.back_tex {
                         media::Tex::Color(col) => *col,
                         media::Tex::Img(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
-                        media::Tex::Vid(vid) =>
+                        media::Tex::Vid(..) =>
                             match &img {
                                 Some(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
                                 None => 0x18191d

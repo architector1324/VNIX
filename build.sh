@@ -2,6 +2,10 @@
 
 cargo build --release --target=x86_64-unknown-uefi
 
+if [ $? -ne 0 ]; then
+    exit
+fi
+
 mkdir -p out
 
 dd if=/dev/zero of=./out/vnix.img bs=1048576 count=256

@@ -1,4 +1,4 @@
-# Vnix alpha v0.1
+# Vnix alpha v1.0
 
 Progress: 45%
 
@@ -7,7 +7,7 @@ Progress: 45%
 1. [x] Simple units type system:
     - [x] basic (`none`, `bool`, `byte`, `int`, `dec`, `str`)
     - [x] collections (`pair`, `list`, `msg`)
-    - [x] complex (`ref`)
+    - [x] complex (`ref`, `stream`)
 2. [x] Vnix units notation [vxun] (`{<unit>:<unit> ...}`)
 3. [ ] Service:
     - [x] send/recv msg communication

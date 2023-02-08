@@ -30,18 +30,18 @@ def pack_pixel(px):
 
 def convert_int_to_bytes(v):
     if v == 0:
-        lst = [10]
+        lst = [13]
     elif -128 <= v <= 127:
-        lst = [11]
+        lst = [14]
         lst.extend(v.to_bytes(1, 'little', signed=True))
     elif 0 <= v <= 255:
-        lst = [13]
+        lst = [16]
         lst.extend(v.to_bytes(1, 'little', signed=False))
     elif -32768 <= v <= 32767:
-        lst = [12]
+        lst = [15]
         lst.extend(v.to_bytes(2, 'little', signed=True))
     elif 0 <= v <= 65535:
-        lst = [14]
+        lst = [17]
         lst.extend(v.to_bytes(2, 'little', signed=False))
     else: 
         lst = [3]
@@ -49,7 +49,7 @@ def convert_int_to_bytes(v):
     return lst
 
 def convert_to_bytes(dat):
-    lst = [8]
+    lst = [11]
     lst.extend(len(dat).to_bytes(4, 'little', signed=False))
 
     for px in dat:

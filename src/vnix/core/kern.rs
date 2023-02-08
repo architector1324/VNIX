@@ -1,3 +1,5 @@
+use core::fmt::Display;
+
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -11,6 +13,13 @@ use super::user::Usr;
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
 use crate::vnix::serv::io::term::TermBase;
 use crate::vnix::utils::RamStore;
+
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Addr {
+    Local,
+    Remote([u16; 8])
+}
 
 #[derive(Debug)]
 pub enum KernErr {
@@ -216,8 +225,21 @@ impl<'a> Kern<'a> {
                 _ => return Err(KernErr::HelpTopicNotFound)
             }
         }
-        
+
         // send
         inst.handle(msg, &mut serv, self)
+    }
+}
+
+impl Display for Addr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Addr::Local => write!(f, "loc"),
+            Addr::Remote(addr) => write!(f,
+                "{:#04x}:{:#04x}:{:#04x}:{:#04x}:{:#04x}:{:#04x}:{:#04x}:{:#04x}",
+                addr[0], addr[1], addr[2], addr[3],
+                addr[4], addr[5], addr[6], addr[7]
+            )
+        }
     }
 }
