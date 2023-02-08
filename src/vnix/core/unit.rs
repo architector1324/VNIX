@@ -1254,12 +1254,12 @@ impl Unit {
         if let Unit::Map(m) = self {
             return m.iter()
                 .filter_map(|(u0, u1)| Some((u0.as_str()?, u1)))
-                .map(|(s, u)| {
+                .find_map(|(s, u)| {
                     if s == sch {
                         return Some(u.clone());
                     }
                     None
-                }).next()?;
+                });
         }
         None
     }

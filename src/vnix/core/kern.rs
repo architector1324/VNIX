@@ -218,7 +218,15 @@ impl<'a> Kern<'a> {
         let mut inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
 
         // check help
-        if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
+        let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
+            Some(topic)
+        } else if let Some(topic) = msg.msg.as_str() {
+            Some(topic)
+        } else {
+            None
+        };
+
+        if let Some(topic) = topic {
             match topic.as_str() {
                 "info" => return inst.help(&msg.ath, ServHelpTopic::Info, self).map(|m| Some(m)),
                 "serv" => return self.help_serv(&msg.ath).map(|m| Some(m)),
