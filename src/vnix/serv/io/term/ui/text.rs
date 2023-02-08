@@ -153,6 +153,8 @@ impl TermAct for Say {
                 if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
                     self.msg = _msg;
                     return self.act(term, orig, msg, kern);
+                } else {
+                    return Ok(msg)
                 }
             },
             Unit::Stream(_msg, (serv, _addr)) => {
