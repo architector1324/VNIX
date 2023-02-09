@@ -95,21 +95,26 @@ impl ServHlr for GFX2D {
             let res = fill.0.get(kern)?;
 
             let img: Vec::<Unit> = (0..res.0*res.1).map(|_| Unit::Int(fill.1 as i32)).collect();
-            let img_s = format!("{}", Unit::Lst(img));
+            let img_b = Unit::Lst(img).as_bytes();
 
-            let img0 = utils::compress(img_s.as_str())?;
-            let img_out = utils::compress(img0.as_str())?;
+            let img_out = utils::compress_bytes(&img_b)?;
 
             let m = Unit::Map(vec![
                 (
                     Unit::Str("msg".into()),
-                    Unit::Pair(
-                        Box::new(Unit::Pair(
-                            Box::new(Unit::Int(res.0 as i32)),
-                            Box::new(Unit::Int(res.1 as i32))
-                        )),
-                        Box::new(Unit::Str(img_out.into()))
-                    )
+                    Unit::Map(vec![
+                        (
+                            Unit::Str("size".into()),
+                            Unit::Pair(
+                                Box::new(Unit::Int(res.0 as i32)),
+                                Box::new(Unit::Int(res.1 as i32))
+                            )
+                        ),
+                        (
+                            Unit::Str("img".into()),
+                            Unit::Str(img_out.into())
+                        )
+                    ])
                 ),
             ]);
 
