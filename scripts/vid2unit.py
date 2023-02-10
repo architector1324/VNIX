@@ -84,20 +84,11 @@ def convert_to_bytes_img(dat):
 
 
 def convert_to_bytes_diff(dat):
-    lst = [11]
-    lst.extend(len(dat).to_bytes(4, 'little', signed=False))
-
+    lst = []
     for ((x, y), diff) in dat:
-        lst.append(10)
-
-        # (x y)
-        lst.append(10)
-        lst.extend(convert_int_to_bytes(x))
-        lst.extend(convert_int_to_bytes(y))
-
-        # diff
-        lst.extend(convert_int_to_bytes(diff))
-
+        lst.extend(x.to_bytes(2, 'little', signed=False))
+        lst.extend(y.to_bytes(2, 'little', signed=False))
+        lst.extend(diff.to_bytes(4, 'little', signed=True))
     return lst
 
 

@@ -1,7 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use alloc::vec;
-use alloc::format;
 
 use crate::vnix::core::kern::Kern;
 use crate::vnix::core::serv::ServHelpTopic;

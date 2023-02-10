@@ -177,12 +177,13 @@ impl FromUnit for VidFrameDiff {
             let diff = match or {
                 Or::First(s) => {
                     let diff0 = utils::decompress_bytes(s.as_str()).ok()?;
-                    let diff_u = Unit::parse_bytes(diff0.iter()).ok()?.0.as_vec()?;
 
-                    diff_u.into_iter().filter_map(|u| u.as_pair())
-                        .filter_map(|(p, diff)| Some((p.as_pair()?, diff.as_int()?)))
-                        .filter_map(|((x, y), diff)| Some(((x.as_int()?, y.as_int()?), diff)))
-                        .map(|((x, y), diff)| ((x as usize, y as usize), diff)).collect()
+                    diff0.into_iter().array_chunks::<8>().map(|v| {
+                        let x = u16::from_le_bytes([v[0], v[1]]);
+                        let y = u16::from_le_bytes([v[2], v[3]]);
+                        let diff = i32::from_le_bytes([v[4], v[5], v[6], v[7]]);
+                        ((x as usize, y as usize), diff)
+                    }).collect::<Vec<_>>()
                 },
                 Or::Second(seq) => seq.into_iter().map(|((x, y), diff)| ((x as usize, y as usize), diff)).collect()
             };

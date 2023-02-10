@@ -6,6 +6,7 @@ use alloc::string::String;
 use alloc::vec;
 
 use crate::driver::CLIErr;
+use crate::vnix::core::unit::DisplayShort;
 
 use self::core::unit::Unit;
 use self::core::user::Usr;
@@ -73,13 +74,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         }
     }
 
-    // // zen
-    // let path = Unit::parse("@task.gfx.desk.zen".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // zen
+    let path = Unit::parse("@task.gfx.desk.zen".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    // let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    // let msg = kern.msg(&ath, u)?;
+    let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    let msg = kern.msg(&ath, u)?;
 
-    // kern.task(msg)?;
+    kern.task(msg)?;
 
     // λ
     loop {
