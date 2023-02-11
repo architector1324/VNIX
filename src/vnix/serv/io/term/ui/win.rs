@@ -8,12 +8,21 @@ use super::UIAct;
 use crate::driver::TermKey;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{KernErr, Kern};
+use crate::vnix::core::unit::SchemaInt;
+use crate::vnix::core::unit::SchemaMapRequire;
+use crate::vnix::core::unit::SchemaPair;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapSecondRequire, SchemaMapEntry, SchemaBool, SchemaStr, SchemaUnit, Schema, SchemaOr, Or};
 
 use crate::vnix::utils;
 
 use super::{TermAct, Mode, Term};
 
+
+#[derive(Debug, Clone)]
+pub struct WinFloating {
+    pos: (i32, i32),
+    size: (usize, usize),
+}
 
 #[derive(Debug, Clone)]
 pub struct Win {
@@ -24,8 +33,7 @@ pub struct Win {
     border_col: u32,
     back_tex: media::Tex,
 
-    pos: Option<(i32, i32)>,
-    size: Option<(usize, usize)>,
+    floating: Option<WinFloating>,
 
     content: Option<Box<super::UI>>,
 }
@@ -45,22 +53,44 @@ impl FromUnit for Win {
                     SchemaMapEntry(Unit::Str("title".into()), SchemaStr),
                     SchemaMapSecondRequire(
                         SchemaMapEntry(Unit::Str("tex".into()), SchemaUnit),
-                        SchemaOr(
-                            SchemaMapEntry(Unit::Str("win".into()), SchemaUnit),
-                            SchemaMapEntry(Unit::Str("win.gfx".into()), SchemaUnit)
+                        SchemaMapSecondRequire(
+                            SchemaMapEntry(
+                                Unit::Str("flt".into()),
+                                SchemaMapRequire(
+                                    SchemaMapEntry(
+                                        Unit::Str("pos".into()),
+                                        SchemaPair(SchemaInt, SchemaInt)
+                                    ),
+                                    SchemaMapEntry(
+                                        Unit::Str("size".into()),
+                                        SchemaPair(SchemaInt, SchemaInt)
+                                    )
+                                )
+                            ),
+                            SchemaOr(
+                                SchemaMapEntry(Unit::Str("win".into()), SchemaUnit),
+                                SchemaMapEntry(Unit::Str("win.gfx".into()), SchemaUnit)
+                            )
                         )
                     )
                 )
             )
         );
 
-        schm.find_deep(glob, u).map(|(brd, (brd_col, (title, (tex, or))))| {
+        schm.find_deep(glob, u).map(|(brd, (brd_col, (title, (tex, (flt, or)))))| {
             let (mode, content) = match or {
                 Or::First(u) => (Mode::Cli, u),
                 Or::Second(u) => (Mode::Gfx, u)
             };
 
             let tex = tex.and_then(|u| media::Tex::from_unit(glob, &u));
+
+            let flt = flt.map(|(pos, size)| {
+                WinFloating {
+                    pos: pos,
+                    size: (size.0 as usize, size.1 as usize)
+                }
+            });
 
             Win {
                 title,
@@ -70,8 +100,8 @@ impl FromUnit for Win {
                 border_col: brd_col.and_then(|col| utils::hex_to_u32(col.as_str())).unwrap_or(0x2a2e32),
                 back_tex: tex.unwrap_or(media::Tex::Color(0x18191d)),
 
-                pos: None,
-                size: None,
+                floating: flt,
+                
                 content: super::UI::from_unit(glob, &content).map(|ui| Box::new(ui))
             }
         })
@@ -92,8 +122,7 @@ impl TermAct for Win {
                     }
                 };
 
-                let size = self.size.unwrap_or(res);
-                let pos = self.pos.unwrap_or((0, 0));
+                let (pos, size) = self.floating.as_ref().map(|flt| (flt.pos, flt.size)).unwrap_or(((0, 0), res));
 
                 self.ui_act(pos, size, term, kern)?;
 
@@ -104,10 +133,9 @@ impl TermAct for Win {
             Mode::Gfx => {
                 let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
-                let size = self.size.unwrap_or(res);
-                let pos = self.pos.unwrap_or((0, 0));
+                let (pos, size) = self.floating.as_ref().map(|flt| (flt.pos, flt.size)).unwrap_or(((0, 0), res));
 
-                self.ui_gfx_act(pos, size, term, kern)?;
+                self.ui_gfx_act(pos, size, None, term, kern)?;
 
                 kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
             }
@@ -115,6 +143,7 @@ impl TermAct for Win {
 
         let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
         let mut mouse_pos = ((res.0 / 2) as i32, (res.1 / 2) as i32);
+        let mut mouse_click = (false, false);
 
         if let Mode::Gfx = self.mode {
             term.res.cur.draw(mouse_pos, 0, kern)?;
@@ -134,18 +163,16 @@ impl TermAct for Win {
                             }
                         };
 
-                        let size = self.size.unwrap_or(res);
-                        let pos = self.pos.unwrap_or((0, 0));
+                        let (pos, size) = self.floating.as_ref().map(|flt| (flt.pos, flt.size)).unwrap_or(((0, 0), res));
     
                         self.ui_act(pos, size, term, kern)?;
                     },
                     Mode::Gfx => {
                         let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+
+                        let (pos, size) = self.floating.as_ref().map(|flt| (flt.pos, flt.size)).unwrap_or(((0, 0), res));
     
-                        let size = self.size.unwrap_or(res);
-                        let pos = self.pos.unwrap_or((0, 0));
-    
-                        if self.ui_gfx_act(pos, size, term, kern)? {
+                        if self.ui_gfx_act(pos, size, Some((mouse_pos, mouse_click)), term, kern)? {
                             term.res.cur.draw(mouse_pos, 0, kern)?;
                             kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
                         }
@@ -159,6 +186,8 @@ impl TermAct for Win {
 
                     mouse_pos.0 += mouse.dpos.0 / 4096;
                     mouse_pos.1 += mouse.dpos.1 / 4096;
+
+                    mouse_click = mouse.click;
 
                     term.res.cur.draw(mouse_pos, 0, kern)?;
                     kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
@@ -218,7 +247,19 @@ impl UIAct for Win {
         Ok(())
     }
 
-    fn ui_gfx_act(&mut self, pos: (i32, i32), size:(usize, usize), term: &mut Term, kern: &mut Kern) -> Result<bool, KernErr> {
+    fn ui_gfx_act(&mut self, mut pos: (i32, i32), mut size:(usize, usize), mouse: Option<((i32, i32), (bool, bool))>, term: &mut Term, kern: &mut Kern) -> Result<bool, KernErr> {
+        if let Some(flt) = &mut self.floating {
+            if let Some((_pos, click)) = mouse {
+                if click.0 && _pos.0 >= flt.pos.0 && _pos.0 < flt.pos.0 + flt.size.0 as i32 && _pos.1 >= flt.pos.1 && _pos.1 < flt.pos.1 + 16 as i32 {
+                    flt.pos.0 = _pos.0 - flt.size.0 as i32 / 2;
+                    flt.pos.1 = _pos.1 - 8;
+                }
+            }
+
+            pos = flt.pos;
+            size = flt.size;
+        }
+
         let mut tmp = Vec::with_capacity(size.0 * size.1);
 
         let img = if let media::Tex::Vid(vid) = &mut self.back_tex {
@@ -260,7 +301,7 @@ impl UIAct for Win {
         }
 
         if let Some(ui) = &mut self.content {
-            ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), term, kern)?;
+            ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), mouse, term, kern)?;
         }
 
         Ok(flush)
