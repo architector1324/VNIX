@@ -56,7 +56,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let mut ath: String = "super".into();
 
     'login: loop {
-        let path = Unit::parse("@task.gfx.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+        let path = Unit::parse("@task.gfx.desk.zen.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
         let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
         let msg = kern.msg("super", u)?;

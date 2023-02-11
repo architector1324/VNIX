@@ -248,11 +248,14 @@ impl UIAct for Win {
     }
 
     fn ui_gfx_act(&mut self, mut pos: (i32, i32), mut size:(usize, usize), mouse: Option<((i32, i32), (bool, bool))>, term: &mut Term, kern: &mut Kern) -> Result<bool, KernErr> {
+        let mut flush = false;
+
         if let Some(flt) = &mut self.floating {
             if let Some((_pos, click)) = mouse {
                 if click.0 && _pos.0 >= flt.pos.0 && _pos.0 < flt.pos.0 + flt.size.0 as i32 && _pos.1 >= flt.pos.1 && _pos.1 < flt.pos.1 + 16 as i32 {
                     flt.pos.0 = _pos.0 - flt.size.0 as i32 / 2;
                     flt.pos.1 = _pos.1 - 8;
+                    flush = true;
                 }
             }
 
@@ -263,12 +266,11 @@ impl UIAct for Win {
         let mut tmp = Vec::with_capacity(size.0 * size.1);
 
         let img = if let media::Tex::Vid(vid) = &mut self.back_tex {
+            flush = true;
             vid.next()
         } else {
             None
         };
-
-        let flush = img.is_some();
 
         for y in 0..size.1 {
             for x in 0..size.0 {
