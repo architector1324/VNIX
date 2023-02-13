@@ -5,6 +5,8 @@ import base64
 import struct
 import argparse
 
+import numpy as np
+
 
 def read_frame(cap):
     res, frame = cap.read()
@@ -19,9 +21,24 @@ def read_frame(cap):
     return (w, h, dim, dat)
 
 
+def save_frame(filename, w, h, dim, dat):
+    img = np.array([e for px in dat for e in px]).reshape((h, w * dim))
+
+    img = png.from_array(img, 'RGB', {'width': w, 'height': h, 'bitdepth': 8})
+    img.save(filename)
+
+
+def diff_to_img(dat):
+    return [unpack_diff(dpx)[1:4] for dpx in dat]
+
+
 def pack_pixel(px):
     b = struct.pack('<BBB', px[0], px[1], px[2])
     return int.from_bytes(b, 'big')
+
+
+def unpack_diff(diff):
+    return tuple([np.uint8(e) for e in diff.to_bytes(4, 'big', signed=True)])
 
 
 def zip_str(s):
@@ -36,7 +53,30 @@ def zip_str(s):
 def zip_list(lst):
     lst0 = gzip.compress(bytes(lst))
     lst_s = base64.b64encode(lst0).decode()
+
+    # print(f'zip: {len(lst)} -> {len(lst0)} -> {len(lst_s)}')
+
     return f'`{lst_s}`'
+
+
+def rle_diff(dat):
+    lst = []
+
+    cnt = 1
+    prev = dat[0]
+
+    for e in dat[1:]:
+        if e != prev:
+            lst.append((cnt, prev))
+
+            prev = e
+            cnt = 1
+        else:
+            cnt += 1
+
+    lst.append((cnt, prev))
+
+    return lst
 
 
 def convert_img(size, dat, zip):
@@ -83,38 +123,54 @@ def convert_to_bytes_img(dat):
     return lst
 
 
-def convert_to_bytes_diff(dat):
+def convert_to_bytes_diff(map):
     lst = []
-    for ((x, y), diff) in dat:
-        lst.extend(x.to_bytes(2, 'little', signed=False))
-        lst.extend(y.to_bytes(2, 'little', signed=False))
-        lst.extend(diff.to_bytes(4, 'little', signed=True))
+
+    lst.extend(len(map).to_bytes(2, 'little'))
+
+    for pos in map:
+        rle = map[pos]
+
+        lst.extend(pos[0].to_bytes(2, 'little'))
+        lst.extend(pos[1].to_bytes(2, 'little'))
+
+        lst.extend(len(rle).to_bytes(2, 'little'))
+        for cnt, dpx in rle:
+            lst.extend(cnt.to_bytes(2, 'little'))
+            lst.extend(dpx.to_bytes(4, 'little', signed=True))
+
     return lst
 
 
 def convert_diff(size, diff, zip):
-    lst = []
-    for i, dpx in enumerate(diff):
-        if dpx != 0:
-            x = i % size[0]
-            y = i // size[0]
-            lst.append(((x, y), dpx))
+    map = {}
 
-    # lst_s = f'[{" ".join([f"(({x} {y}) {dpx})" for ((x, y), dpx) in lst])}]'
+    for block_y in range(size[1] // 16):
+        for block_x in range(size[0] // 16):
+            tmp = []
+            for y in range(16):
+                for x in range(16):
+                    idx = (x + block_x * 16) + (y + block_y * 16) * size[0]
+                    tmp.append(diff[idx])
+            tmp = rle_diff(tmp)
+
+            if len(tmp) == 1 and tmp[0][1] == 0:
+                continue
+            map[(block_x, block_y)] = tmp
 
     if zip:
-        # lst_s = zip_str(lst_s)
-        lst_s = zip_list(convert_to_bytes_diff(lst))
+        lst_s = zip_list(convert_to_bytes_diff(map))
     else:
-        lst_s = f'[{" ".join([f"(({x} {y}) {dpx})" for ((x, y), dpx) in lst])}]'
+        raise Exception
 
     return lst_s
-     
+
 
 # parse args
 parser = argparse.ArgumentParser()
 parser.add_argument('vid', help='Video filename')
 parser.add_argument('-z', '--zip', action='store_true', help='Compress video with gunzip')
+parser.add_argument('-t', '--trc', action='store_true', help='Save codec trace output')
 
 args = parser.parse_args()
 
@@ -127,6 +183,7 @@ img_s = convert_img((w, h), dat, args.zip)
 
 # get next frame difference
 frames_diff = []
+last_frame = 0
 
 while cap.isOpened():
     res = read_frame(cap)
@@ -140,7 +197,12 @@ while cap.isOpened():
     diff_s = convert_diff((w, h), diff, args.zip)
     dat = next_dat
 
+    if args.trc:
+        save_frame(f'./content/frames/out{last_frame}.png', w, h, 3, next_dat)
+        save_frame(f'./content/frames/out{last_frame}d.png', w, h, 3, diff_to_img(diff))
+
     frames_diff.append(diff_s)
+    last_frame += 1
 
 frames_s = f'[{" ".join([s for s in frames_diff])}]'
 
