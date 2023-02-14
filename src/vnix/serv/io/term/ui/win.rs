@@ -303,7 +303,9 @@ impl UIAct for Win {
         }
 
         if let Some(ui) = &mut self.content {
-            ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), mouse, term, kern)?;
+            if ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), mouse, term, kern)? {
+                kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+            }
         }
 
         Ok(flush)
