@@ -27,7 +27,7 @@ pub struct Sprite {
 pub enum Tex {
     Color(u32),
     Img(Img),
-    Vid(Cycle<VideoIter>)
+    Vid(Cycle<VideoIterLoop>)
 }
 
 #[derive(Debug, Clone)]
@@ -36,8 +36,8 @@ struct VidFrameDiffRle16x16 {
 }
 
 #[derive(Debug, Clone)]
-struct VidFrameDiffRle16x16Iter {
-    block: VidFrameDiffRle16x16,
+struct VidFrameDiffRle16x16Iter<'a> {
+    block: &'a VidFrameDiffRle16x16,
     last: (usize, i32),
     idx: usize
 }
@@ -61,6 +61,9 @@ pub struct VideoIter {
     idx: usize
 }
 
+#[derive(Debug, Clone)]
+pub struct VideoIterLoop(VideoIter);
+
 impl Img {
     pub fn draw(&self, pos: (i32, i32), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
         kern.disp.blk(pos, self.size, src, &self.img).map_err(|e| KernErr::DispErr(e))
@@ -80,20 +83,20 @@ impl IntoIterator for Video {
     }
 }
 
-impl IntoIterator for VidFrameDiffRle16x16 {
+impl<'a> IntoIterator for &'a VidFrameDiffRle16x16 {
     type Item = i32;
-    type IntoIter = VidFrameDiffRle16x16Iter;
+    type IntoIter = VidFrameDiffRle16x16Iter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         VidFrameDiffRle16x16Iter {
-            block: self,
+            block: &self,
             last: (0, 0),
             idx: 0
         }
     }
 }
 
-impl Iterator for VidFrameDiffRle16x16Iter {
+impl<'a> Iterator for VidFrameDiffRle16x16Iter<'a> {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -111,20 +114,25 @@ impl Iterator for VideoIter {
     type Item = Img;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.idx >= self.vid.frames.len() {
+        if self.idx >= self.vid.frames.len() + 1 {
             return None
         }
 
-        let diff = self.vid.frames.get(self.idx)?;
+        if self.idx == 0 {
+            self.idx += 1;
+            return Some(self.img.clone())
+        }
+
+        let diff = self.vid.frames.get(self.idx - 1)?;
         self.idx += 1;
 
-        for ((block_x, block_y), diff) in diff.diff.clone() {
+        for ((block_x, block_y), diff) in &diff.diff {
             let mut it = diff.into_iter();
 
             for y in 0..16 {
                 for x in 0..16 {
                     if let Some(diff) = it.next() {
-                        let idx = (x + block_x * 16) + (y + block_y * 16) * self.img.size.0;
+                        let idx = (x + *block_x * 16) + (y + *block_y * 16) * self.img.size.0;
                         if let Some(px) = self.img.img.get_mut(idx) {
                             *px = (*px as i64 + diff as i64) as u32;
                         }
@@ -134,6 +142,21 @@ impl Iterator for VideoIter {
         }
 
         Some(self.img.clone())
+    }
+}
+
+impl Iterator for VideoIterLoop {
+    type Item = Img;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0.next() {
+            Some(img) => Some(img),
+            None => {
+                self.0.idx = 0;
+                self.0.img = self.0.vid.img.clone();
+                self.0.next()
+            }
+        }
     }
 }
 
@@ -360,7 +383,7 @@ impl FromUnit for Tex {
                     }
 
                     if let Some(vid) = Video::from_unit(glob, &u) {
-                        return Some(Tex::Vid(vid.into_iter().cycle()));
+                        return Some(Tex::Vid(VideoIterLoop(vid.into_iter()).cycle()));
                     }
 
                     None
