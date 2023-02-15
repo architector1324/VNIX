@@ -1,6 +1,7 @@
 use core::iter::Cycle;
 
 use alloc::vec::Vec;
+use alloc::vec;
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{KernErr, Kern};
@@ -12,9 +13,17 @@ use super::{TermAct, Term};
 
 
 #[derive(Debug, Clone)]
+pub enum Pixels {
+    Rgb(Vec<u8>),
+    Rgba(Vec<u32>),
+    RgbRle(Vec<(usize, (u8, u8, u8))>),
+    RgbaRle(Vec<(usize, u32)>)
+}
+
+#[derive(Debug, Clone)]
 pub struct Img {
     pub size: (usize, usize),
-    pub img: Vec<u32>
+    pub img: Pixels
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +75,43 @@ pub struct VideoIterLoop(VideoIter);
 
 impl Img {
     pub fn draw(&self, pos: (i32, i32), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
-        kern.disp.blk(pos, self.size, src, &self.img).map_err(|e| KernErr::DispErr(e))
+        let pixels = self.get_pixels().ok_or(KernErr::DecompressionFault)?;
+        kern.disp.blk(pos, self.size, src, &pixels).map_err(|e| KernErr::DispErr(e))
+    }
+
+    pub fn get_pixels(&self) -> Option<Vec<u32>> {
+        match &self.img {
+            Pixels::Rgb(img) => {
+                if img.len() / 3 != self.size.0 * self.size.1 {
+                    return None;
+                }
+                Some(img.array_chunks::<3>().map(|ch| u32::from_le_bytes([ch[0], ch[1], ch[2], 0])).collect())
+            },
+            Pixels::Rgba(img) => {
+                if img.len() != self.size.0 * self.size.1 {
+                    return None;
+                }
+                Some(img.clone())
+            },
+            Pixels::RgbRle(rle) => {
+                let tmp = rle.iter().map(|(cnt, px)| (0..*cnt).map(|_| u32::from_le_bytes([px.0, px.1, px.2, 0]))).flatten().collect::<Vec<_>>();
+
+                if tmp.len() != self.size.0 * self.size.1 {
+                    return None;
+                }
+
+                Some(tmp)
+            },
+            Pixels::RgbaRle(rle) => {
+                let tmp = rle.iter().map(|(cnt, px)| (0..*cnt).map(|_| *px)).flatten().collect::<Vec<_>>();
+
+                if tmp.len() != self.size.0 * self.size.1 {
+                    return None;
+                }
+
+                Some(tmp)
+            }
+        }
     }
 }
 
@@ -128,12 +173,13 @@ impl Iterator for VideoIter {
 
         for ((block_x, block_y), diff) in &diff.diff {
             let mut it = diff.into_iter();
+            let mut img = self.img.get_pixels()?;
 
             for y in 0..16 {
                 for x in 0..16 {
                     if let Some(diff) = it.next() {
                         let idx = (x + *block_x * 16) + (y + *block_y * 16) * self.img.size.0;
-                        if let Some(px) = self.img.img.get_mut(idx) {
+                        if let Some(px) = img.get_mut(idx) {
                             *px = (*px as i64 + diff as i64) as u32;
                         }
                     }
@@ -206,24 +252,68 @@ impl FromUnit for Img {
                 Unit::Str("size".into()),
                 SchemaPair(SchemaInt, SchemaInt)
             ),
-            SchemaMapEntry(
-                Unit::Str("img".into()),
-                SchemaOr(
-                    SchemaStr,
-                    SchemaSeq(SchemaInt)
+            SchemaMapRequire(
+                SchemaMapEntry(Unit::Str("fmt".into()), SchemaStr),
+                SchemaMapEntry(
+                    Unit::Str("img".into()),
+                    SchemaOr(
+                        SchemaStr,
+                        SchemaOr(
+                            SchemaSeq(
+                                SchemaPair(SchemaInt, SchemaInt)
+                            ),
+                            SchemaSeq(SchemaInt)
+                        )
+                    )
                 )
             )
         );
 
-        schm.find(glob, u).and_then(|(size, or)|{
+        schm.find(glob, u).and_then(|(size, (fmt, or))|{
             let img = match or {
                 Or::First(s) => {
                     let img0 = utils::decompress_bytes(s.as_str()).ok()?;
-                    let img_u = Unit::parse_bytes(img0.iter()).ok()?.0.as_vec()?;
 
-                    img_u.into_iter().filter_map(|u| u.as_int()).map(|v| v as u32).collect()
+                    match fmt.as_str() {
+                        "rgb" => Pixels::Rgb(img0),
+                        "rgba" => Pixels::Rgba(img0.into_iter().array_chunks::<4>().map(|ch| u32::from_le_bytes(ch)).collect()),
+                        "rgb.rle" => Pixels::RgbRle(img0.into_iter().array_chunks::<6>().map(|ch| {
+                            let cnt = u32::from_le_bytes([ch[0], ch[1], ch[2], 0]);
+                            (cnt as usize, (ch[3], ch[4], ch[5]))
+                        }).collect()),
+                        "rgba.rle" => Pixels::RgbaRle(img0.into_iter().array_chunks::<7>().map(|ch| {
+                            let cnt = u32::from_le_bytes([ch[0], ch[1], ch[2], 0]);
+                            let px = u32::from_le_bytes([ch[3], ch[4], ch[5], ch[6]]);
+                            (cnt as usize, px)
+                        }).collect()),
+                        _ => return None
+                    }
                 },
-                Or::Second(seq) => seq.into_iter().map(|e| e as u32).collect()
+                Or::Second(or) =>
+                    match or {
+                        Or::First(rle) => {
+                            match fmt.as_str() {
+                                "rgb.rle" =>
+                                    Pixels::RgbRle(rle.into_iter().map(|(cnt, px)| {
+                                        let b = (px as u32).to_le_bytes();
+                                        (cnt as usize, (b[0], b[1], b[2]))
+                                    }).collect()),
+                                "rgba.rle" =>
+                                Pixels::RgbaRle(rle.into_iter().map(|(cnt, px)|(cnt as usize, px as u32)).collect()),
+                                _ => return None
+                            }
+                        },
+                        Or::Second(seq) => {
+                            match fmt.as_str() {
+                                "rgb" => Pixels::Rgb(seq.into_iter().map(|px| {
+                                    let b = (px as u32).to_le_bytes();
+                                    vec![b[0], b[1], b[2]]
+                                }).flatten().collect()),
+                                "rgba" => Pixels::Rgba(seq.into_iter().map(|px| px as u32).collect()),
+                                _ => return None
+                            }
+                        }
+                    }
             };
 
             Some(Img {

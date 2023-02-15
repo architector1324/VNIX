@@ -2,6 +2,7 @@
 #![no_main]
 #![feature(abi_efiapi)]
 #![feature(iter_array_chunks)]
+#![feature(array_chunks)]
 
 extern crate alloc;
 

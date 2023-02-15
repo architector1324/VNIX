@@ -1432,7 +1432,11 @@ impl<A> Schema for SchemaSeq<A> where A: Schema {
 
     fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
         if let Unit::Lst(lst) = u {
-            return Some(lst.iter().filter_map(|u| self.0.find_deep(glob, u)).collect());
+            let tmp = lst.iter().filter_map(|u| self.0.find_deep(glob, u)).collect::<Vec<_>>();
+            if tmp.is_empty() {
+                return None;
+            }
+            return Some(tmp);
         }
         None
     }

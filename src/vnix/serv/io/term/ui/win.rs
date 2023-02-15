@@ -267,7 +267,9 @@ impl UIAct for Win {
 
         let img = if let media::Tex::Vid(vid) = &mut self.back_tex {
             flush = true;
-            vid.next()
+            vid.next().and_then(|img| Some((img.get_pixels()?, img.size)))
+        } else if let media::Tex::Img(img) = &mut self.back_tex {
+            img.get_pixels().map(|pixels| (pixels, img.size))
         } else {
             None
         };
@@ -279,10 +281,9 @@ impl UIAct for Win {
                 } else {
                     match &mut self.back_tex {
                         media::Tex::Color(col) => *col,
-                        media::Tex::Img(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
-                        media::Tex::Vid(..) =>
+                        media::Tex::Img(..) | media::Tex::Vid(..) =>
                             match &img {
-                                Some(img) => *img.img.get(x * img.size.0 / size.0 + y * img.size.1 / size.1 * img.size.0).unwrap_or(&0x18191d),
+                                Some((img, size)) => *img.get(x * size.0 / size.0 + y * size.1 / size.1 * size.0).unwrap_or(&0x18191d),
                                 None => 0x18191d
                             }
                     }

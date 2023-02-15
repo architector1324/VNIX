@@ -28,71 +28,71 @@ def pack_pixel(px):
     b = struct.pack('<BBB', px[0], px[1], px[2])
     return int.from_bytes(b, 'big')
 
-def convert_int_to_bytes(v):
-    if v == 0:
-        lst = [13]
-    elif -128 <= v <= 127:
-        lst = [14]
-        lst.extend(v.to_bytes(1, 'little', signed=True))
-    elif 0 <= v <= 255:
-        lst = [16]
-        lst.extend(v.to_bytes(1, 'little', signed=False))
-    elif -32768 <= v <= 32767:
-        lst = [15]
-        lst.extend(v.to_bytes(2, 'little', signed=True))
-    elif 0 <= v <= 65535:
-        lst = [17]
-        lst.extend(v.to_bytes(2, 'little', signed=False))
-    else: 
-        lst = [3]
-        lst.extend(v.to_bytes(4, 'little', signed=True))
+
+def rle_img(dat):
+    lst = []
+
+    cnt = 1
+    prev = dat[0]
+
+    for e in dat[1:]:
+        if e != prev:
+            lst.append((cnt, prev))
+
+            prev = e
+            cnt = 1
+        else:
+            cnt += 1
+
+    lst.append((cnt, prev))
+
     return lst
 
+
+def convert_to_bytes_rle(rle):
+    lst = []
+
+    for cnt, px in rle:
+        lst.extend(cnt.to_bytes(3, 'little'))
+        lst.extend(px.to_bytes(3, 'little'))
+
+    return lst
+
+
 def convert_to_bytes(dat):
-    lst = [11]
-    lst.extend(len(dat).to_bytes(4, 'little', signed=False))
+    lst = []
 
     for px in dat:
-        lst.extend(convert_int_to_bytes(px))
+        lst.extend(px.to_bytes(3, 'little'))
 
     return lst
 
 
 def convert(size, dat, zip):
     img = [pack_pixel(px) for px in dat]
-
-    # img_b = convert_to_bytes(img)
-
-    # print(len(img_s), len(img_b))
+    img_rle = rle_img(img)
 
     if zip:
+        img_b0 = convert_to_bytes(img)
+        img_b1 = convert_to_bytes_rle(img_rle)
+
+        img_b, fmt = (img_b0, 'rgb') if len(img_b0) < len(img_b1) else (img_b1, 'rgb.rle')
+
         # as binary representation
-        img_b = convert_to_bytes(img)
         img0 = gzip.compress(bytes(img_b))
         img_s = base64.b64encode(img0).decode()
         img_s = f'`{img_s}`'
-
-        # # as string representation
-        # img0 = gzip.compress(bytes(img_s, 'utf-8'))
-        # img0 = base64.b64encode(img0).decode()
-
-        # img_s = gzip.compress(bytes(img0, 'utf-8'))
-        # img_s = base64.b64encode(img_s).decode()
-        # img_s = f'`{img_s}`'
     else:
-        img_s = f'[{" ".join([str(e) for e in img])}]'
+        img_s0 = f'[{" ".join([str(e) for e in img])}]'
+        img_s1 = f'[{" ".join(f"({cnt} {px})" for cnt, px in img_rle)}]'
 
-    return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
+        img_s, fmt = (img_s0, 'rgb') if len(img_s0) < len(img_s1) else (img_s1, 'rgb.rle')
+
+    return f'{{size:({size[0]} {size[1]}) fmt:{fmt} img:{img_s}}}'
 
 
 def convert_sys(size, dat):
-    img = []
-
-    for px in dat:
-        b = struct.pack('<BBB', px[0], px[1], px[2])
-        v = int.from_bytes(b, 'big')
-        img.append(v)
-
+    img = [e for px in dat for e in px]
     img_s = f'[{",".join([str(e) for e in img])}]'
 
     return (img_s, len(img))
