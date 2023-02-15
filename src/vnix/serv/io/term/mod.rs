@@ -346,7 +346,8 @@ impl Default for Term {
                 },
                 cur: ui::media::Img {
                     size: (32, 32),
-                    img: ui::media::Pixels::Rgb(Vec::from(content::CURSOR))
+                    img: ui::media::Pixels::Rgb(Vec::from(content::CURSOR)),
+                    _cache: None
                 }
             },
             act: None

@@ -12,8 +12,6 @@ def read_img(filename):
     h = img[1]
     dim = img[3]['planes']
 
-    # print(len(img[2]))
-
     if dim == 3:
         dat = [tuple(img[2][n : n + 3]) for n in range(0, len(img[2]), 3)]
     elif dim == 4:
@@ -98,20 +96,21 @@ def convert_sys(size, dat):
     return (img_s, len(img))
 
 
-# parse args
-parser = argparse.ArgumentParser()
-parser.add_argument('img', help='Image filename')
-parser.add_argument('--sys', action='store_true', help='Convert to system img array')
-parser.add_argument('-z', '--zip', action='store_true', help='Compress image with gunzip')
+if __name__ == "__main__":
+    # parse args
+    parser = argparse.ArgumentParser()
+    parser.add_argument('img', help='Image filename')
+    parser.add_argument('--sys', action='store_true', help='Convert to system img array')
+    parser.add_argument('-z', '--zip', action='store_true', help='Compress image with gunzip')
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-# process image
-(size, _, img) = read_img(args.img)
+    # process image
+    (size, _, img) = read_img(args.img)
 
-if args.sys:
-    vnix_img = convert_sys(size, img)
-else:
-    vnix_img = convert(size, img, args.zip)
+    if args.sys:
+        vnix_img = convert_sys(size, img)
+    else:
+        vnix_img = convert(size, img, args.zip)
 
-print(vnix_img)
+    print(vnix_img)

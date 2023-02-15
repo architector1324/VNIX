@@ -1,4 +1,4 @@
-# Vnix alpha v1.0
+# Vnix pre-alpha v1.0
 
 Progress: 45%
 

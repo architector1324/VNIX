@@ -265,11 +265,11 @@ impl UIAct for Win {
 
         let mut tmp = Vec::with_capacity(size.0 * size.1);
 
-        let img = if let media::Tex::Vid(vid) = &mut self.back_tex {
+        let mut img = if let media::Tex::Vid(vid) = &mut self.back_tex {
             flush = true;
-            vid.next().and_then(|img| Some((img.get_pixels()?, img.size)))
-        } else if let media::Tex::Img(img) = &mut self.back_tex {
-            img.get_pixels().map(|pixels| (pixels, img.size))
+            vid.next()
+        } else if let media::Tex::Img(img) = &self.back_tex {
+            Some(img.clone())
         } else {
             None
         };
@@ -282,8 +282,17 @@ impl UIAct for Win {
                     match &mut self.back_tex {
                         media::Tex::Color(col) => *col,
                         media::Tex::Img(..) | media::Tex::Vid(..) =>
-                            match &img {
-                                Some((img, size)) => *img.get(x * size.0 / size.0 + y * size.1 / size.1 * size.0).unwrap_or(&0x18191d),
+                            match &mut img {
+                                Some(img) => {
+                                    let size = img.size.clone();
+                                    let pixels = img.get_pixels();
+
+                                    if let Some(img) = pixels {
+                                        *img.get(x * size.0 / size.0 + y * size.1 / size.1 * size.0).unwrap_or(&0x18191d)
+                                    } else {
+                                        0x18191d
+                                    }
+                                },
                                 None => 0x18191d
                             }
                     }

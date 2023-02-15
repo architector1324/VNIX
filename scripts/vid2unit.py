@@ -2,10 +2,10 @@ import cv2
 import png
 import gzip
 import base64
-import struct
 import argparse
-
 import numpy as np
+
+import img2unit
 
 
 def read_frame(cap):
@@ -32,22 +32,8 @@ def diff_to_img(dat):
     return [unpack_diff(dpx)[1:4] for dpx in dat]
 
 
-def pack_pixel(px):
-    b = struct.pack('<BBB', px[0], px[1], px[2])
-    return int.from_bytes(b, 'big')
-
-
 def unpack_diff(diff):
     return tuple([np.uint8(e) for e in diff.to_bytes(4, 'big', signed=True)])
-
-
-def zip_str(s):
-    tmp0 = gzip.compress(bytes(s, 'utf-8'))
-    tmp0 = base64.b64encode(tmp0).decode()
-
-    tmp_s = gzip.compress(bytes(tmp0, 'utf-8'))
-    tmp_s = base64.b64encode(tmp_s).decode()
-    return f'`{tmp_s}`'
 
 
 def zip_list(lst):
@@ -79,70 +65,48 @@ def rle_diff(dat):
     return lst
 
 
-def convert_img(size, dat, zip):
-    img = [pack_pixel(px) for px in dat]
-    # img_s = f'[{" ".join([str(e) for e in img])}]'
-
-    if zip:
-        # img_s = zip_str(img_s)
-        img_s = zip_list(convert_to_bytes_img(img))
-    else:
-        img_s = f'[{" ".join([str(e) for e in img])}]'
-
-    return f'{{size:({size[0]} {size[1]}) img:{img_s}}}'
-
-
-def convert_int_to_bytes(v):
-    if v == 0:
-        lst = [13]
-    elif -128 <= v <= 127:
-        lst = [14]
-        lst.extend(v.to_bytes(1, 'little', signed=True))
-    elif 0 <= v <= 255:
-        lst = [16]
-        lst.extend(v.to_bytes(1, 'little', signed=False))
-    elif -32768 <= v <= 32767:
-        lst = [15]
-        lst.extend(v.to_bytes(2, 'little', signed=True))
-    elif 0 <= v <= 65535:
-        lst = [17]
-        lst.extend(v.to_bytes(2, 'little', signed=False))
-    else: 
-        lst = [3]
-        lst.extend(v.to_bytes(4, 'little', signed=True))
-    return lst
-
-
-def convert_to_bytes_img(dat):
-    lst = [11]
-    lst.extend(len(dat).to_bytes(4, 'little', signed=False))
-
-    for px in dat:
-        lst.extend(convert_int_to_bytes(px))
-
-    return lst
-
-
 def convert_to_bytes_diff(map):
     lst = []
 
     lst.extend(len(map).to_bytes(2, 'little'))
 
     for pos in map:
-        rle = map[pos]
+        id = map[pos]
 
         lst.extend(pos[0].to_bytes(2, 'little'))
         lst.extend(pos[1].to_bytes(2, 'little'))
 
-        lst.extend(len(rle).to_bytes(2, 'little'))
-        for cnt, dpx in rle:
-            lst.extend(cnt.to_bytes(2, 'little'))
-            lst.extend(dpx.to_bytes(4, 'little', signed=True))
+        lst.extend(id.to_bytes(3, 'little'))
 
     return lst
 
 
-def convert_diff(size, diff, zip):
+def convert_to_bytes_blocks(dat):
+    lst = []
+
+    lst.extend(len(dat).to_bytes(3, 'little'))
+
+    for block in dat:
+        lst.extend(len(block).to_bytes(2, 'little'))
+
+        for cnt, px in block:
+            lst.extend(cnt.to_bytes(2, 'little'))
+            lst.extend(px.to_bytes(3, 'little'))
+
+    return lst
+
+
+def convert_to_bytes_colors(dat):
+    lst = []
+
+    lst.extend(len(dat).to_bytes(3, 'little'))
+
+    for dpx in dat:
+        lst.extend(dpx.to_bytes(4, 'little', signed=True))
+
+    return lst
+
+def convert_diff(size, diff, zip, diff_blocks):
     map = {}
 
     for block_y in range(size[1] // 16):
@@ -156,58 +120,99 @@ def convert_diff(size, diff, zip):
 
             if len(tmp) == 1 and tmp[0][1] == 0:
                 continue
-            map[(block_x, block_y)] = tmp
+
+            entry = tuple(tmp)
+
+            if diff_blocks.get(entry) is None:
+                diff_blocks[entry] = len(diff_blocks)
+
+            diff_block_id = diff_blocks[entry]
+            map[(block_x, block_y)] = diff_block_id
 
     if zip:
         lst_s = zip_list(convert_to_bytes_diff(map))
     else:
-        raise Exception
+        lst_s = f'{{{" ".join(f"({key[0]} {key[1]}):{map[key]}" for key in map)}}}'
 
     return lst_s
 
 
-# parse args
-parser = argparse.ArgumentParser()
-parser.add_argument('vid', help='Video filename')
-parser.add_argument('-z', '--zip', action='store_true', help='Compress video with gunzip')
-parser.add_argument('-t', '--trc', action='store_true', help='Save codec trace output')
+def convert_blocks(map, colors, zip):
+    lst = [k for k, _ in sorted(map.items(), key=lambda item: item[1])]
+    lst = [[(cnt, colors[dpx]) for cnt, dpx in block] for block in lst]
 
-args = parser.parse_args()
+    if zip:
+        lst_s = zip_list(convert_to_bytes_blocks(lst))
+    else:
+        blocks_s = [f'[{" ".join(f"({cnt} {px})" for cnt, px in block)}]' for block in lst]
+        lst_s = f'[{" ".join(s for s in blocks_s)}]'
 
-# process video
-cap = cv2.VideoCapture(args.vid)
+    return lst_s
 
-# get first frame
-(w, h, _, dat) = read_frame(cap)
-img_s = convert_img((w, h), dat, args.zip)
 
-# get next frame difference
-frames_diff = []
-last_frame = 0
+def convert_colors(map, zip):
+    lst = [k for k, _ in sorted(map.items(), key=lambda item: item[1])]
 
-while cap.isOpened():
-    res = read_frame(cap)
+    if zip:
+        lst_s = zip_list(convert_to_bytes_colors(lst))
+    else:
+        lst_s = f'[{" ".join([str(e) for e in lst])}]'
 
-    if res is None:
-        break
+    return lst_s
 
-    (_, _, _, next_dat) = res
+if __name__ == "__main__":
+    # parse args
+    parser = argparse.ArgumentParser()
+    parser.add_argument('vid', help='Video filename')
+    parser.add_argument('-z', '--zip', action='store_true', help='Compress video with gunzip')
+    parser.add_argument('-t', '--trc', action='store_true', help='Save codec trace output')
 
-    diff = [pack_pixel(next_dat[i]) - pack_pixel(dat[i]) for i in range(0, len(dat))]
-    diff_s = convert_diff((w, h), diff, args.zip)
-    dat = next_dat
+    diff_blocks = {}
+    diff_colors = {}
 
-    if args.trc:
-        save_frame(f'./content/frames/out{last_frame}.png', w, h, 3, next_dat)
-        save_frame(f'./content/frames/out{last_frame}d.png', w, h, 3, diff_to_img(diff))
+    args = parser.parse_args()
 
-    frames_diff.append(diff_s)
-    last_frame += 1
+    # process video
+    cap = cv2.VideoCapture(args.vid)
 
-frames_s = f'[{" ".join([s for s in frames_diff])}]'
+    # get first frame
+    (w, h, _, dat) = read_frame(cap)
+    img_s = img2unit.convert((w, h), dat, args.zip)
 
-# final
-vid_s = f'{{img:{img_s} fms:{frames_s}}}'
-print(vid_s)
+    # get next frame difference
+    frames_diff = []
+    last_frame = 0
 
-cap.release()
+    while cap.isOpened():
+        res = read_frame(cap)
+
+        if res is None:
+            break
+
+        (_, _, _, next_dat) = res
+
+        diff = [img2unit.pack_pixel(next_dat[i]) - img2unit.pack_pixel(dat[i]) for i in range(0, len(dat))]
+
+        for px in diff:
+            if diff_colors.get(px) is None:
+                diff_colors[px] = len(diff_colors)
+
+        diff_s = convert_diff((w, h), diff, args.zip, diff_blocks)
+        dat = next_dat
+
+        if args.trc:
+            save_frame(f'./content/frames/out{last_frame}.png', w, h, 3, next_dat)
+            save_frame(f'./content/frames/out{last_frame}d.png', w, h, 3, diff_to_img(diff))
+
+        frames_diff.append(diff_s)
+        last_frame += 1
+
+    blocks_s = convert_blocks(diff_blocks, diff_colors, args.zip)
+    colors_s = convert_colors(diff_colors, args.zip)
+    frames_s = f'[{" ".join([s for s in frames_diff])}]'
+
+    # final
+    vid_s = f'{{img:{img_s} pal:{colors_s} blk:{blocks_s} fms:{frames_s}}}'
+    print(vid_s)
+
+    cap.release()
