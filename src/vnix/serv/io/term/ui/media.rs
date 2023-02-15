@@ -438,7 +438,7 @@ impl TermAct for Video {
             img.draw(pos, 0x00ff00, kern)?;
             kern.disp.flush_blk(pos, img.size).map_err(|e| KernErr::DispErr(e))?;
 
-            kern.time.wait(30000).map_err(|e| KernErr::TimeErr(e))?;
+            kern.time.wait(15000).map_err(|e| KernErr::TimeErr(e))?;
         }
 
         Ok(msg)
