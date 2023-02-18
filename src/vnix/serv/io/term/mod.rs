@@ -623,27 +623,25 @@ impl ServHlr for Term {
 
             self.flush(kern)?;
             return Ok(Some(kern.msg(&msg.ath, out_u)?));
-        } else {
-            let _msg = if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
-                _msg
-            } else {
-                msg.msg.clone()
-            };
-
-            let mut out_u = msg.msg.clone();
-
-            let act = Act::Say(ui::text::Say {
-                msg: _msg,
-                shrt: None,
-                nl: false,
-                mode: ui::text::SayMode::Norm
-            });
-            out_u = act.act(self, &msg, out_u, kern)?;
-
-            self.flush(kern)?;
-            return Ok(Some(kern.msg(&msg.ath, out_u)?));
         }
 
-        Ok(Some(msg))
+        let _msg = if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
+            _msg
+        } else {
+            msg.msg.clone()
+        };
+
+        let mut out_u = msg.msg.clone();
+
+        let act = Act::Say(ui::text::Say {
+            msg: _msg,
+            shrt: None,
+            nl: false,
+            mode: ui::text::SayMode::Norm
+        });
+        out_u = act.act(self, &msg, out_u, kern)?;
+
+        self.flush(kern)?;
+        return Ok(Some(kern.msg(&msg.ath, out_u)?));
     }
 }

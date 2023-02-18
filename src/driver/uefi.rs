@@ -7,9 +7,9 @@ use uefi::proto::console::pointer::Pointer;
 use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
 use uefi::proto::rng::{Rng, RngAlgorithmType};
 use uefi::prelude::{SystemTable, Boot};
-use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes};
+use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType};
 
-use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mouse};
+use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
 
 
 pub struct UefiCLI {
@@ -34,6 +34,10 @@ pub struct UefiTime {
 pub struct UefiRnd {
     st: SystemTable<Boot>,
     rnd_hlr: Handle
+}
+
+pub struct UefiMem {
+    st: SystemTable<Boot>
 }
 
 impl UefiCLI {
@@ -93,6 +97,12 @@ impl UefiRnd {
             st,
             rnd_hlr
         })
+    }
+}
+
+impl UefiMem {
+    pub fn new(st: SystemTable<Boot>) -> Result<UefiMem, DrvErr> {
+        Ok(UefiMem{st})
     }
 }
 
@@ -345,5 +355,21 @@ impl Rnd for UefiRnd {
         rng.get_rng(Some(RngAlgorithmType::ALGORITHM_RAW), buf).map_err(|_| RndErr::GetBytes)?;
 
         Ok(())
+    }
+}
+
+impl Mem for UefiMem {
+    fn free(&self, units: MemSizeUnits) -> Result<usize, MemErr> {
+        let size = self.st.boot_services().memory_map_size();
+        let mut tmp = (0..(size.map_size * size.entry_size)).map(|_| 0u8).collect::<Vec<u8>>();
+        let mem = self.st.boot_services().memory_map(&mut tmp).map_err(|_| MemErr::NotEnough)?.1.filter(|m| m.ty == MemoryType::CONVENTIONAL).collect::<Vec<_>>();
+
+        let size = mem.iter().map(|m| m.page_count * 4 * 1024).sum::<u64>() as usize;
+        match units {
+            MemSizeUnits::Bytes => Ok(size),
+            MemSizeUnits::Kilo => Ok(size / 1024),
+            MemSizeUnits::Mega => Ok(size / (1024 * 1024)),
+            MemSizeUnits::Giga => Ok(size / (1024 * 1024 * 1024))
+        }
     }
 }

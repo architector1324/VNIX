@@ -34,12 +34,18 @@ pub enum RndErr {
 }
 
 #[derive(Debug)]
+pub enum MemErr {
+    NotEnough
+}
+
+#[derive(Debug)]
 pub enum DrvErr {
     HandleFault,
     CLI(CLIErr),
     Disp(DispErr),
     Time(TimeErr),
-    Rnd(RndErr)
+    Rnd(RndErr),
+    Mem(MemErr)
 }
 
 #[derive(Debug, PartialEq)]
@@ -92,6 +98,17 @@ pub trait Disp {
     fn flush_blk(&mut self, pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr>;
 }
 
+#[derive(Debug)]
+pub enum MemSizeUnits {
+    Bytes,
+    Kilo,
+    Mega,
+    Giga
+}
+
+pub trait Mem {
+    fn free(&self, units: MemSizeUnits) -> Result<usize, MemErr>;
+}
 
 impl Display for TermKey {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

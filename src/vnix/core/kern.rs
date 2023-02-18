@@ -10,7 +10,7 @@ use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaSeq, SchemaUnit, Sch
 
 use super::user::Usr;
 
-use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd};
+use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd, Mem, MemErr};
 use crate::vnix::serv::io::term::TermBase;
 use crate::vnix::utils::RamStore;
 
@@ -48,6 +48,7 @@ pub enum KernErr {
     DispErr(DispErr),
     TimeErr(TimeErr),
     RndErr(RndErr),
+    MemErr(MemErr),
     ServErr(ServErr)
 }
 
@@ -57,6 +58,7 @@ pub struct Kern<'a> {
     pub disp: &'a mut dyn Disp,
     pub time: &'a mut dyn Time,
     pub rnd: &'a mut dyn Rnd,
+    pub mem: &'a mut dyn Mem,
 
     pub term: TermBase,
     pub ram_store: RamStore,
@@ -67,12 +69,13 @@ pub struct Kern<'a> {
 }
 
 impl<'a> Kern<'a> {
-    pub fn new(cli: &'a mut dyn CLI, disp: &'a mut dyn Disp, time: &'a mut dyn Time, rnd: &'a mut dyn Rnd) -> Self {
+    pub fn new(cli: &'a mut dyn CLI, disp: &'a mut dyn Disp, time: &'a mut dyn Time, rnd: &'a mut dyn Rnd, mem: &'a mut dyn Mem) -> Self {
         let kern = Kern {
             cli,
             disp,
             time,
             rnd,
+            mem,
             ram_store: RamStore::default(),
             term: TermBase::default(),
             users: Vec::new(),
