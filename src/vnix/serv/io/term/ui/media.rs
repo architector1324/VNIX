@@ -1,5 +1,3 @@
-use core::iter::Cycle;
-
 use alloc::vec::Vec;
 use alloc::vec;
 
@@ -41,25 +39,25 @@ pub struct Sprite {
 pub enum Tex {
     Color(u32),
     Img(Img),
-    Vid(Cycle<VideoIterLoop>)
+    Vid(VideoIterLoop)
 }
 
 #[derive(Debug, Clone)]
 struct VidFrameDiffRle16x16 {
-    rle: Vec<(usize, usize)>
+    rle: Vec<(u16, u32)>
 }
 
 #[derive(Debug, Clone)]
 struct VidFrameDiffRle16x16Iter<'a> {
     block: &'a VidFrameDiffRle16x16,
     pallete: &'a VidDiffPallete,
-    last: (usize, i32),
+    last: (u16, i32),
     idx: usize
 }
 
 #[derive(Debug, Clone)]
 struct VidFrameDiff {
-    diff: Vec<((usize, usize), usize)>
+    diff: Vec<((u16, u16), u32)>
 }
 
 #[derive(Debug, Clone)]
@@ -164,7 +162,7 @@ impl<'a> Iterator for VidFrameDiffRle16x16Iter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.last.0 == 0 {
             let (cnt, id) = self.block.rle.get(self.idx)?.clone();
-            self.last = (cnt, *self.pallete.pal.get(id)?);
+            self.last = (cnt, *self.pallete.pal.get(id as usize)?);
             self.idx += 1;
         }
 
@@ -190,14 +188,14 @@ impl Iterator for VideoIter {
         self.idx += 1;
 
         for ((block_x, block_y), diff) in &diff.diff {
-            let mut it = self.vid.blocks.get(*diff)?.into_iter(&self.vid.pallete);
+            let mut it = self.vid.blocks.get(*diff as usize)?.into_iter(&self.vid.pallete);
             let size = self.img.size.clone();
             let img = self.img.get_pixels()?;
 
             for y in 0..16 {
                 for x in 0..16 {
                     if let Some(diff) = it.next() {
-                        let idx = (x + *block_x * 16) + (y + *block_y * 16) * size.0;
+                        let idx = (x + (*block_x as usize) * 16) + (y + (*block_y as usize) * 16) * size.0;
                         if let Some(px) = img.get_mut(idx) {
                             *px = (*px as i64 + diff as i64) as u32;
                         }
@@ -340,14 +338,16 @@ impl FromUnit for Sprite {
 impl ParseBytes for VidFrameDiff {
     fn parse_bytes<'a, I>(mut it: I) -> Option<(Self, I)> where I: Iterator<Item = &'a u8> {
         let len = u16::from_le_bytes([*it.next()?, *it.next()?]);
+        let mut diff = Vec::with_capacity(len as usize);
 
-        let diff = (0..len).map(|_| {
+        for _ in 0..len {
             let x = u16::from_le_bytes([*it.next()?, *it.next()?]);
             let y = u16::from_le_bytes([*it.next()?, *it.next()?]);
             let id = u32::from_le_bytes([*it.next()?, *it.next()?, *it.next()?, 0]);
 
-            Some(((x as usize, y as usize), id as usize))
-        }).collect::<Option<Vec<_>>>()?;
+            diff.push(((x, y), id));
+        }
+        diff.shrink_to_fit();
 
         Some((VidFrameDiff{diff}, it))
     }
@@ -356,13 +356,15 @@ impl ParseBytes for VidFrameDiff {
 impl ParseBytes for VidFrameDiffRle16x16 {
     fn parse_bytes<'a, I>(mut it: I) -> Option<(Self, I)> where I: Iterator<Item = &'a u8> {
         let len = u16::from_le_bytes([*it.next()?, *it.next()?]);
+        let mut rle = Vec::with_capacity(len as usize);
 
-        let rle = (0..len).map(|_| {
+        for _ in 0..len {
             let cnt = u16::from_le_bytes([*it.next()?, *it.next()?]);
             let id = u32::from_le_bytes([*it.next()?, *it.next()?,*it.next()?, 0]);
 
-            Some((cnt as usize, id as usize))
-        }).collect::<Option<Vec<_>>>()?;
+            rle.push((cnt, id));
+        }
+        rle.shrink_to_fit();
 
         Some((VidFrameDiffRle16x16{rle}, it))
     }
@@ -371,9 +373,13 @@ impl ParseBytes for VidFrameDiffRle16x16 {
 impl ParseBytes for VidDiffPallete {
     fn parse_bytes<'a, I>(mut it: I) -> Option<(Self, I)> where I: Iterator<Item = &'a u8> {
         let len = u32::from_le_bytes([*it.next()?, *it.next()?, *it.next()?, 0]);
-        let pal = (0..len).map(|_| Some(
-            i32::from_le_bytes([*it.next()?, *it.next()?, *it.next()?, *it.next()?]
-        ))).collect::<Option<Vec<_>>>()?;
+        let mut pal = Vec::with_capacity(len as usize);
+
+        for _ in 0..len {
+            let dpx = i32::from_le_bytes([*it.next()?, *it.next()?, *it.next()?, *it.next()?]);
+            pal.push(dpx);
+        }
+        pal.shrink_to_fit();
 
         Some((VidDiffPallete{pal}, it))
     }
@@ -435,19 +441,18 @@ impl FromUnit for Video {
                 },
                 Or::Second(seq) =>
                     seq.into_iter().map(|v| {
-                        let diff = v.into_iter().map(|((x, y), id)| ((x as usize, y as usize), id as usize)).collect();
+                        let diff = v.into_iter().map(|((x, y), id)| ((x as u16, y as u16), id as u32)).collect();
                         VidFrameDiff{diff}
                     }).collect()
             };
 
             let blocks = match blk {
                 Or::First(s) => {
-
                     let blk_b = utils::decompress_bytes(s.as_str()).ok()?;
                     let mut it = blk_b.iter();
 
                     let len = u32::from_le_bytes([*it.next()?, *it.next()?, *it.next()?, 0]);
-                    
+
                     let mut out = Vec::with_capacity(len as usize);
 
                     for _ in 0..len {
@@ -456,11 +461,12 @@ impl FromUnit for Video {
 
                         it = tmp;
                     }
+                    out.shrink_to_fit();
                     out
                 },
                 Or::Second(seq) =>
                     seq.into_iter().map(|v| {
-                        let rle = v.into_iter().map(|(cnt, id)| (cnt as usize, id as usize)).collect();
+                        let rle = v.into_iter().map(|(cnt, id)| (cnt as u16, id as u32)).collect();
                         VidFrameDiffRle16x16{rle}
                     }).collect()
             };
@@ -503,7 +509,7 @@ impl FromUnit for Tex {
                     }
 
                     if let Some(vid) = Video::from_unit(glob, &u) {
-                        return Some(Tex::Vid(VideoIterLoop(vid.into_iter()).cycle()));
+                        return Some(Tex::Vid(VideoIterLoop(vid.into_iter())));
                     }
 
                     None
@@ -547,7 +553,7 @@ impl TermAct for Video {
             (res.1 - self.img.size.1) as i32 / 2
         );
 
-        // render frames  
+        // render frames
         let mut it = self.into_iter();
 
         while let Some(mut img) = it.next() {

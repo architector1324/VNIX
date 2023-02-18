@@ -604,7 +604,7 @@ impl Unit {
         ];
 
         let len = u32::from_le_bytes(bytes);
-        let mut tmp = Vec::new();
+        let mut tmp = Vec::with_capacity(len as usize);
 
         for _ in 0..len {
             let (u, next) = Unit::parse_bytes(it)?;

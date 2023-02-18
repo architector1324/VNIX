@@ -3,7 +3,6 @@ pub mod serv;
 pub mod utils;
 
 use alloc::string::String;
-use alloc::vec;
 
 use crate::driver::CLIErr;
 use crate::vnix::core::unit::DisplayShort;
@@ -16,7 +15,7 @@ use self::core::serv::{Serv, ServKind};
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
-    let services = vec![
+    let services = [
         ("io.term", ServKind::IOTerm),
         ("io.store", ServKind::IOStore),
         ("etc.chrono", ServKind::EtcChrono),
