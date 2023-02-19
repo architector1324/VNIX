@@ -4,7 +4,6 @@
 #![feature(iter_array_chunks)]
 #![feature(array_chunks)]
 #![feature(generators, generator_trait)]
-#![feature(return_position_impl_trait_in_trait)]
 
 extern crate alloc;
 

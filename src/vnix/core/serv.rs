@@ -1,5 +1,6 @@
 use core::ops::Generator;
 
+use alloc::boxed::Box;
 use alloc::string::String;
 
 use super::msg::Msg;
@@ -30,7 +31,8 @@ pub enum ServKind {
     // MathInt,
     // SysTask,
     // SysUsr,
-    TestDumb
+    TestDumb,
+    TestDumbLoop,
 }
 
 pub enum ServInst {
@@ -42,7 +44,8 @@ pub enum ServInst {
     // MathInt(math::Int),
     // SysTask(sys::task::Task),
     // SysUsr(sys::usr::User),
-    TestDumb(test::Dumb)
+    TestDumb(test::Dumb),
+    TestDumbLoop(test::DumbLoop)
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +53,14 @@ pub struct Serv {
     pub name: String,
     pub kind: ServKind
 }
+
+pub struct ServHlrAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>);
+
+pub trait ServHlr: FromUnit {
+    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &Mutex<Kern>) -> Result<Msg, KernErr>;
+    fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
+}
+
 
 impl Serv {
     pub fn new(name: &str, kind: ServKind) -> Self {
@@ -69,7 +80,8 @@ impl Serv {
             // ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
             // ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
             // ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
-            ServKind::TestDumb => Some(ServInst::TestDumb(test::Dumb::from_unit_loc(u)?))
+            ServKind::TestDumb => Some(ServInst::TestDumb(test::Dumb::from_unit_loc(u)?)),
+            ServKind::TestDumbLoop => Some(ServInst::TestDumbLoop(test::DumbLoop::from_unit_loc(u)?))
         }
     }
 }
@@ -91,11 +103,12 @@ impl ServHlr for ServInst {
         //     ServInst::MathInt(inst) => inst.help(ath, topic, kern),
         //     ServInst::SysTask(inst) => inst.help(ath, topic, kern),
         //     ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
-            ServInst::TestDumb(inst) => inst.help(ath, topic, kern)
+            ServInst::TestDumb(inst) => inst.help(ath, topic, kern),
+            ServInst::TestDumbLoop(inst) => inst.help(ath, topic, kern),
         }
     }
 
-    fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a {
+    fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         match self {
             // ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
             // ServInst::IODB(inst) => inst.handle(msg, serv, kern),
@@ -105,12 +118,8 @@ impl ServHlr for ServInst {
             // ServInst::MathInt(inst) => inst.handle(msg, serv, kern),
             // ServInst::SysTask(inst) => inst.handle(msg, serv, kern),
             // ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
-            ServInst::TestDumb(inst) => inst.handle(msg, serv, kern)
+            ServInst::TestDumb(inst) => inst.handle(msg, serv, kern),
+            ServInst::TestDumbLoop(inst) => inst.handle(msg, serv, kern)
         }
     }
-}
-
-pub trait ServHlr: FromUnit {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &Mutex<Kern>) -> Result<Msg, KernErr>;
-    fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a;
 }

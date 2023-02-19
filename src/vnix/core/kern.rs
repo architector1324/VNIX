@@ -75,6 +75,7 @@ pub struct Kern {
     services: Vec<Serv>
 }
 
+
 impl KernDrv {
     pub fn new(cli: Box<dyn CLI>, disp: Box<dyn Disp>, time: Box<dyn Time>, rnd: Box<dyn Rnd>, mem: Box<dyn Mem>) -> Self {
         KernDrv {
@@ -220,7 +221,7 @@ impl Kern {
         self.msg(ath, u)
     }
 
-    pub fn send_block<'a>(mtx: &'a Mutex<Self>, serv: &'a str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
+    pub fn send_block<'a>(mtx: &'a Mutex<Self>, serv: &'a str, msg: Msg) -> Result<Option<Msg>, KernErr> {
         let mut gen = Kern::send(mtx, serv, msg);
 
         loop {
@@ -265,7 +266,7 @@ impl Kern {
             }
 
             // send
-            let mut res = inst.handle(msg, serv, mtx);
+            let mut res = Box::into_pin(inst.handle(msg, serv, mtx).0);
 
             loop {
                 match Pin::new(&mut res).resume(()) {

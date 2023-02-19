@@ -32,7 +32,8 @@ pub fn vnix_entry(kern: Kern) -> Result<(), KernErr> {
         // ("math.int", ServKind::MathInt),
         // ("sys.task", ServKind::SysTask),
         // ("sys.usr", ServKind::SysUsr),
-        ("test.dumb", ServKind::TestDumb)
+        ("test.dumb", ServKind::TestDumb),
+        ("test.dumb.loop", ServKind::TestDumbLoop)
     ];
 
     for (name, kind) in services {
@@ -56,7 +57,7 @@ pub fn vnix_entry(kern: Kern) -> Result<(), KernErr> {
     });
 
     let mut queue = msg.map(|msg| {
-        Kern::send(&kern_mtx, "test.dumb", msg)
+        Kern::send(&kern_mtx, "test.dumb.loop", msg)
     });
 
     loop {
@@ -66,8 +67,6 @@ pub fn vnix_entry(kern: Kern) -> Result<(), KernErr> {
             }
         }
     }
-
-    Ok(())
 
     // // login task
     // let mut ath: String = "super".into();
