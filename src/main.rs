@@ -24,6 +24,7 @@ use uefi::proto::media::file::FileAttribute;
 use uefi::proto::media::file::FileMode;
 pub use uefi_services::println;
 
+use vnix::core::kern::KernDrv;
 use vnix::vnix_entry;
 use vnix::core::kern::Kern;
 
@@ -98,8 +99,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
         let mem = mem.unwrap();
 
-        // load kernel
-        let mut kern = Kern::new(
+        let driver = KernDrv::new(
             Box::new(cli),
             disp.map(|p| Box::new(p) as Box<dyn Disp>).unwrap_or(Box::new(disp_stub) as Box<dyn Disp>),
             Box::new(time),
@@ -107,8 +107,11 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
             Box::new(mem)
         );
 
+        // load kernel
+        let mut kern = Kern::new(driver);
+
         // load store
-        writeln!(kern.cli, "INFO vnix: load `super` storage").unwrap();
+        writeln!(kern.drv.cli, "INFO vnix: load `super` storage").unwrap();
 
         if let Some(store) = load_store(image, st.unsafe_clone()) {
             kern.ram_store.data = store;
@@ -118,8 +121,8 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         }
 
         // run
-        writeln!(kern.cli, "INFO vnix: kernel running on `uefi` platform").unwrap();
-        writeln!(kern.cli, "INFO vnix:kern: {}mb. free memory", kern.mem.free(MemSizeUnits::Mega).unwrap()).unwrap();
+        writeln!(kern.drv.cli, "INFO vnix: kernel running on `uefi` platform").unwrap();
+        writeln!(kern.drv.cli, "INFO vnix:kern: {}mb. free memory", kern.drv.mem.free(MemSizeUnits::Mega).unwrap()).unwrap();
 
         if let Err(err) = vnix_entry(kern) {
             println!("ERR vnix: {:?}", err);

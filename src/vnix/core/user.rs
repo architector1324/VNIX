@@ -32,7 +32,7 @@ impl Usr {
     pub fn new(name: &str, kern: &mut Kern) -> Result<(Self, String), KernErr> {
         // gen private key
         let mut priv_key_b: [u8; 32] = [0; 32];
-        kern.rnd.get_bytes(&mut priv_key_b).map_err(|e| KernErr::RndErr(e))?;
+        kern.drv.rnd.get_bytes(&mut priv_key_b).map_err(|e| KernErr::RndErr(e))?;
 
         let p = SigningKey::from_bytes(&priv_key_b).map_err(|_| KernErr::CreatePrivKeyFault)?;
 

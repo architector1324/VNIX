@@ -53,14 +53,16 @@ pub enum KernErr {
     ServErr(ServErr)
 }
 
-pub struct Kern {
-    // drivers
+pub struct KernDrv {
     pub cli: Box<dyn CLI>,
     pub disp: Box<dyn Disp>,
     pub time: Box<dyn Time>,
     pub rnd: Box<dyn Rnd>,
     pub mem: Box<dyn Mem>,
+}
 
+pub struct Kern {
+    pub drv: KernDrv,
     pub term: TermBase,
     pub ram_store: RamStore,
 
@@ -69,14 +71,22 @@ pub struct Kern {
     services: Vec<Serv>
 }
 
-impl Kern {
+impl KernDrv {
     pub fn new(cli: Box<dyn CLI>, disp: Box<dyn Disp>, time: Box<dyn Time>, rnd: Box<dyn Rnd>, mem: Box<dyn Mem>) -> Self {
-        let kern = Kern {
+        KernDrv {
             cli,
             disp,
             time,
             rnd,
-            mem,
+            mem
+        }
+    }
+}
+
+impl Kern {
+    pub fn new(drv: KernDrv) -> Self {
+        let kern = Kern {
+            drv,
             ram_store: RamStore::default(),
             term: TermBase::default(),
             users: Vec::new(),

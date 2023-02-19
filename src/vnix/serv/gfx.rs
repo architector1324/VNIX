@@ -37,7 +37,7 @@ impl FillRes {
     fn get(&self, kern: &mut Kern) -> Result<(usize, usize), KernErr> {
         match self {
             FillRes::Custom(w, h) => Ok((*w, *h)),
-            FillRes::Full => kern.disp.res().map_err(|e| KernErr::DispErr(e))
+            FillRes::Full => kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))
         }
     }
 }

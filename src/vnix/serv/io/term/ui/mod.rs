@@ -97,7 +97,7 @@ impl UIAct for UI {
                     let pos = (pos.0 + (i * size.0) as i32, pos.1);
 
                     if ui.ui_gfx_act(pos, size, mouse, term, kern)? {
-                        kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                        kern.drv.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
             },
@@ -109,7 +109,7 @@ impl UIAct for UI {
                     let pos = (pos.0, pos.1 + (i * size.1) as i32);
 
                     if ui.ui_gfx_act(pos, size, mouse, term, kern)? {
-                        kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                        kern.drv.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
                     }
                 }
             },

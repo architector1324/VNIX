@@ -115,9 +115,9 @@ impl TermAct for Win {
         match self.mode {
             Mode::Cli => {
                 let res = match term.mode {
-                    Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+                    Mode::Cli => kern.drv.cli.res().map_err(|e| KernErr::CLIErr(e))?,
                     Mode::Gfx => {
-                        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                        let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
                         (res.0 / 8, res.1 / 16)
                     }
                 };
@@ -127,27 +127,27 @@ impl TermAct for Win {
                 self.ui_act(pos, size, term, kern)?;
 
                 if let Mode::Gfx = term.mode {
-                    kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                    kern.drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                 }
             },
             Mode::Gfx => {
-                let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
                 let (pos, size) = self.floating.as_ref().map(|flt| (flt.pos, flt.size)).unwrap_or(((0, 0), res));
 
                 self.ui_gfx_act(pos, size, None, term, kern)?;
 
-                kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                kern.drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
             }
         }
 
-        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
         let mut mouse_pos = ((res.0 / 2) as i32, (res.1 / 2) as i32);
         let mut mouse_click = (false, false);
 
         if let Mode::Gfx = self.mode {
             term.res.cur.draw(mouse_pos, 0, kern)?;
-            kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
+            kern.drv.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
         }
 
         loop {
@@ -156,9 +156,9 @@ impl TermAct for Win {
                 match self.mode {
                     Mode::Cli => {
                         let res = match term.mode {
-                            Mode::Cli => kern.cli.res().map_err(|e| KernErr::CLIErr(e))?,
+                            Mode::Cli => kern.drv.cli.res().map_err(|e| KernErr::CLIErr(e))?,
                             Mode::Gfx => {
-                                let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                                let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
                                 (res.0 / 8, res.1 / 16)
                             }
                         };
@@ -168,21 +168,21 @@ impl TermAct for Win {
                         self.ui_act(pos, size, term, kern)?;
                     },
                     Mode::Gfx => {
-                        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                        let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
                         let (pos, size) = self.floating.as_ref().map(|flt| (flt.pos, flt.size)).unwrap_or(((0, 0), res));
     
                         if self.ui_gfx_act(pos, size, Some((mouse_pos, mouse_click)), term, kern)? {
                             term.res.cur.draw(mouse_pos, 0, kern)?;
-                            kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                            kern.drv.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
                         }
                     }
                 }
 
                 // mouse
-                let mouse = kern.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
+                let mouse = kern.drv.disp.mouse(false).map_err(|e| KernErr::DispErr(e))?;
                 if let Some(mouse) = mouse {
-                    kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
+                    kern.drv.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
 
                     mouse_pos.0 += mouse.dpos.0 / 4096;
                     mouse_pos.1 += mouse.dpos.1 / 4096;
@@ -190,7 +190,7 @@ impl TermAct for Win {
                     mouse_click = mouse.click;
 
                     term.res.cur.draw(mouse_pos, 0, kern)?;
-                    kern.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
+                    kern.drv.disp.flush_blk(mouse_pos, term.res.cur.size).map_err(|e| KernErr::DispErr(e))?;
                 }
             }
 
@@ -301,7 +301,7 @@ impl UIAct for Win {
             }
         }
 
-        kern.disp.blk(pos, size, 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
+        kern.drv.disp.blk(pos, size, 0, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
 
         if self.border {
             if let Some(title) = &self.title {
@@ -314,7 +314,7 @@ impl UIAct for Win {
 
         if let Some(ui) = &mut self.content {
             if ui.ui_gfx_act((pos.0 + 4, pos.1 + 16), (size.0 - 8, size.1 - 16), mouse, term, kern)? {
-                kern.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
+                kern.drv.disp.flush_blk(pos, size).map_err(|e| KernErr::DispErr(e))?;
             }
         }
 

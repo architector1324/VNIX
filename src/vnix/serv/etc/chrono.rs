@@ -47,7 +47,7 @@ impl ServHlr for Chrono {
 
     fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
         if let Some(mcs) = self.wait {
-            kern.time.wait(mcs as usize).map_err(|e| KernErr::TimeErr(e))?;
+            kern.drv.time.wait(mcs as usize).map_err(|e| KernErr::TimeErr(e))?;
         }
         Ok(Some(msg))
     }

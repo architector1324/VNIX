@@ -222,7 +222,7 @@ impl TermAct for Put {
     fn act(self, term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
         match term.mode {
             Mode::Cli => {
-                let (w, h) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                let (w, h) = kern.drv.cli.res().map_err(|e| KernErr::CLIErr(e))?;
 
                 if self.pos.0 < w as i32 && self.pos.1 < h as i32 {
                     if let Some(ch) = self.str.chars().next() {
@@ -231,7 +231,7 @@ impl TermAct for Put {
                 }
             },
             Mode::Gfx => {
-                let (w, h) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                let (w, h) = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
                 let (w, h) = (w / 8, h / 16);
 
                 if self.pos.0 < w as i32 && self.pos.1 < h as i32 {

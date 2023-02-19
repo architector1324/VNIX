@@ -114,21 +114,21 @@ impl TermAct for Act {
             Act::GetRes(which, path) => {
                 let u = match which {
                     GetRes::Cli => {
-                        let res = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                        let res = kern.drv.cli.res().map_err(|e| KernErr::CLIErr(e))?;
                         Unit::Pair(
                             Box::new(Unit::Int(res.0 as i32)),
                             Box::new(Unit::Int(res.1 as i32))
                         )
                     },
                     GetRes::Gfx => {
-                        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                        let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
                         Unit::Pair(
                             Box::new(Unit::Int(res.0 as i32)),
                             Box::new(Unit::Int(res.1 as i32))
                         )
                     },
                     GetRes::ListCli => {
-                        let lst = kern.cli.res_list().map_err(|e| KernErr::CLIErr(e))?;
+                        let lst = kern.drv.cli.res_list().map_err(|e| KernErr::CLIErr(e))?;
                         
                         Unit::Lst(
                             lst.into_iter().map(|(w, h)| {
@@ -140,7 +140,7 @@ impl TermAct for Act {
                         )
                     },
                     GetRes::ListGfx => {
-                        let lst = kern.disp.res_list().map_err(|e| KernErr::DispErr(e))?;
+                        let lst = kern.drv.disp.res_list().map_err(|e| KernErr::DispErr(e))?;
                         
                         Unit::Lst(
                             lst.into_iter().map(|(w, h)| {
@@ -159,8 +159,8 @@ impl TermAct for Act {
             },
             Act::SetRes(which, res) =>
                 match which {
-                    SetRes::Cli => kern.cli.set_res(res).map_err(|e| KernErr::CLIErr(e))?,
-                    SetRes::Gfx => kern.disp.set_res(res).map_err(|e| KernErr::DispErr(e))?
+                    SetRes::Cli => kern.drv.cli.set_res(res).map_err(|e| KernErr::CLIErr(e))?,
+                    SetRes::Gfx => kern.drv.disp.set_res(res).map_err(|e| KernErr::DispErr(e))?
                 }
             Act::Inp(inp) => return inp.act(term, orig, msg, kern),
             Act::Put(put) => return put.act(term, orig, msg, kern),
@@ -177,7 +177,7 @@ impl Term {
     fn print_glyth(&mut self, ch: char, pos: (usize, usize), src: u32, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
             Mode::Cli => {
-                kern.cli.glyth(ch, (pos.0 / 8, pos.1 / 16)).map_err(|e| KernErr::CLIErr(e))?;
+                kern.drv.cli.glyth(ch, (pos.0 / 8, pos.1 / 16)).map_err(|e| KernErr::CLIErr(e))?;
             },
             Mode::Gfx => {
                 let img = self.res.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(KernErr::CLIErr(CLIErr::Write)), |(_, img)| Ok(img))?;
@@ -190,7 +190,7 @@ impl Term {
                         tmp.push(px);
                     }
                 }
-                kern.disp.blk((pos.0 as i32, pos.1 as i32), (8, 16), src, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
+                kern.drv.disp.blk((pos.0 as i32, pos.1 as i32), (8, 16), src, tmp.as_slice()).map_err(|e| KernErr::DispErr(e))?;
             }
         }
         Ok(())
@@ -199,7 +199,7 @@ impl Term {
     fn print(&mut self, s: &str, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
             Mode::Cli => {
-                let (w, _) = kern.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                let (w, _) = kern.drv.cli.res().map_err(|e| KernErr::CLIErr(e))?;
 
                 for ch in s.chars() {
                     if ch == '\n' {
@@ -223,12 +223,12 @@ impl Term {
                         kern.term.pos.0 = 0;
                     }
 
-                    write!(kern.cli, "{}", ch).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    write!(kern.drv.cli, "{}", ch).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 }
                 Ok(())
             },
             Mode::Gfx => {
-                let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                let (w, _) = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
                 for ch in s.chars() {
                     if ch == '\n' {
@@ -260,7 +260,7 @@ impl Term {
 
     fn flush(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
         if let Mode::Gfx = self.mode {
-            kern.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+            kern.drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
         }
         Ok(())
     }
@@ -273,7 +273,7 @@ impl Term {
         self.flush(kern)?;
 
         loop {
-            if let Some(key) = kern.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
+            if let Some(key) = kern.drv.cli.get_key(true).map_err(|e| KernErr::CLIErr(e))? {
                 if let TermKey::Char(c) = key {
                     if c == '\r' || c == '\n' {
                         break;
@@ -296,9 +296,9 @@ impl Term {
 
     fn clear_line(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
-            Mode::Cli => write!(kern.cli, "\r").map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
+            Mode::Cli => write!(kern.drv.cli, "\r").map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
             Mode::Gfx => {
-                let (w, _) = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                let (w, _) = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
 
                 kern.term.pos.0 = 0;
         
@@ -314,16 +314,16 @@ impl Term {
 
     fn clear(&mut self, kern: &mut Kern) -> Result<(), KernErr> {
         match self.mode {
-            Mode::Cli => kern.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
+            Mode::Cli => kern.drv.cli.clear().map_err(|_| KernErr::CLIErr(CLIErr::Clear)),
             Mode::Gfx => {
                 kern.term.pos = (0, 0);
-                kern.disp.fill(&|_, _| 0x000000).map_err(|e| KernErr::DispErr(e))
+                kern.drv.disp.fill(&|_, _| 0x000000).map_err(|e| KernErr::DispErr(e))
             }
         }
     }
 
     fn get_key(&mut self, block: bool, kern: &mut Kern) -> Result<Option<TermKey>, KernErr> {
-        let key = kern.cli.get_key(block).map_err(|e| KernErr::CLIErr(e))?;
+        let key = kern.drv.cli.get_key(block).map_err(|e| KernErr::CLIErr(e))?;
         Ok(key)
     }
 }

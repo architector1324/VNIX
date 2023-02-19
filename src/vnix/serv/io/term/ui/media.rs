@@ -89,7 +89,7 @@ impl Img {
         let size = self.size.clone();
         let pixels = self.get_pixels().ok_or(KernErr::DecompressionFault)?;
 
-        kern.disp.blk(pos, size, src, &pixels).map_err(|e| KernErr::DispErr(e))
+        kern.drv.disp.blk(pos, size, src, &pixels).map_err(|e| KernErr::DispErr(e))
     }
 
     pub fn get_pixels(&mut self) -> Option<&mut Vec<u32>> {
@@ -521,7 +521,7 @@ impl FromUnit for Tex {
 
 impl TermAct for Img {
     fn act(mut self, _term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
-        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
         let pos = (
             (res.0 - self.size.0) as i32 / 2,
             (res.1 - self.size.1) as i32 / 2
@@ -547,7 +547,7 @@ impl TermAct for Sprite {
 
 impl TermAct for Video {
     fn act(self, _term: &mut Term, _orig: &Msg, msg: Unit, kern: &mut Kern) -> Result<Unit, KernErr> {
-        let res = kern.disp.res().map_err(|e| KernErr::DispErr(e))?;
+        let res = kern.drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
         let pos = (
             (res.0 - self.img.size.0) as i32 / 2,
             (res.1 - self.img.size.1) as i32 / 2
@@ -558,9 +558,9 @@ impl TermAct for Video {
 
         while let Some(mut img) = it.next() {
             img.draw(pos, 0x00ff00, kern)?;
-            kern.disp.flush_blk(pos, img.size).map_err(|e| KernErr::DispErr(e))?;
+            kern.drv.disp.flush_blk(pos, img.size).map_err(|e| KernErr::DispErr(e))?;
 
-            kern.time.wait(15000).map_err(|e| KernErr::TimeErr(e))?;
+            kern.drv.time.wait(15000).map_err(|e| KernErr::TimeErr(e))?;
         }
 
         Ok(msg)
