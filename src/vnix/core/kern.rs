@@ -1,4 +1,6 @@
 use core::fmt::Display;
+use core::ops::{Generator, GeneratorState};
+use core::pin::Pin;
 
 use alloc::boxed::Box;
 use alloc::vec;
@@ -12,8 +14,10 @@ use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaSeq, SchemaUnit, Sch
 use super::user::Usr;
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd, Mem, MemErr};
-use crate::vnix::serv::io::term::TermBase;
+// use crate::vnix::serv::io::term::TermBase;
 use crate::vnix::utils::RamStore;
+
+use spin::Mutex;
 
 
 #[derive(Debug, PartialEq, Clone)]
@@ -63,7 +67,7 @@ pub struct KernDrv {
 
 pub struct Kern {
     pub drv: KernDrv,
-    pub term: TermBase,
+    // pub term: TermBase,
     pub ram_store: RamStore,
 
     // vnix
@@ -88,7 +92,7 @@ impl Kern {
         let kern = Kern {
             drv,
             ram_store: RamStore::default(),
-            term: TermBase::default(),
+            // term: TermBase::default(),
             users: Vec::new(),
             services: Vec::new()
         };
@@ -158,53 +162,53 @@ impl Kern {
         Ok(Some(msg))
     }
 
-    pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        let schm = SchemaMapEntry(
-            Unit::Str("task".into()),
-            SchemaOr(
-                SchemaStr,
-                SchemaSeq(SchemaUnit)
-            )
-        );
+    // pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
+    //     let schm = SchemaMapEntry(
+    //         Unit::Str("task".into()),
+    //         SchemaOr(
+    //             SchemaStr,
+    //             SchemaSeq(SchemaUnit)
+    //         )
+    //     );
 
-        if let Some(or) = schm.find_loc(&msg.msg) {
-            match or {
-                Or::First(serv) => return self.send(serv.as_str(), msg),
-                Or::Second(lst) => {
-                    let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
+    //     if let Some(or) = schm.find_loc(&msg.msg) {
+    //         match or {
+    //             Or::First(serv) => return self.send(serv.as_str(), msg),
+    //             Or::Second(lst) => {
+    //                 let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
             
-                    if net.is_empty() {
-                        return Ok(None);
-                    }
+    //                 if net.is_empty() {
+    //                     return Ok(None);
+    //                 }
             
-                    let mut msg = msg;
+    //                 let mut msg = msg;
             
-                    loop {
-                        for (i, serv) in net.iter().enumerate() {
-                            if net.len() > 1 && i == net.len() - 1 && net.first().unwrap() == net.last().unwrap() {
-                                break;
-                            }
+    //                 loop {
+    //                     for (i, serv) in net.iter().enumerate() {
+    //                         if net.len() > 1 && i == net.len() - 1 && net.first().unwrap() == net.last().unwrap() {
+    //                             break;
+    //                         }
             
-                            let u = msg.msg.clone();
+    //                         let u = msg.msg.clone();
             
-                            if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
-                                let usr = self.get_usr(&_msg.ath)?;
-                                msg = self.msg(&usr.name, u.merge(_msg.msg))?;
-                            } else {
-                                return Ok(None);
-                            }
+    //                         if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
+    //                             let usr = self.get_usr(&_msg.ath)?;
+    //                             msg = self.msg(&usr.name, u.merge(_msg.msg))?;
+    //                         } else {
+    //                             return Ok(None);
+    //                         }
             
-                            if i == net.len() - 1 && net.first().unwrap() != net.last().unwrap() {
-                                return Ok(Some(msg));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    //                         if i == net.len() - 1 && net.first().unwrap() != net.last().unwrap() {
+    //                             return Ok(Some(msg));
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Ok(None)
-    }
+    //     Ok(None)
+    // }
 
     fn help_serv(&self, ath: &str) -> Result<Msg, KernErr> {
         let serv = self.services.iter().cloned().map(|serv| Unit::Str(serv.name)).collect();
@@ -216,40 +220,60 @@ impl Kern {
         self.msg(ath, u)
     }
 
-    pub fn send<'b>(&'b mut self, serv: &str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
-        // verify msg 
-        let usr = self.get_usr(&msg.ath)?;
-        usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
+    pub fn send_block<'a>(mtx: &'a Mutex<Self>, serv: &'a str, mut msg: Msg) -> Result<Option<Msg>, KernErr> {
+        let mut gen = Kern::send(mtx, serv, msg);
 
-        // prepare msg
-        if let Some(_msg) = self.msg_hlr(msg, usr)? {
-            msg = _msg;
-        } else {
-            return Ok(None);
-        }
-
-        let mut serv = self.get_serv(serv)?;
-        let mut inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
-
-        // check help
-        let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
-            Some(topic)
-        } else if let Some(topic) = msg.msg.as_str() {
-            Some(topic)
-        } else {
-            None
-        };
-
-        if let Some(topic) = topic {
-            match topic.as_str() {
-                "info" => return inst.help(&msg.ath, ServHelpTopic::Info, self).map(|m| Some(m)),
-                "serv" => return self.help_serv(&msg.ath).map(|m| Some(m)),
-                _ => ()
+        loop {
+            match Pin::new(&mut gen).resume(()) {
+                GeneratorState::Complete(res) => return res,
+                GeneratorState::Yielded(_) => ()
             }
         }
+    }
 
-        // send
-        inst.handle(msg, &mut serv, self)
+    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: &'a str, mut msg: Msg) -> impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a {
+        || {
+            // verify msg
+            let usr = mtx.lock().get_usr(&msg.ath)?;
+            usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
+    
+            // prepare msg
+            if let Some(_msg) = mtx.lock().msg_hlr(msg, usr)? {
+                msg = _msg;
+            } else {
+                return Ok(None);
+            }
+    
+            let serv = mtx.lock().get_serv(serv)?;
+            let inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
+    
+            // check help
+            let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
+                Some(topic)
+            } else if let Some(topic) = msg.msg.as_str() {
+                Some(topic)
+            } else {
+                None
+            };
+    
+            if let Some(topic) = topic {
+                match topic.as_str() {
+                    "info" => return inst.help(&msg.ath, ServHelpTopic::Info, mtx).map(|m| Some(m)),
+                    "serv" => return mtx.lock().help_serv(&msg.ath).map(|m| Some(m)),
+                    _ => ()
+                }
+            }
+
+            // send
+            let mut res = inst.handle(msg, serv, mtx);
+
+            loop {
+                match Pin::new(&mut res).resume(()) {
+                    GeneratorState::Complete(res) => return res,
+                    GeneratorState::Yielded(..) => yield
+                }
+            }
+        }
     }
 }
 
