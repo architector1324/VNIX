@@ -3,6 +3,7 @@
 #![feature(abi_efiapi)]
 #![feature(iter_array_chunks)]
 #![feature(array_chunks)]
+#![feature(generators, generator_trait)]
 
 extern crate alloc;
 
@@ -61,33 +62,33 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
             println!("ERR loader:cli: not available");
         }
     
-        let mut cli = cli.unwrap();
+        let cli = cli.unwrap();
     
         // disp
-        let mut disp = driver::uefi::UefiDisp::new(st.unsafe_clone());
+        let disp = driver::uefi::UefiDisp::new(st.unsafe_clone());
         if disp.is_err() {
             println!("ERR loader:disp: not available");
             println!("WARN loader:disp: using stub driver");
         }
 
-        let mut disp_stub = driver::stub::StubDisp;
-    
+        let disp_stub = driver::stub::StubDisp;
+
         // time
         let time = driver::uefi::UefiTime::new(st.unsafe_clone());
         if time.is_err() {
             println!("ERR loader:time: not available");
         }
     
-        let mut time = time.unwrap();
+        let time = time.unwrap();
 
         // rnd
-        let mut rnd = driver::uefi::UefiRnd::new(st.unsafe_clone());
+        let rnd = driver::uefi::UefiRnd::new(st.unsafe_clone());
         if rnd.is_err() {
             println!("ERR loader: rnd not available");
             println!("WARN loader:rnd: using pseudo random generator");
         }
 
-        let mut prng = driver::stub::PRng;
+        let prng = driver::stub::PRng;
 
         // mem
         let mem = driver::uefi::UefiMem::new(st.unsafe_clone());
@@ -95,15 +96,15 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
             println!("ERR loader:mem: not available");
         }
 
-        let mut mem = mem.unwrap();
+        let mem = mem.unwrap();
 
         // load kernel
         let mut kern = Kern::new(
-            &mut cli,
-            disp.as_mut().map(|p| p as &mut dyn Disp).unwrap_or(&mut disp_stub),
-            &mut time,
-            rnd.as_mut().map(|p| p as &mut dyn Rnd).unwrap_or(&mut prng),
-            &mut mem
+            Box::new(cli),
+            disp.map(|p| Box::new(p) as Box<dyn Disp>).unwrap_or(Box::new(disp_stub) as Box<dyn Disp>),
+            Box::new(time),
+            rnd.map(|p| Box::new(p) as Box<dyn Rnd>).unwrap_or(Box::new(prng) as Box<dyn Rnd>),
+            Box::new(mem)
         );
 
         // load store
@@ -121,7 +122,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         writeln!(kern.cli, "INFO vnix:kern: {}mb. free memory", kern.mem.free(MemSizeUnits::Mega).unwrap()).unwrap();
 
         if let Err(err) = vnix_entry(kern) {
-            writeln!(cli, "ERR vnix: {:?}", err).unwrap();
+            println!("ERR vnix: {:?}", err);
         }
     }
 

@@ -17,3 +17,4 @@ lazy_static = {version = "1.4.0", default-features = false, features = ["spin_no
 compression = {version = "0.1.5", default-features = false, features = ["gzip"]}
 base64ct = {version = "1.5.3", default-features = false, features = ["alloc"]}
 libm = "0.2.6"
+spin = "0.9.5"

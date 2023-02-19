@@ -1,5 +1,6 @@
 use core::fmt::Display;
 
+use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -52,13 +53,13 @@ pub enum KernErr {
     ServErr(ServErr)
 }
 
-pub struct Kern<'a> {
+pub struct Kern {
     // drivers
-    pub cli: &'a mut dyn CLI,
-    pub disp: &'a mut dyn Disp,
-    pub time: &'a mut dyn Time,
-    pub rnd: &'a mut dyn Rnd,
-    pub mem: &'a mut dyn Mem,
+    pub cli: Box<dyn CLI>,
+    pub disp: Box<dyn Disp>,
+    pub time: Box<dyn Time>,
+    pub rnd: Box<dyn Rnd>,
+    pub mem: Box<dyn Mem>,
 
     pub term: TermBase,
     pub ram_store: RamStore,
@@ -68,8 +69,8 @@ pub struct Kern<'a> {
     services: Vec<Serv>
 }
 
-impl<'a> Kern<'a> {
-    pub fn new(cli: &'a mut dyn CLI, disp: &'a mut dyn Disp, time: &'a mut dyn Time, rnd: &'a mut dyn Rnd, mem: &'a mut dyn Mem) -> Self {
+impl Kern {
+    pub fn new(cli: Box<dyn CLI>, disp: Box<dyn Disp>, time: Box<dyn Time>, rnd: Box<dyn Rnd>, mem: Box<dyn Mem>) -> Self {
         let kern = Kern {
             cli,
             disp,

@@ -2,6 +2,9 @@ pub mod core;
 pub mod serv;
 pub mod utils;
 
+use ::core::ops::Generator;
+use ::core::pin::Pin;
+
 use alloc::string::String;
 
 use crate::driver::CLIErr;
@@ -12,94 +15,113 @@ use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServKind};
 
+use spin::Mutex;
 
-pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
-    // register service
-    let services = [
-        ("io.term", ServKind::IOTerm),
-        ("io.store", ServKind::IOStore),
-        ("etc.chrono", ServKind::EtcChrono),
-        ("etc.fsm", ServKind::EtcFSM),
-        ("gfx.2d", ServKind::GFX2D),
-        ("math.int", ServKind::MathInt),
-        ("sys.task", ServKind::SysTask),
-        ("sys.usr", ServKind::SysUsr),
-    ];
 
-    for (name, kind) in services {
-        let serv = Serv::new(name, kind);
-        kern.reg_serv(serv)?;
+fn test<'a>(s: &'a str, kern: &'a Mutex<Kern>) -> impl Generator<Yield = (), Return = Result<(), KernErr>> + 'a {
+    move || loop {
+        writeln!(kern.lock().cli, "test: {s}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        yield;
+    }
+}
 
-        writeln!(kern.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+pub fn vnix_entry(kern: Kern) -> Result<(), KernErr> {
+    let mtx = Mutex::new(kern);
+
+    let mut a = test("a", &mtx);
+    let mut b = test("b", &mtx);
+
+    loop {
+        Pin::new(&mut a).resume(());
+        Pin::new(&mut b).resume(());
     }
 
-    // register user
-    let _super = Usr::new("super", &mut kern)?.0;
-    kern.reg_usr(_super.clone())?;
+    // // register service
+    // let services = [
+    //     ("io.term", ServKind::IOTerm),
+    //     ("io.store", ServKind::IOStore),
+    //     ("etc.chrono", ServKind::EtcChrono),
+    //     ("etc.fsm", ServKind::EtcFSM),
+    //     ("gfx.2d", ServKind::GFX2D),
+    //     ("math.int", ServKind::MathInt),
+    //     ("sys.task", ServKind::SysTask),
+    //     ("sys.usr", ServKind::SysUsr),
+    // ];
 
-    writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    // for (name, kind) in services {
+    //     let serv = Serv::new(name, kind);
+    //     kern.reg_serv(serv)?;
 
-    // // test
-    // let s = "{
-    //     term.gfx:[
-    //         (set.res.gfx (1920 1080))
-    //         (say 'loading video..')
-    //         nl
-    //         (load @vid.wall.lines)@io.store
-    //         (say 'press any key..')
-    //         key
-    //     ]
-    // }";
-    // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    // let msg = kern.msg("super", u)?;
-
-    // if let Some(msg) = kern.send("io.term", msg)? {
-    //     writeln!(kern.cli, "{}", DisplayShort(&msg.msg, 16)).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    //     writeln!(kern.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
     // }
 
-    // Ok(())
+    // // register user
+    // let _super = Usr::new("super", &mut kern)?.0;
+    // kern.reg_usr(_super.clone())?;
 
-    // login task
-    let mut ath: String = "super".into();
+    // writeln!(kern.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-    'login: loop {
-        let path = Unit::parse("@task.zen.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // // // test
+    // // let s = "{
+    // //     term.gfx:[
+    // //         (set.res.gfx (1920 1080))
+    // //         (say 'loading video..')
+    // //         nl
+    // //         (load @vid.wall.lines)@io.store
+    // //         (say 'press any key..')
+    // //         key
+    // //     ]
+    // // }";
+    // // let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-        let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-        let msg = kern.msg("super", u)?;
+    // // let msg = kern.msg("super", u)?;
+
+    // // if let Some(msg) = kern.send("io.term", msg)? {
+    // //     writeln!(kern.cli, "{}", DisplayShort(&msg.msg, 16)).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    // // }
+
+    // // Ok(())
+
+    // // login task
+    // let mut ath: String = "super".into();
+
+    // 'login: loop {
+    //     let path = Unit::parse("@task.zen.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+
+    //     let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    //     let msg = kern.msg("super", u)?;
     
-        let go = kern.task(msg);
+    //     let go = kern.task(msg);
 
-        match go {
-            Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
-            Ok(msg) => {
-                if let Some(msg) = msg {
-                    ath = msg.ath;
-                    break 'login;
-                }
-            }
-        }
-    }
+    //     match go {
+    //         Err(e) => writeln!(kern.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+    //         Ok(msg) => {
+    //             if let Some(msg) = msg {
+    //                 ath = msg.ath;
+    //                 break 'login;
+    //             }
+    //         }
+    //     }
+    // }
 
-    // zen
-    let path = Unit::parse("@task.zen.desk.load".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // // zen
+    // let path = Unit::parse("@task.zen.desk.load".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    let msg = kern.msg(&ath, u)?;
+    // let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    // let msg = kern.msg(&ath, u)?;
 
-    kern.task(msg)?;
+    // kern.task(msg)?;
 
-    // λ
-    loop {
-        let path = Unit::parse("@task.lambda.gfx.load".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // // λ
+    // loop {
+    //     let path = Unit::parse("@task.lambda.gfx.load".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-        let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-        let msg = kern.msg(&ath, u)?;
+    //     let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    //     let msg = kern.msg(&ath, u)?;
 
-        // run
-        if let Err(e) = kern.task(msg) {
-            writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-        }
-    }
+    //     // run
+    //     if let Err(e) = kern.task(msg) {
+    //         writeln!(kern.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    //     }
+    // }
 }
