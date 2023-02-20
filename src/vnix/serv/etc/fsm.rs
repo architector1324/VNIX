@@ -1,11 +1,14 @@
+use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
+use spin::Mutex;
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaMap, SchemaUnit, SchemaMapSeq, SchemaOr, SchemaPair, Schema, Or};
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
-use crate::vnix::core::kern::{KernErr, Kern};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::kern::Kern;
 
 
 #[derive(Debug, Clone)]
@@ -126,70 +129,80 @@ impl FromUnit for FSM {
 }
 
 impl ServHlr for FSM {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
-        let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Finite state machine service\nExample: {fsm:{a:(b hello) b:a} state:a}@etc.fsm # switch state `a -> b` and get `hello` msg".into())
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            let u = match topic {
+                ServHelpTopic::Info => Unit::Str("Finite state machine service\nExample: {fsm:{a:(b hello) b:a} state:a}@etc.fsm # switch state `a -> b` and get `hello` msg".into())
+            };
+    
+            let m = Unit::Map(vec![(
+                Unit::Str("msg".into()),
+                u
+            )]);
+    
+            let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
+            yield;
+
+            out
         };
-
-        let m = Unit::Map(vec![(
-            Unit::Str("msg".into()),
-            u
-        )]);
-
-        return Ok(kern.msg(ath, m)?)
+        ServHlrAsync(Box::new(hlr))
     }
 
-    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        // writeln!(kern.drv.cli, "DEBG vnix:fsm: {:?}", self).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-        let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
-            match &t.table {
-                EventTableEntry::State(state) => {
-                    EventOut {
-                        state: state.clone(),
-                        msg: None
-                    }
-                },
-                EventTableEntry::Out(out) => {
-                    EventOut {
-                        state: out.state.clone(),
-                        msg: out.msg.clone()
-                    }
-                },
-                EventTableEntry::Event(ev) => {
-                    let msg = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit).find_loc(&msg.msg);
-
-                    if let Some(msg) = msg {
-                        if let Some(out) = ev.iter().find(|e| e.ev == msg).map(|e| &e.out) {
-                            return EventOut {
-                                state: out.state.clone(),
-                                msg: out.msg.clone()
+    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            // writeln!(kern.lock().drv.cli, "DEBG vnix:fsm: {:?}", self).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    
+            let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
+                match &t.table {
+                    EventTableEntry::State(state) => {
+                        EventOut {
+                            state: state.clone(),
+                            msg: None
+                        }
+                    },
+                    EventTableEntry::Out(out) => {
+                        EventOut {
+                            state: out.state.clone(),
+                            msg: out.msg.clone()
+                        }
+                    },
+                    EventTableEntry::Event(ev) => {
+                        let msg = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit).find_loc(&msg.msg);
+    
+                        if let Some(msg) = msg {
+                            if let Some(out) = ev.iter().find(|e| e.ev == msg).map(|e| &e.out) {
+                                return EventOut {
+                                    state: out.state.clone(),
+                                    msg: out.msg.clone()
+                                }
                             }
                         }
-                    }
-
-                    EventOut {
-                        state: self.state.clone(),
-                        msg: None
+    
+                        EventOut {
+                            state: self.state.clone(),
+                            msg: None
+                        }
                     }
                 }
+            });
+            yield;
+
+            if let Some(out) = out {
+                let mut m = vec![
+                    (Unit::Str("state".into()), out.state),
+                ];
+    
+                if let Some(msg) = out.msg {
+                    m.push(
+                        (Unit::Str("msg".into()), msg),
+                    );
+                }
+
+                return Ok(Some(kern.lock().msg(&msg.ath, Unit::Map(m))?))
             }
-        });
-
-        if let Some(out) = out {
-            let mut m = vec![
-                (Unit::Str("state".into()), out.state),
-            ];
-
-            if let Some(msg) = out.msg {
-                m.push(
-                    (Unit::Str("msg".into()), msg),
-                );
-            }
-
-            return Ok(Some(kern.msg(&msg.ath, Unit::Map(m))?))
-        }
-
-        Ok(None)
+    
+            Ok(None)
+        };
+        ServHlrAsync(Box::new(hlr))
     }
 }

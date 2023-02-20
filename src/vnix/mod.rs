@@ -2,6 +2,7 @@ pub mod core;
 pub mod serv;
 pub mod utils;
 
+use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::driver::CLIErr;
@@ -19,7 +20,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("io.term", ServKind::IOTerm),
         // ("io.store", ServKind::IOStore),
         ("etc.chrono", ServKind::EtcChrono),
-        // ("etc.fsm", ServKind::EtcFSM),
+        ("etc.fsm", ServKind::EtcFSM),
         // ("gfx.2d", ServKind::GFX2D),
         // ("math.int", ServKind::MathInt),
         // ("sys.task", ServKind::SysTask),
@@ -42,12 +43,24 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let task = TaskLoop::Queue(vec![
-        (Unit::Str("test usr".into()), "sys.usr".into()),
-        (Unit::Str("a".into()), "test.dumb".into()),
-        (Unit::Int(2000000), "etc.chrono".into()),
-        (Unit::Str("b".into()), "test.dumb.loop".into()),
-    ]);
+    let task = TaskLoop::Chain {
+        msg: Unit::Map(vec![
+            (Unit::Str("state".into()), Unit::Str("a".into())),
+            (
+                Unit::Str("fsm".into()),
+                Unit::Map(vec![
+                    (
+                        Unit::Str("a".into()),
+                        Unit::Pair(
+                            Box::new(Unit::Str("b".into())),
+                            Box::new(Unit::Str("abc".into()))
+                        )
+                    )
+                ])
+            )
+        ]),
+        chain: vec!["etc.fsm".into(), "test.dumb".into()],
+    };
 
     kern.reg_task(&_super.name, "init", task)?;
     kern.run()
