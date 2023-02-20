@@ -1,8 +1,10 @@
 #![no_std]
 #![no_main]
+
 #![feature(abi_efiapi)]
-#![feature(iter_array_chunks)]
 #![feature(array_chunks)]
+#![feature(drain_filter)]
+#![feature(iter_array_chunks)]
 #![feature(generators, generator_trait)]
 
 extern crate alloc;

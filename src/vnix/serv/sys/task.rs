@@ -106,24 +106,28 @@ impl ServHlr for Task {
     fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(task) = self.task {
-                kern.lock().reg_task(&msg.ath, &self.name.unwrap_or("sys.task".into()), task)?;
-                yield;
+                let id = kern.lock().reg_task(&msg.ath, &self.name.unwrap_or("sys.task".into()), task)?;
+                let msg;
 
-                // loop {
-                //     yield;
-                // }
+                loop {
+                    if let Some(_msg) = kern.lock().get_task_result(id) {
+                        msg = _msg;
+                        break;
+                    }
+                    yield;
+                }
 
-                // let msg = kern.lock().task(task)?;
+                let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
 
-                // let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
-    
-                // if let Some(out) = msg.map(|msg| schm.find_loc(&msg.msg)).flatten() {
-                //     let msg = Unit::Map(vec![
-                //         (Unit::Str("msg".into()), out)
-                //     ]);
-    
-                //     return kern.lock().msg(&ath, msg).map(|msg| Some(msg));
-                // }
+                if let Some(msg) = msg {
+                    if let Some(out) = schm.find_loc(&msg.msg) {
+                        let u = Unit::Map(vec![
+                            (Unit::Str("msg".into()), out)
+                        ]);
+
+                        return kern.lock().msg(&msg.ath, u).map(|msg| Some(msg));
+                    }
+                }
 
                 return Ok(None);
             }

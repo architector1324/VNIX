@@ -75,7 +75,9 @@ pub struct Kern {
     // vnix
     users: Vec<Usr>,
     services: Vec<Serv>,
-    tasks: Vec<Task>
+    last_task_id: usize,
+    tasks: Vec<Task>,
+    task_result: Vec<(usize, Option<Msg>)>
 }
 
 
@@ -99,7 +101,9 @@ impl Kern {
             // term: TermBase::default(),
             users: Vec::new(),
             services: Vec::new(),
+            last_task_id: 0,
             tasks: Vec::new(),
+            task_result: Vec::new()
         };
 
         kern
@@ -135,13 +139,18 @@ impl Kern {
         Ok(())
     }
 
-    pub fn reg_task(&mut self, usr: &str, name: &str, task: TaskLoop) -> Result<(), KernErr> {
-        self.tasks.push(Task::new(usr.into(), name.into(), self.tasks.len(), task));
-        Ok(())
+    pub fn reg_task(&mut self, usr: &str, name: &str, task: TaskLoop) -> Result<usize, KernErr> {
+        self.tasks.push(Task::new(usr.into(), name.into(), self.last_task_id, task));
+        self.last_task_id += 1;
+        Ok(self.last_task_id - 1)
     }
 
     fn get_serv(&self, name: &str) -> Result<Serv, KernErr> {
         self.services.iter().find(|s| s.name == name).ok_or(KernErr::ServNotFound).cloned()
+    }
+
+    pub fn get_task_result(&mut self, id: usize) -> Option<Option<Msg>> {
+        self.task_result.drain_filter(|(i, _)| *i == id).next().map(|(_, msg)| msg)
     }
 
     pub fn msg(&self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
@@ -226,18 +235,52 @@ impl Kern {
         let kern_mtx = Mutex::new(self);
 
         loop {
-            let runs = kern_mtx.lock().tasks.clone().into_iter().map(|task| (task.clone(), task.run(&kern_mtx)));
+            let mut runs = kern_mtx.lock().tasks.clone().into_iter().map(|t| {
+                let task = t.clone();
+                let run = Box::into_pin(t.run(&kern_mtx).0);
+
+                (task, (run, false))
+            }).collect::<Vec<_>>();
+
             kern_mtx.lock().tasks = Vec::new();
 
-            for (task, run) in runs {
-                let mut run = Box::into_pin(run.0);
+            for (task, _) in runs.iter() {
                 writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            }
 
-                loop {
-                    if let GeneratorState::Complete(res) = Pin::new(&mut run).resume(()) {
-                        res?;
-                        break;
+            loop {
+                for (task, (run, done)) in &mut runs {
+                    if *done {
+                        continue;
                     }
+
+                    if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
+                        kern_mtx.lock().task_result.push((task.id, res?));
+                        *done = true;
+                    }
+                }
+
+                // run new tasks
+                if !kern_mtx.lock().tasks.is_empty() {
+                    let mut new_runs = kern_mtx.lock().tasks.clone().into_iter().map(|t| {
+                        let task = t.clone();
+                        let run = Box::into_pin(t.run(&kern_mtx).0);
+        
+                        (task, (run, false))
+                    }).collect::<Vec<_>>();
+
+                    kern_mtx.lock().tasks = Vec::new();
+        
+                    for (task, _) in new_runs.iter() {
+                        writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    }
+
+                    runs.append(&mut new_runs);
+                }
+
+                // done
+                if runs.iter().all(|(_, (_, done))| *done) {
+                    break;
                 }
             }
         }
