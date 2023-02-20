@@ -1,15 +1,18 @@
 use alloc::vec;
+use spin::Mutex;
+use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaStr, SchemaMapSecondRequire, Schema, SchemaOr, Or};
 use crate::vnix::core::user::Usr;
 
 
+#[derive(Debug)]
 pub enum UserAct {
     Login {
         ath: String,
@@ -83,43 +86,55 @@ impl FromUnit for User {
 }
 
 impl ServHlr for User {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
-        let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Users registration service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr".into())
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            let u = match topic {
+                ServHelpTopic::Info => Unit::Str("Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr".into())
+            };
+    
+            let m = Unit::Map(vec![(
+                Unit::Str("msg".into()),
+                u
+            )]);
+    
+            let out = kern.lock().msg(ath.as_str(), m).map(|msg| Some(msg));
+            yield;
+
+            out
         };
-
-        let m = Unit::Map(vec![(
-            Unit::Str("msg".into()),
-            u
-        )]);
-
-        return Ok(kern.msg(ath, m)?)
+        ServHlrAsync(Box::new(hlr))
     }
 
-    fn handle(&mut self, mut msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some(act) = &self.act {
-            let (usr, out) = match act {
-                UserAct::Reg {ath} => Usr::new(ath, kern)?,
-                UserAct::Guest {ath, pub_key} => (Usr::guest(ath, pub_key)?, String::new()),
-                UserAct::Login {ath, pub_key, priv_key} => (Usr::login(ath, priv_key, pub_key)?, String::new())
-            };
+    fn handle<'a>(self, mut msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            if let Some(act) = self.act {
+                let (usr, out) = match act {
+                    UserAct::Reg{ref ath} => Usr::new(ath, &mut kern.lock())?,
+                    UserAct::Guest{ref ath, ref pub_key} => (Usr::guest(ath, pub_key)?, String::new()),
+                    UserAct::Login{ref ath, ref pub_key, ref priv_key} => (Usr::login(ath, priv_key, pub_key)?, String::new())
+                };
 
-            kern.reg_usr(usr.clone())?;
-            writeln!(kern.drv.cli, "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-            if !out.is_empty() {
-                writeln!(kern.drv.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-
-                let m = Unit::Map(vec![
-                    (Unit::Str("msg".into()), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
-                ]);
+                kern.lock().reg_usr(usr.clone())?;
+                writeln!(kern.lock().drv.cli, "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                yield;
     
-                return Ok(Some(kern.msg(&usr.name, m)?))
+                if !out.is_empty() {
+                    writeln!(kern.lock().drv.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    yield;
+    
+                    let m = Unit::Map(vec![
+                        (Unit::Str("msg".into()), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
+                    ]);
+        
+                    return Ok(Some(kern.lock().msg(&usr.name, m)?))
+                }
+    
+                msg = kern.lock().msg(&usr.name, msg.msg)?;
+                yield;
             }
-
-            msg = kern.msg(&usr.name, msg.msg)?;
-        }
-
-        Ok(Some(msg))
+    
+            Ok(Some(msg))
+        };
+        ServHlrAsync(Box::new(hlr))
     }
 }

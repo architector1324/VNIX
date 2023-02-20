@@ -231,7 +231,7 @@ impl Kern {
 
             for (task, run) in runs {
                 let mut run = Box::into_pin(run.0);
-                writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern:run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
                 loop {
                     if let GeneratorState::Complete(res) = Pin::new(&mut run).resume(()) {

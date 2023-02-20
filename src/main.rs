@@ -87,7 +87,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
             println!("WARN loader:rnd: using pseudo random generator");
         }
 
-        let prng = driver::stub::PRng;
+        let prng = driver::stub::PRng([1; 32]);
 
         // mem
         let mem = driver::uefi::UefiMem::new(st.unsafe_clone());

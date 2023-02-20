@@ -7,7 +7,7 @@ use super::msg::Msg;
 use super::kern::{KernErr, Kern};
 use super::unit::{FromUnit, Unit};
 
-use crate::vnix::serv::{/*io, etc, gfx, math, sys, */test};
+use crate::vnix::serv::{/*io, etc, gfx, math, */sys, test};
 
 use spin::Mutex;
 
@@ -30,7 +30,7 @@ pub enum ServKind {
     // GFX2D,
     // MathInt,
     // SysTask,
-    // SysUsr,
+    SysUsr,
     TestDumb,
     TestDumbLoop,
 }
@@ -43,7 +43,7 @@ pub enum ServInst {
     // GFX2D(gfx::GFX2D),
     // MathInt(math::Int),
     // SysTask(sys::task::Task),
-    // SysUsr(sys::usr::User),
+    SysUsr(sys::usr::User),
     TestDumb(test::Dumb),
     TestDumbLoop(test::DumbLoop)
 }
@@ -79,7 +79,7 @@ impl Serv {
             // ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit_loc(u)?)),
             // ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
             // ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
-            // ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
+            ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
             ServKind::TestDumb => Some(ServInst::TestDumb(test::Dumb::from_unit_loc(u)?)),
             ServKind::TestDumbLoop => Some(ServInst::TestDumbLoop(test::DumbLoop::from_unit_loc(u)?))
         }
@@ -102,7 +102,7 @@ impl ServHlr for ServInst {
         //     ServInst::GFX2D(inst) => inst.help(ath, topic, kern),
         //     ServInst::MathInt(inst) => inst.help(ath, topic, kern),
         //     ServInst::SysTask(inst) => inst.help(ath, topic, kern),
-        //     ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
+            ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
             ServInst::TestDumb(inst) => inst.help(ath, topic, kern),
             ServInst::TestDumbLoop(inst) => inst.help(ath, topic, kern),
         }
@@ -117,7 +117,7 @@ impl ServHlr for ServInst {
             // ServInst::GFX2D(inst) => inst.handle(msg, serv, kern),
             // ServInst::MathInt(inst) => inst.handle(msg, serv, kern),
             // ServInst::SysTask(inst) => inst.handle(msg, serv, kern),
-            // ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
+            ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
             ServInst::TestDumb(inst) => inst.handle(msg, serv, kern),
             ServInst::TestDumbLoop(inst) => inst.handle(msg, serv, kern)
         }

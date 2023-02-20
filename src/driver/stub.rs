@@ -43,13 +43,15 @@ impl Disp for StubDisp {
     }
 }
 
-pub struct PRng;
+pub struct PRng(pub [u8; 32]);
 
 impl Rnd for PRng {
     fn get_bytes(&mut self, buf: &mut [u8]) -> Result<(), RndErr> {
-        let mut rng = StdRng::from_seed([1; 32]);
+        let mut rng = StdRng::from_seed(self.0);
 
         rng.fill_bytes(buf);
+        self.0 = buf[0..32].try_into().map_err(|_| RndErr::GetBytes)?;
+
         Ok(())
     }
 }

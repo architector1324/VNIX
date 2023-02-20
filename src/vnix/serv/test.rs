@@ -50,8 +50,8 @@ impl ServHlr for Dumb {
 
     fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
-            if let Some(msg) = self.msg {
-                writeln!(kern.lock().drv.cli, "test: {msg}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+            if let Some(_msg) = self.msg {
+                writeln!(kern.lock().drv.cli, "test[{}]: {_msg}", msg.ath).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 yield;
             }
             kern.lock().msg(&msg.ath, Unit::Str("b".into())).map(|msg| Some(msg))
@@ -65,11 +65,11 @@ impl ServHlr for DumbLoop {
         unimplemented!()
     }
 
-    fn handle<'a>(self, _msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
-            if let Some(msg) = self.msg {
+            if let Some(_msg) = self.msg {
                 for i in 0..5 {
-                    writeln!(kern.lock().drv.cli, "test {i}: {msg}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                    writeln!(kern.lock().drv.cli, "test[{}]{i}: {_msg}", msg.ath).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     yield;
                 }
             }

@@ -23,7 +23,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("gfx.2d", ServKind::GFX2D),
         // ("math.int", ServKind::MathInt),
         // ("sys.task", ServKind::SysTask),
-        // ("sys.usr", ServKind::SysUsr),
+        ("sys.usr", ServKind::SysUsr),
         ("test.dumb", ServKind::TestDumb),
         ("test.dumb.loop", ServKind::TestDumbLoop)
     ];
@@ -43,8 +43,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     // test
     let task = TaskLoop::Chain {
-        msg: Unit::Str("a".into()),
-        chain: vec!["test.dumb".into(), "test.dumb.loop".into(), "test.dumb".into()]
+        msg: Unit::Str("test".into()),
+        chain: vec!["sys.usr".into(), "test.dumb".into()]
     };
 
     kern.reg_task(&_super.name, "test", task)?;
