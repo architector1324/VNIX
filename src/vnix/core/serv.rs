@@ -7,7 +7,7 @@ use super::msg::Msg;
 use super::kern::{KernErr, Kern};
 use super::unit::{FromUnit, Unit};
 
-use crate::vnix::serv::{/*io, etc, gfx, math, */sys, test};
+use crate::vnix::serv::{/*io, etc, gfx, math,*/ etc, sys, test};
 
 use spin::Mutex;
 
@@ -25,7 +25,7 @@ pub enum ServErr {
 pub enum ServKind {
     // IOTerm,
     // IOStore,
-    // EtcChrono,
+    EtcChrono,
     // EtcFSM,
     // GFX2D,
     // MathInt,
@@ -38,7 +38,7 @@ pub enum ServKind {
 pub enum ServInst {
     // IOTerm(io::term::Term),
     // IODB(io::store::Store),
-    // EtcChrono(etc::chrono::Chrono),
+    EtcChrono(etc::chrono::Chrono),
     // EtcFSM(etc::fsm::FSM),
     // GFX2D(gfx::GFX2D),
     // MathInt(math::Int),
@@ -74,7 +74,7 @@ impl Serv {
         match self.kind {
             // ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit_loc(u)?)),
             // ServKind::IOStore => Some(ServInst::IODB(io::store::Store::from_unit_loc(u)?)),
-            // ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit_loc(u)?)),
+            ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit_loc(u)?)),
             // ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit_loc(u)?)),
             // ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit_loc(u)?)),
             // ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
@@ -97,7 +97,7 @@ impl ServHlr for ServInst {
         match self {
         //     ServInst::IOTerm(inst) => inst.help(ath, topic, kern),
         //     ServInst::IODB(inst) => inst.help(ath, topic, kern),
-        //     ServInst::EtcChrono(inst) => inst.help(ath, topic, kern),
+            ServInst::EtcChrono(inst) => inst.help(ath, topic, kern),
         //     ServInst::EtcFSM(inst) => inst.help(ath, topic, kern),
         //     ServInst::GFX2D(inst) => inst.help(ath, topic, kern),
         //     ServInst::MathInt(inst) => inst.help(ath, topic, kern),
@@ -112,7 +112,7 @@ impl ServHlr for ServInst {
         match self {
             // ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
             // ServInst::IODB(inst) => inst.handle(msg, serv, kern),
-            // ServInst::EtcChrono(inst) => inst.handle(msg, serv, kern),
+            ServInst::EtcChrono(inst) => inst.handle(msg, serv, kern),
             // ServInst::EtcFSM(inst) => inst.handle(msg, serv, kern),
             // ServInst::GFX2D(inst) => inst.handle(msg, serv, kern),
             // ServInst::MathInt(inst) => inst.handle(msg, serv, kern),

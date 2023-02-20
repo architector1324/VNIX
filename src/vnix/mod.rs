@@ -18,7 +18,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let services = [
         // ("io.term", ServKind::IOTerm),
         // ("io.store", ServKind::IOStore),
-        // ("etc.chrono", ServKind::EtcChrono),
+        ("etc.chrono", ServKind::EtcChrono),
         // ("etc.fsm", ServKind::EtcFSM),
         // ("gfx.2d", ServKind::GFX2D),
         // ("math.int", ServKind::MathInt),
@@ -42,12 +42,14 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let task = TaskLoop::Chain {
-        msg: Unit::Str("test".into()),
-        chain: vec!["sys.usr".into(), "test.dumb".into()]
-    };
+    let task = TaskLoop::Queue(vec![
+        (Unit::Str("test usr".into()), "sys.usr".into()),
+        (Unit::Str("a".into()), "test.dumb".into()),
+        (Unit::Int(2000000), "etc.chrono".into()),
+        (Unit::Str("b".into()), "test.dumb.loop".into()),
+    ]);
 
-    kern.reg_task(&_super.name, "test", task)?;
+    kern.reg_task(&_super.name, "init", task)?;
     kern.run()
 
     // // login task
