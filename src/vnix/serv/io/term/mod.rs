@@ -7,13 +7,14 @@ use alloc::boxed::Box;
 use alloc::{format, vec};
 use alloc::string::String;
 use alloc::vec::Vec;
+use spin::Mutex;
 
 use crate::driver::{CLIErr, TermKey};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaStr, SchemaUnit, Schema, SchemaPair, SchemaSeq, Or, SchemaRef, SchemaOr, SchemaMapSeq, SchemaByte};
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
 use crate::vnix::core::kern::{KernErr, Kern, Addr};
 
 
@@ -91,13 +92,15 @@ impl TermAct for Act {
             Act::Source(_msg, (serv, _addr)) => {
                 let _msg = kern.msg(&orig.ath, _msg)?;
 
-                if let Some(_msg) = kern.send(serv.as_str(), _msg)? {
-                    if let Some(_msg) = _msg.msg.as_map_find("msg") {
-                        if let Some(act) = Act::from_unit_loc(&_msg) {
-                            return act.act(term, orig, msg, kern);
-                        }
-                    }
-                }
+                todo!()
+
+                // if let Some(_msg) = kern.send(serv.as_str(), _msg)? {
+                //     if let Some(_msg) = _msg.msg.as_map_find("msg") {
+                //         if let Some(act) = Act::from_unit_loc(&_msg) {
+                //             return act.act(term, orig, msg, kern);
+                //         }
+                //     }
+                // }
             },
             Act::Say(say) => return say.act(term, orig, msg, kern),
             Act::GetKey(may_path) => {
@@ -600,48 +603,61 @@ impl FromUnit for Term {
 }
 
 impl ServHlr for Term {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
-        let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: hello@io.term\nFor gfx mode: {term.gfx:(say hello)}@io.term".into())
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            let u = match topic {
+                ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: hello@io.term\nFor gfx mode: {term.gfx:(say hello)}@io.term".into())
+            };
+    
+            let m = Unit::Map(vec![(
+                Unit::Str("msg".into()),
+                u
+            )]);
+    
+            let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
+            yield;
+
+            out
         };
-
-        let m = Unit::Map(vec![(
-            Unit::Str("msg".into()),
-            u
-        )]);
-
-        return Ok(kern.msg(ath, m)?)
+        ServHlrAsync(Box::new(hlr))
     }
 
-    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some(acts) = self.act.clone() {
-            let mut out_u = msg.msg.clone();
+    fn handle<'a>(mut self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            if let Some(acts) = self.act.clone() {
+                let mut out_u = msg.msg.clone();
+    
+                for act in acts {
+                    out_u = act.act(&mut self, &msg, out_u, &mut kern.lock())?;
+                    yield;
+                }
 
-            for act in acts {
-                out_u = act.act(self, &msg, out_u, kern)?;
+                self.flush(&mut kern.lock())?;
+                return Ok(Some(kern.lock().msg(&msg.ath, out_u)?));
             }
+    
+            let _msg = if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
+                _msg
+            } else {
+                msg.msg.clone()
+            };
+    
+            let mut out_u = msg.msg.clone();
+    
+            let act = Act::Say(ui::text::Say {
+                msg: _msg,
+                shrt: None,
+                nl: false,
+                mode: ui::text::SayMode::Norm
+            });
+            out_u = act.act(&mut self, &msg, out_u, &mut kern.lock())?;
+            yield;
 
-            self.flush(kern)?;
-            return Ok(Some(kern.msg(&msg.ath, out_u)?));
-        }
+            self.flush(&mut kern.lock())?;
+            yield;
 
-        let _msg = if let Some(_msg) = Unit::find_ref(vec!["msg".into()].into_iter(), &msg.msg) {
-            _msg
-        } else {
-            msg.msg.clone()
+            return Ok(Some(kern.lock().msg(&msg.ath, out_u)?));
         };
-
-        let mut out_u = msg.msg.clone();
-
-        let act = Act::Say(ui::text::Say {
-            msg: _msg,
-            shrt: None,
-            nl: false,
-            mode: ui::text::SayMode::Norm
-        });
-        out_u = act.act(self, &msg, out_u, kern)?;
-
-        self.flush(kern)?;
-        return Ok(Some(kern.msg(&msg.ath, out_u)?));
+        ServHlrAsync(Box::new(hlr))
     }
 }

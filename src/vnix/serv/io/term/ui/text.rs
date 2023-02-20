@@ -160,12 +160,13 @@ impl TermAct for Say {
             Unit::Stream(_msg, (serv, _addr)) => {
                 let _msg = kern.msg(&orig.ath, *_msg)?;
 
-                if let Some(_msg) = kern.send(serv.as_str(), _msg)? {
-                    if let Some(_msg) = _msg.msg.as_map_find("msg") {
-                        self.msg = _msg;
-                        return self.act(term, orig, msg, kern);
-                    }
-                }
+                todo!()
+                // if let Some(_msg) = kern.send(serv.as_str(), _msg)? {
+                //     if let Some(_msg) = _msg.msg.as_map_find("msg") {
+                //         self.msg = _msg;
+                //         return self.act(term, orig, msg, kern);
+                //     }
+                // }
             },
             Unit::Lst(lst) => 
                 match self.mode {

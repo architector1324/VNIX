@@ -23,7 +23,7 @@ pub enum ServErr {
 
 #[derive(Debug, Clone)]
 pub enum ServKind {
-    // IOTerm,
+    IOTerm,
     IOStore,
     EtcChrono,
     EtcFSM,
@@ -32,11 +32,10 @@ pub enum ServKind {
     SysTask,
     SysUsr,
     TestDumb,
-    TestDumbLoop,
 }
 
 pub enum ServInst {
-    // IOTerm(io::term::Term),
+    IOTerm(io::term::Term),
     IOStore(io::store::Store),
     EtcChrono(etc::chrono::Chrono),
     EtcFSM(etc::fsm::FSM),
@@ -45,7 +44,6 @@ pub enum ServInst {
     SysTask(sys::task::Task),
     SysUsr(sys::usr::User),
     TestDumb(test::Dumb),
-    TestDumbLoop(test::DumbLoop)
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +70,7 @@ impl Serv {
 
     pub fn inst(&self, u: &Unit) -> Option<ServInst> {
         match self.kind {
-            // ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit_loc(u)?)),
+            ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit_loc(u)?)),
             ServKind::IOStore => Some(ServInst::IOStore(io::store::Store::from_unit_loc(u)?)),
             ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit_loc(u)?)),
             ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit_loc(u)?)),
@@ -81,7 +79,6 @@ impl Serv {
             ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
             ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
             ServKind::TestDumb => Some(ServInst::TestDumb(test::Dumb::from_unit_loc(u)?)),
-            ServKind::TestDumbLoop => Some(ServInst::TestDumbLoop(test::DumbLoop::from_unit_loc(u)?))
         }
     }
 }
@@ -95,7 +92,7 @@ impl FromUnit for ServInst {
 impl ServHlr for ServInst {
     fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         match self {
-        //     ServInst::IOTerm(inst) => inst.help(ath, topic, kern),
+            ServInst::IOTerm(inst) => inst.help(ath, topic, kern),
             ServInst::IOStore(inst) => inst.help(ath, topic, kern),
             ServInst::EtcChrono(inst) => inst.help(ath, topic, kern),
             ServInst::EtcFSM(inst) => inst.help(ath, topic, kern),
@@ -104,13 +101,12 @@ impl ServHlr for ServInst {
             ServInst::SysTask(inst) => inst.help(ath, topic, kern),
             ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
             ServInst::TestDumb(inst) => inst.help(ath, topic, kern),
-            ServInst::TestDumbLoop(inst) => inst.help(ath, topic, kern),
         }
     }
 
     fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         match self {
-            // ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
+            ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
             ServInst::IOStore(inst) => inst.handle(msg, serv, kern),
             ServInst::EtcChrono(inst) => inst.handle(msg, serv, kern),
             ServInst::EtcFSM(inst) => inst.handle(msg, serv, kern),
@@ -119,7 +115,6 @@ impl ServHlr for ServInst {
             ServInst::SysTask(inst) => inst.handle(msg, serv, kern),
             ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
             ServInst::TestDumb(inst) => inst.handle(msg, serv, kern),
-            ServInst::TestDumbLoop(inst) => inst.handle(msg, serv, kern)
         }
     }
 }

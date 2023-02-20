@@ -15,7 +15,7 @@ use super::serv::{Serv, ServHlr, ServErr, ServHelpTopic, ServHlrAsync};
 use super::user::Usr;
 
 use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd, Mem, MemErr};
-// use crate::vnix::serv::io::term::TermBase;
+use crate::vnix::serv::io::term::TermBase;
 use crate::vnix::utils::RamStore;
 
 use spin::Mutex;
@@ -69,7 +69,7 @@ pub struct KernDrv {
 
 pub struct Kern {
     pub drv: KernDrv,
-    // pub term: TermBase,
+    pub term: TermBase,
     pub ram_store: RamStore,
 
     // vnix
@@ -98,7 +98,7 @@ impl Kern {
         let kern = Kern {
             drv,
             ram_store: RamStore::default(),
-            // term: TermBase::default(),
+            term: TermBase::default(),
             users: Vec::new(),
             services: Vec::new(),
             last_task_id: 0,
