@@ -21,7 +21,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         ("etc.chrono", ServKind::EtcChrono),
         ("etc.fsm", ServKind::EtcFSM),
         ("gfx.2d", ServKind::GFX2D),
-        // ("math.int", ServKind::MathInt),
+        ("math.int", ServKind::MathInt),
         // ("sys.task", ServKind::SysTask),
         ("sys.usr", ServKind::SysUsr),
         ("test.dumb", ServKind::TestDumb),
@@ -42,9 +42,11 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
+    let msg = Unit::parse("{sum:[1 2 3]}".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+
     let task = TaskLoop::Chain {
-        msg: Unit::Str("#ff0000".into()),
-        chain: vec!["gfx.2d".into(), "test.dumb".into()],
+        msg: msg,
+        chain: vec!["math.int".into(), "test.dumb".into()],
     };
 
     kern.reg_task(&_super.name, "init", task)?;

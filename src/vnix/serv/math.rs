@@ -2,10 +2,11 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
+use spin::Mutex;
 
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaPair, SchemaInt, Schema, SchemaOr, SchemaSeq, Or, SchemaUnit, SchemaRef};
 
@@ -173,17 +174,17 @@ impl Int {
         Int::find_multi_op(glob, u)
     }
 
-    fn calc_op(op: &Operation) -> i32 {
+    fn calc_op(op: Operation) -> i32 {
         match op {
             Operation::Single(op) => Int::calc_single_op(op),
             Operation::Multi(op) => Int::calc_multi_op(op)
         }
     }
 
-    fn calc_single_op(op: &SingleOp) -> i32 {
+    fn calc_single_op(op: SingleOp) -> i32 {
         let v = match op.op {
             Operand::Int(v) => v,
-            Operand::Operation(ref op) => Int::calc_op(&op)
+            Operand::Operation(op) => Int::calc_op(*op)
         };
 
         match op.act {
@@ -198,11 +199,11 @@ impl Int {
         }
     }
 
-    fn calc_multi_op(op: &MultiOp) -> i32 {
-        let lst = op.op.iter().map(|op| {
+    fn calc_multi_op(op: MultiOp) -> i32 {
+        let lst = op.op.into_iter().map(|op| {
             match op {
-                Operand::Int(v) => *v,
-                Operand::Operation(ref op) => Int::calc_op(&op)
+                Operand::Int(v) => v,
+                Operand::Operation(op) => Int::calc_op(*op)
             }
         });
 
@@ -243,28 +244,38 @@ impl FromUnit for Int {
 }
 
 impl ServHlr for Int {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
-        let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.int".into())
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            let u = match topic {
+                ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.int".into())
+            };
+    
+            let m = Unit::Map(vec![(
+                Unit::Str("msg".into()),
+                u
+            )]);
+    
+            let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
+            yield;
+
+            out
         };
-
-        let m = Unit::Map(vec![(
-            Unit::Str("msg".into()),
-            u
-        )]);
-
-        return Ok(kern.msg(ath, m)?)
+        ServHlrAsync(Box::new(hlr))
     }
 
-    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        if let Some((op, path)) = &self.op {
-            let out = Int::calc_op(op);
+    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            if let Some((op, path)) = self.op {
+                let out = Int::calc_op(op);
+                yield;
 
-            let m = Unit::merge_ref(path.clone().into_iter(), Unit::Int(out), msg.msg).ok_or(KernErr::DbLoadFault)?;
+                let m = Unit::merge_ref(path.clone().into_iter(), Unit::Int(out), msg.msg).ok_or(KernErr::DbLoadFault)?;
 
-            return Ok(Some(kern.msg(&msg.ath, m)?))
-        }
+                return kern.lock().msg(&msg.ath, m).map(|msg| Some(msg));
+            }
 
-        return Ok(Some(msg))
+            return Ok(Some(msg))
+        };
+        ServHlrAsync(Box::new(hlr))
     }
 }
