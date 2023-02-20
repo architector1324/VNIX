@@ -2,7 +2,6 @@ pub mod core;
 pub mod serv;
 pub mod utils;
 
-use alloc::boxed::Box;
 use alloc::vec;
 
 use crate::driver::CLIErr;
@@ -21,7 +20,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("io.store", ServKind::IOStore),
         ("etc.chrono", ServKind::EtcChrono),
         ("etc.fsm", ServKind::EtcFSM),
-        // ("gfx.2d", ServKind::GFX2D),
+        ("gfx.2d", ServKind::GFX2D),
         // ("math.int", ServKind::MathInt),
         // ("sys.task", ServKind::SysTask),
         ("sys.usr", ServKind::SysUsr),
@@ -44,22 +43,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     // test
     let task = TaskLoop::Chain {
-        msg: Unit::Map(vec![
-            (Unit::Str("state".into()), Unit::Str("a".into())),
-            (
-                Unit::Str("fsm".into()),
-                Unit::Map(vec![
-                    (
-                        Unit::Str("a".into()),
-                        Unit::Pair(
-                            Box::new(Unit::Str("b".into())),
-                            Box::new(Unit::Str("abc".into()))
-                        )
-                    )
-                ])
-            )
-        ]),
-        chain: vec!["etc.fsm".into(), "test.dumb".into()],
+        msg: Unit::Str("#ff0000".into()),
+        chain: vec!["gfx.2d".into(), "test.dumb".into()],
     };
 
     kern.reg_task(&_super.name, "init", task)?;

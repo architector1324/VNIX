@@ -126,7 +126,7 @@ impl ServHlr for User {
                         (Unit::Str("msg".into()), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
                     ]);
         
-                    return Ok(Some(kern.lock().msg(&usr.name, m)?))
+                    return kern.lock().msg(&usr.name, m).map(|msg| Some(msg));
                 }
     
                 msg = kern.lock().msg(&usr.name, msg.msg)?;

@@ -198,7 +198,7 @@ impl ServHlr for FSM {
                     );
                 }
 
-                return Ok(Some(kern.lock().msg(&msg.ath, Unit::Map(m))?))
+                return kern.lock().msg(&msg.ath, Unit::Map(m)).map(|msg| Some(msg));
             }
     
             Ok(None)

@@ -7,7 +7,7 @@ use super::msg::Msg;
 use super::kern::{KernErr, Kern};
 use super::unit::{FromUnit, Unit};
 
-use crate::vnix::serv::{/*io, etc, gfx, math,*/ etc, sys, test};
+use crate::vnix::serv::{/*io, etc, math,*/ gfx, etc, sys, test};
 
 use spin::Mutex;
 
@@ -27,7 +27,7 @@ pub enum ServKind {
     // IOStore,
     EtcChrono,
     EtcFSM,
-    // GFX2D,
+    GFX2D,
     // MathInt,
     // SysTask,
     SysUsr,
@@ -40,7 +40,7 @@ pub enum ServInst {
     // IODB(io::store::Store),
     EtcChrono(etc::chrono::Chrono),
     EtcFSM(etc::fsm::FSM),
-    // GFX2D(gfx::GFX2D),
+    GFX2D(gfx::GFX2D),
     // MathInt(math::Int),
     // SysTask(sys::task::Task),
     SysUsr(sys::usr::User),
@@ -76,7 +76,7 @@ impl Serv {
             // ServKind::IOStore => Some(ServInst::IODB(io::store::Store::from_unit_loc(u)?)),
             ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit_loc(u)?)),
             ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit_loc(u)?)),
-            // ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit_loc(u)?)),
+            ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit_loc(u)?)),
             // ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
             // ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
             ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
@@ -99,7 +99,7 @@ impl ServHlr for ServInst {
         //     ServInst::IODB(inst) => inst.help(ath, topic, kern),
             ServInst::EtcChrono(inst) => inst.help(ath, topic, kern),
             ServInst::EtcFSM(inst) => inst.help(ath, topic, kern),
-        //     ServInst::GFX2D(inst) => inst.help(ath, topic, kern),
+            ServInst::GFX2D(inst) => inst.help(ath, topic, kern),
         //     ServInst::MathInt(inst) => inst.help(ath, topic, kern),
         //     ServInst::SysTask(inst) => inst.help(ath, topic, kern),
             ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
@@ -114,7 +114,7 @@ impl ServHlr for ServInst {
             // ServInst::IODB(inst) => inst.handle(msg, serv, kern),
             ServInst::EtcChrono(inst) => inst.handle(msg, serv, kern),
             ServInst::EtcFSM(inst) => inst.handle(msg, serv, kern),
-            // ServInst::GFX2D(inst) => inst.handle(msg, serv, kern),
+            ServInst::GFX2D(inst) => inst.handle(msg, serv, kern),
             // ServInst::MathInt(inst) => inst.handle(msg, serv, kern),
             // ServInst::SysTask(inst) => inst.handle(msg, serv, kern),
             ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
