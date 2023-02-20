@@ -1,5 +1,6 @@
 use crate::{vnix::core::{serv::{ServHlr, Serv, ServHelpTopic, ServHlrAsync}, kern::{Kern, KernErr}, msg::Msg, unit::{FromUnit, Unit, SchemaUnit, Schema}}, driver::CLIErr};
 use alloc::boxed::Box;
+use alloc::string::String;
 use spin::Mutex;
 
 
@@ -43,7 +44,7 @@ impl FromUnit for DumbLoop {
 
 
 impl ServHlr for Dumb {
-    fn help(&self, _ath: &str, _topic: ServHelpTopic, _kern: &Mutex<Kern>) -> Result<Msg, KernErr> {
+    fn help<'a>(self, _ath: String, _topic: ServHelpTopic, _kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         unimplemented!()
     }
 
@@ -60,15 +61,15 @@ impl ServHlr for Dumb {
 }
 
 impl ServHlr for DumbLoop {
-    fn help(&self, _ath: &str, _topic: ServHelpTopic, _kern: &Mutex<Kern>) -> Result<Msg, KernErr> {
+    fn help<'a>(self, _ath: String, _topic: ServHelpTopic, _kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         unimplemented!()
     }
 
     fn handle<'a>(self, _msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(msg) = self.msg {
-                loop {
-                    writeln!(kern.lock().drv.cli, "test: {msg}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                for i in 0..5 {
+                    writeln!(kern.lock().drv.cli, "test {i}: {msg}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     yield;
                 }
             }

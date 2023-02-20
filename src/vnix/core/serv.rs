@@ -57,7 +57,7 @@ pub struct Serv {
 pub struct ServHlrAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>);
 
 pub trait ServHlr: FromUnit {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &Mutex<Kern>) -> Result<Msg, KernErr>;
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
     fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
 }
 
@@ -93,7 +93,7 @@ impl FromUnit for ServInst {
 }
 
 impl ServHlr for ServInst {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &Mutex<Kern>) -> Result<Msg, KernErr> {
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         match self {
         //     ServInst::IOTerm(inst) => inst.help(ath, topic, kern),
         //     ServInst::IODB(inst) => inst.help(ath, topic, kern),

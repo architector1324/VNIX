@@ -1,15 +1,16 @@
+use core::pin::Pin;
 use core::fmt::Display;
 use core::ops::{Generator, GeneratorState};
-use core::pin::Pin;
 
-use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
+use alloc::boxed::Box;
 
 use super::msg::Msg;
-use super::serv::{Serv, ServHlr, ServHelpTopic};
-use super::serv::ServErr;
-use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaSeq, SchemaUnit, SchemaStr, Schema, SchemaBool, SchemaMap, SchemaOr, Or};
+use super::task::{Task, TaskLoop};
+use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaUnit, Schema, SchemaBool, SchemaMap};
+use super::serv::{Serv, ServHlr, ServErr, ServHelpTopic, ServHlrAsync};
 
 use super::user::Usr;
 
@@ -45,6 +46,7 @@ pub enum KernErr {
     ServNotFound,
     ServAlreadyReg,
     CannotCreateServInstance,
+    TaskAlreadyReg,
     DbLoadFault,
     DbSaveFault,
     HelpTopicNotFound,
@@ -72,7 +74,8 @@ pub struct Kern {
 
     // vnix
     users: Vec<Usr>,
-    services: Vec<Serv>
+    services: Vec<Serv>,
+    tasks: Vec<Task>
 }
 
 
@@ -95,7 +98,8 @@ impl Kern {
             ram_store: RamStore::default(),
             // term: TermBase::default(),
             users: Vec::new(),
-            services: Vec::new()
+            services: Vec::new(),
+            tasks: Vec::new(),
         };
 
         kern
@@ -121,13 +125,18 @@ impl Kern {
     fn get_usr(&self, ath: &str) -> Result<Usr, KernErr> {
         self.users.iter().find(|usr| usr.name == ath).ok_or(KernErr::UsrNotFound).cloned()
     }
-
+    
     pub fn reg_serv(&mut self, serv: Serv) -> Result<(), KernErr> {
         if self.services.iter().find(|s| s.name == serv.name).is_some() {
             return Err(KernErr::ServAlreadyReg);
         }
-
+        
         self.services.push(serv);
+        Ok(())
+    }
+
+    pub fn reg_task(&mut self, usr: &str, name: &str, task: TaskLoop) -> Result<(), KernErr> {
+        self.tasks.push(Task::new(usr.into(), name.into(), self.tasks.len(), task));
         Ok(())
     }
 
@@ -163,54 +172,6 @@ impl Kern {
         Ok(Some(msg))
     }
 
-    // pub fn task(&mut self, msg: Msg) -> Result<Option<Msg>, KernErr> {
-    //     let schm = SchemaMapEntry(
-    //         Unit::Str("task".into()),
-    //         SchemaOr(
-    //             SchemaStr,
-    //             SchemaSeq(SchemaUnit)
-    //         )
-    //     );
-
-    //     if let Some(or) = schm.find_loc(&msg.msg) {
-    //         match or {
-    //             Or::First(serv) => return self.send(serv.as_str(), msg),
-    //             Or::Second(lst) => {
-    //                 let net = lst.iter().filter_map(|u| u.as_str()).collect::<Vec<_>>();
-            
-    //                 if net.is_empty() {
-    //                     return Ok(None);
-    //                 }
-            
-    //                 let mut msg = msg;
-            
-    //                 loop {
-    //                     for (i, serv) in net.iter().enumerate() {
-    //                         if net.len() > 1 && i == net.len() - 1 && net.first().unwrap() == net.last().unwrap() {
-    //                             break;
-    //                         }
-            
-    //                         let u = msg.msg.clone();
-            
-    //                         if let Some(mut _msg) = self.send(serv.as_str(), msg)? {
-    //                             let usr = self.get_usr(&_msg.ath)?;
-    //                             msg = self.msg(&usr.name, u.merge(_msg.msg))?;
-    //                         } else {
-    //                             return Ok(None);
-    //                         }
-            
-    //                         if i == net.len() - 1 && net.first().unwrap() != net.last().unwrap() {
-    //                             return Ok(Some(msg));
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     Ok(None)
-    // }
-
     fn help_serv(&self, ath: &str) -> Result<Msg, KernErr> {
         let serv = self.services.iter().cloned().map(|serv| Unit::Str(serv.name)).collect();
         let u = Unit::Map(vec![(
@@ -221,57 +182,61 @@ impl Kern {
         self.msg(ath, u)
     }
 
-    pub fn send_block<'a>(mtx: &'a Mutex<Self>, serv: &'a str, msg: Msg) -> Result<Option<Msg>, KernErr> {
-        let mut gen = Kern::send(mtx, serv, msg);
+    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: String, mut msg: Msg) -> Result<Option<ServHlrAsync<'a>>, KernErr> {
+        // verify msg
+        let usr = mtx.lock().get_usr(&msg.ath)?;
+        usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
 
-        loop {
-            match Pin::new(&mut gen).resume(()) {
-                GeneratorState::Complete(res) => return res,
-                GeneratorState::Yielded(_) => ()
+        // prepare msg
+        if let Some(_msg) = mtx.lock().msg_hlr(msg, usr)? {
+            msg = _msg;
+        } else {
+            return Ok(None);
+        }
+
+        let serv = mtx.lock().get_serv(serv.as_str())?;
+        let inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
+
+        // check help
+        let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
+            Some(topic)
+        } else if let Some(topic) = msg.msg.as_str() {
+            Some(topic)
+        } else {
+            None
+        };
+
+        if let Some(topic) = topic {
+            match topic.as_str() {
+                "info" => return Ok(Some(inst.help(msg.ath, ServHelpTopic::Info, mtx))),
+                "serv" => return Ok(Some(ServHlrAsync(Box::new(move || {
+                    let out = mtx.lock().help_serv(&msg.ath).map(|m| Some(m));
+                    yield;
+                    out
+                })))),
+                _ => ()
             }
         }
+
+        // send
+        Ok(Some(inst.handle(msg, serv, mtx)))
     }
 
-    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: &'a str, mut msg: Msg) -> impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a {
-        || {
-            // verify msg
-            let usr = mtx.lock().get_usr(&msg.ath)?;
-            usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
-    
-            // prepare msg
-            if let Some(_msg) = mtx.lock().msg_hlr(msg, usr)? {
-                msg = _msg;
-            } else {
-                return Ok(None);
-            }
-    
-            let serv = mtx.lock().get_serv(serv)?;
-            let inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
-    
-            // check help
-            let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
-                Some(topic)
-            } else if let Some(topic) = msg.msg.as_str() {
-                Some(topic)
-            } else {
-                None
-            };
-    
-            if let Some(topic) = topic {
-                match topic.as_str() {
-                    "info" => return inst.help(&msg.ath, ServHelpTopic::Info, mtx).map(|m| Some(m)),
-                    "serv" => return mtx.lock().help_serv(&msg.ath).map(|m| Some(m)),
-                    _ => ()
-                }
-            }
+    pub fn run<'a>(self) -> Result<(), KernErr> {
+        let kern_mtx = Mutex::new(self);
 
-            // send
-            let mut res = Box::into_pin(inst.handle(msg, serv, mtx).0);
+        loop {
+            let runs = kern_mtx.lock().tasks.clone().into_iter().map(|task| (task.clone(), task.run(&kern_mtx)));
+            kern_mtx.lock().tasks = Vec::new();
 
-            loop {
-                match Pin::new(&mut res).resume(()) {
-                    GeneratorState::Complete(res) => return res,
-                    GeneratorState::Yielded(..) => yield
+            for (task, run) in runs {
+                let mut run = Box::into_pin(run.0);
+                writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern:run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+
+                loop {
+                    if let GeneratorState::Complete(..) = Pin::new(&mut run).resume(()) {
+                        break;
+                    }
                 }
             }
         }

@@ -10,8 +10,6 @@ extern crate alloc;
 pub mod vnix;
 pub mod driver;
 
-use core::fmt::Write;
-
 use alloc::boxed::Box;
 use alloc::string::String;
 use driver::Disp;

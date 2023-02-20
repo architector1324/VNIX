@@ -2,26 +2,18 @@ pub mod core;
 pub mod serv;
 pub mod utils;
 
-use ::core::ops::{Generator, GeneratorState};
-use ::core::pin::Pin;
-
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::vec;
 
 use crate::driver::CLIErr;
-use crate::vnix::core::unit::DisplayShort;
 
+use self::core::task::TaskLoop;
 use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServKind};
 
-use spin::Mutex;
 
-
-pub fn vnix_entry(kern: Kern) -> Result<(), KernErr> {
-    let kern_mtx = Mutex::new(kern);
-
+pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
         // ("io.term", ServKind::IOTerm),
@@ -38,35 +30,25 @@ pub fn vnix_entry(kern: Kern) -> Result<(), KernErr> {
 
     for (name, kind) in services {
         let serv = Serv::new(name, kind);
-        kern_mtx.lock().reg_serv(serv)?;
+        kern.reg_serv(serv)?;
 
-        writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        writeln!(kern.drv.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
     }
 
     // register user
-    let _super = Usr::new("super", &mut kern_mtx.lock())?.0;
-    kern_mtx.lock().reg_usr(_super.clone())?;
+    let _super = Usr::new("super", &mut kern)?.0;
+    kern.reg_usr(_super.clone())?;
 
-    writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let s = ["a", "b"];
-    let msg = s.map(|s| {
-        let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e)).unwrap().0;
-        kern_mtx.lock().msg("super", u).unwrap()
-    });
+    let task = TaskLoop::Sim(vec![
+        (Unit::Str("a".into()), "test.dumb.loop".into()),
+        (Unit::Str("b".into()), "test.dumb.loop".into())
+    ]);
 
-    let mut queue = msg.map(|msg| {
-        Kern::send(&kern_mtx, "test.dumb.loop", msg)
-    });
-
-    loop {
-        for q in &mut queue {
-            if let GeneratorState::Complete(res) = Pin::new(q).resume(()) {
-                res?;
-            }
-        }
-    }
+    kern.reg_task(&_super.name, "test", task)?;
+    kern.run()
 
     // // login task
     // let mut ath: String = "super".into();
