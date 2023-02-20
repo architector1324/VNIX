@@ -22,7 +22,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         ("etc.fsm", ServKind::EtcFSM),
         ("gfx.2d", ServKind::GFX2D),
         ("math.int", ServKind::MathInt),
-        // ("sys.task", ServKind::SysTask),
+        ("sys.task", ServKind::SysTask),
         ("sys.usr", ServKind::SysUsr),
         ("test.dumb", ServKind::TestDumb),
         ("test.dumb.loop", ServKind::TestDumbLoop)
@@ -42,12 +42,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let msg = Unit::parse("(load @txt.hello)".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg0 = Unit::parse("{name:`test task` msg:{sum:[1 2 3]} task:[math.int test.dumb]}".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg1 = Unit::parse("123".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let task = TaskLoop::Chain {
-        msg: msg,
-        chain: vec!["io.store".into(), "test.dumb".into()],
-    };
+    let task = TaskLoop::Queue(vec![
+        (msg0, "sys.task".into()),
+        (msg1, "test.dumb".into())
+    ]);
 
     kern.reg_task(&_super.name, "init", task)?;
     kern.run()
