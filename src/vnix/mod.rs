@@ -42,7 +42,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let msg0 = Unit::parse("{name:`test task` msg:{sum:[1 2 3]} task:[math.int test.dumb]}".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg0 = Unit::parse("{task.sim:[a@test.dumb.loop b@test.dumb.loop]}".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     let msg1 = Unit::parse("123".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Queue(vec![

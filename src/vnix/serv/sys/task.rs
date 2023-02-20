@@ -8,7 +8,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::Kern;
 use crate::vnix::core::task::{TaskLoop};
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaPair};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream};
 
 
 pub struct Task {
@@ -41,15 +41,11 @@ impl FromUnit for Task {
                     SchemaOr(
                         SchemaMapEntry(
                             Unit::Str("task.sim".into()),
-                            SchemaSeq(
-                                SchemaPair(SchemaUnit, SchemaStr)
-                            )
+                            SchemaSeq(SchemaStream)
                         ),
                         SchemaMapEntry(
                             Unit::Str("task.que".into()),
-                            SchemaSeq(
-                                SchemaPair(SchemaUnit, SchemaStr)
-                            )
+                            SchemaSeq(SchemaStream)
                         ),
                     )
                 )
@@ -73,8 +69,12 @@ impl FromUnit for Task {
                     }
                 Or::Second(or) =>
                     match or {
-                        Or::First(sim) => Some(TaskLoop::Sim(sim)),
-                        Or::Second(queue) => Some(TaskLoop::Queue(queue))
+                        Or::First(sim) => Some(TaskLoop::Sim(
+                            sim.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
+                        )),
+                        Or::Second(queue) => Some(TaskLoop::Queue(
+                            queue.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
+                        ))
                     }
             };
         });
