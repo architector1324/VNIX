@@ -48,13 +48,13 @@ impl ServHlr for Dumb {
         unimplemented!()
     }
 
-    fn handle<'a>(self, _msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(msg) = self.msg {
                 writeln!(kern.lock().drv.cli, "test: {msg}").map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 yield;
             }
-            Ok(None)
+            kern.lock().msg(&msg.ath, Unit::Str("b".into())).map(|msg| Some(msg))
         };
         ServHlrAsync(Box::new(hlr))
     }

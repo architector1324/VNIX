@@ -84,8 +84,28 @@ impl Task {
 
                         Ok(None)
                     },
-                    TaskLoop::Chain{..} => {
-                        todo!();
+                    TaskLoop::Chain{mut msg, chain} => {
+                        for serv in chain {
+                            let mut _msg = kern.lock().msg(&self.usr, msg.clone())?;
+
+                            if let Some(gen) = Kern::send(kern, serv, _msg)? {
+                                let mut gen = Box::into_pin(gen.0);
+
+                                loop {
+                                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                                        if let Some(_msg) = res? {
+                                            self.usr = _msg.ath;
+                                            msg = _msg.msg;
+                                        } else {
+                                            return Ok(None)
+                                        }
+                                        break;
+                                    }
+                                    yield;
+                                }
+                            }
+                        }
+                        kern.lock().msg(&self.usr, msg).map(|msg| Some(msg))
                     }
                 }
             }

@@ -234,7 +234,8 @@ impl Kern {
                 writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern:run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
                 loop {
-                    if let GeneratorState::Complete(..) = Pin::new(&mut run).resume(()) {
+                    if let GeneratorState::Complete(res) = Pin::new(&mut run).resume(()) {
+                        res?;
                         break;
                     }
                 }
