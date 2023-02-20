@@ -245,7 +245,7 @@ impl Kern {
             kern_mtx.lock().tasks = Vec::new();
 
             for (task, _) in runs.iter() {
-                writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
 
             loop {
@@ -257,6 +257,8 @@ impl Kern {
                     if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
                         kern_mtx.lock().task_result.push((task.id, res?));
                         *done = true;
+
+                        writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     }
                 }
 
@@ -270,9 +272,9 @@ impl Kern {
                     }).collect::<Vec<_>>();
 
                     kern_mtx.lock().tasks = Vec::new();
-        
+
                     for (task, _) in new_runs.iter() {
-                        writeln!(kern_mtx.lock().drv.cli, "INFO vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     }
 
                     runs.append(&mut new_runs);

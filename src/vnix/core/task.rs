@@ -95,7 +95,7 @@ impl Task {
                                     if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
                                         if let Some(_msg) = res? {
                                             self.usr = _msg.ath;
-                                            msg = _msg.msg;
+                                            msg = msg.merge(_msg.msg);
                                         } else {
                                             return Ok(None)
                                         }

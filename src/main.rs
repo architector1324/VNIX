@@ -68,8 +68,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         // disp
         let disp = driver::uefi::UefiDisp::new(st.unsafe_clone());
         if disp.is_err() {
-            println!("ERR loader:disp: not available");
-            println!("WARN loader:disp: using stub driver");
+            println!("WARN loader:disp: not available, using stub driver");
         }
 
         let disp_stub = driver::stub::StubDisp;
@@ -85,8 +84,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         // rnd
         let rnd = driver::uefi::UefiRnd::new(st.unsafe_clone());
         if rnd.is_err() {
-            println!("ERR loader: rnd not available");
-            println!("WARN loader:rnd: using pseudo random generator");
+            println!("WARN loader:rnd: not available, using pseudo random generator");
         }
 
         let prng = driver::stub::PRng([1; 32]);

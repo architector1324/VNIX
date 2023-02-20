@@ -264,7 +264,7 @@ impl ServHlr for Store {
             if let Some(u) = out_u {
                 return kern.lock().msg(&msg.ath, u).map(|msg| Some(msg));
             }
-    
+
             Ok(Some(msg))
         };
         ServHlrAsync(Box::new(hlr))

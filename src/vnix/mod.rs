@@ -40,58 +40,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
-    // test
-    let msg0 = Unit::parse("{task.sim:[a@test.dumb b@test.dumb]}".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg1 = Unit::parse("trc".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // run
+    let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
-    let task = TaskLoop::Queue(vec![
-        (msg0, "sys.task".into()),
-        (msg1, "io.term".into())
-    ]);
+    let task = TaskLoop::Queue(vec![(msg, "sys.task".into())]);
 
-    kern.reg_task(&_super.name, "init", task)?;
+    kern.reg_task(&_super.name, "init.load", task)?;
     kern.run()
-
-    // // login task
-    // let mut ath: String = "super".into();
-
-    // 'login: loop {
-    //     let path = Unit::parse("@task.zen.login".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    //     let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    //     let msg = kern.msg("super", u)?;
-    
-    //     let go = kern.task(msg);
-
-    //     match go {
-    //         Err(e) => writeln!(kern.drv.cli, "ERR vnix:kern: failed to login {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
-    //         Ok(msg) => {
-    //             if let Some(msg) = msg {
-    //                 ath = msg.ath;
-    //                 break 'login;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // // zen
-    // let path = Unit::parse("@task.zen.desk.load".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    // let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    // let msg = kern.msg(&ath, u)?;
-
-    // kern.task(msg)?;
-
-    // // λ
-    // loop {
-    //     let path = Unit::parse("@task.lambda.gfx.load".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    //     let u = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    //     let msg = kern.msg(&ath, u)?;
-
-    //     // run
-    //     if let Err(e) = kern.task(msg) {
-    //         writeln!(kern.drv.cli, "ERR vnix:kern: {:?}", e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
-    //     }
-    // }
 }

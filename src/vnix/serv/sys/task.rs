@@ -53,17 +53,18 @@ impl FromUnit for Task {
         );
 
         schm.find_loc(u).map(|(msg, (name, or))| {
+            let msg = msg.and_then(|msg| Some(Unit::Map(msg.as_map()?))).unwrap_or(u.clone());
             inst.name = name;
 
             inst.task = match or {
                 Or::First(or) =>
                     match or {
                         Or::First(serv) => Some(TaskLoop::Chain{
-                            msg: msg.unwrap_or(u.clone()),
+                            msg,
                             chain: vec![serv]
                         }),
                         Or::Second(chain) => Some(TaskLoop::Chain{
-                            msg: msg.unwrap_or(u.clone()),
+                            msg,
                             chain
                         }),
                     }
