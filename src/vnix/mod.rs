@@ -17,7 +17,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
         // ("io.term", ServKind::IOTerm),
-        // ("io.store", ServKind::IOStore),
+        ("io.store", ServKind::IOStore),
         ("etc.chrono", ServKind::EtcChrono),
         ("etc.fsm", ServKind::EtcFSM),
         ("gfx.2d", ServKind::GFX2D),
@@ -42,11 +42,11 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let msg = Unit::parse("{sum:[1 2 3]}".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = Unit::parse("(load @txt.hello)".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Chain {
         msg: msg,
-        chain: vec!["math.int".into(), "test.dumb".into()],
+        chain: vec!["io.store".into(), "test.dumb".into()],
     };
 
     kern.reg_task(&_super.name, "init", task)?;

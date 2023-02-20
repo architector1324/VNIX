@@ -1,11 +1,13 @@
+use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::string::String;
+use spin::Mutex;
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, SchemaPair, Schema, SchemaRef, SchemaStr, SchemaOr, SchemaSeq, Or, SchemaMapFirstRequire, SchemaMapRequire};
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic};
+use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
@@ -227,34 +229,44 @@ impl FromUnit for Store {
 }
 
 impl ServHlr for Store {
-    fn help(&self, ath: &str, topic: ServHelpTopic, kern: &mut Kern) -> Result<Msg, KernErr> {
-        let u = match topic {
-            ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store".into())
+    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            let u = match topic {
+                ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store".into())
+            };
+    
+            let m = Unit::Map(vec![(
+                Unit::Str("msg".into()),
+                u
+            )]);
+    
+            let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
+            yield;
+
+            out
         };
-
-        let m = Unit::Map(vec![(
-            Unit::Str("msg".into()),
-            u
-        )]);
-
-        return Ok(kern.msg(ath, m)?)
+        ServHlrAsync(Box::new(hlr))
     }
 
-    fn handle(&mut self, msg: Msg, _serv: &mut Serv, kern: &mut Kern) -> Result<Option<Msg>, KernErr> {
-        let mut out_u: Option<Unit> = None;
-
-        if let Some(acts) = self.act.clone() {
-            for act in acts {
-                act.act(kern)?.map(|u| {
-                    out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
-                });
+    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+        let hlr = move || {
+            let mut out_u: Option<Unit> = None;
+    
+            if let Some(acts) = self.act {
+                for act in acts {
+                    act.act(&mut kern.lock())?.map(|u| {
+                        out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
+                    });
+                    yield;
+                }
             }
-        }
 
-        if let Some(u) = out_u {
-            return Ok(Some(kern.msg(&msg.ath, u)?));
-        }
-
-        Ok(Some(msg))
+            if let Some(u) = out_u {
+                return kern.lock().msg(&msg.ath, u).map(|msg| Some(msg));
+            }
+    
+            Ok(Some(msg))
+        };
+        ServHlrAsync(Box::new(hlr))
     }
 }
