@@ -13,10 +13,7 @@ use super::unit::Unit;
 #[derive(Debug, Clone)]
 pub enum TaskLoop {
     Sim(Vec<(Unit, String)>),
-    Queue {
-        msg: Unit,
-        queue: Vec<String>,
-    },
+    Queue(Vec<(Unit, String)>),
     Chain {
         msg: Unit,
         chain: Vec<String>,
@@ -38,7 +35,7 @@ impl Task {
         Task{usr, name, id, task}
     }
 
-    pub fn run<'a>(self, kern: &'a Mutex<Kern>) -> TaskRunAsync<'a> {
+    pub fn run<'a>(mut self, kern: &'a Mutex<Kern>) -> TaskRunAsync<'a> {
         TaskRunAsync(Box::new(
             move || {
                 match self.task {
@@ -58,11 +55,34 @@ impl Task {
                                     *done = true;
                                 }
                             }
+
+                            if sim.iter().all(|(_, done)| *done) {
+                                return Ok(None)
+                            }
+
                             yield;
                         }
                     },
-                    TaskLoop::Queue{..} => {
-                        todo!();
+                    TaskLoop::Queue(queue) => {
+                        for (u, serv) in queue {
+                            let msg = kern.lock().msg(&self.usr, u)?;
+
+                            if let Some(gen) = Kern::send(kern, serv, msg)? {
+                                let mut gen = Box::into_pin(gen.0);
+    
+                                loop {
+                                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                                        if let Some(msg) = res? {
+                                            self.usr = msg.ath;
+                                        }
+                                        break;
+                                    }
+                                    yield;
+                                }
+                            }
+                        }
+
+                        Ok(None)
                     },
                     TaskLoop::Chain{..} => {
                         todo!();

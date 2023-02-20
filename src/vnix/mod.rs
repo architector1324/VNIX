@@ -42,7 +42,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let task = TaskLoop::Sim(vec![
+    let task = TaskLoop::Queue(vec![
         (Unit::Str("a".into()), "test.dumb.loop".into()),
         (Unit::Str("b".into()), "test.dumb.loop".into())
     ]);
