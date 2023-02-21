@@ -62,8 +62,17 @@ impl FromUnit for Task {
         );
 
         schm.find_loc(u).map(|(msg, (name, or))| {
-            let msg = msg.and_then(|msg| Some(Unit::Map(msg.as_map()?))).unwrap_or(u.clone());
             inst.name = name;
+
+            if let Some(msg) = msg.clone() {
+                if let Some(m) = msg.as_map() {
+                    let u = Unit::Map(m);
+                    inst = Task::from_unit_loc(&u)?;
+                    return None;
+                }
+            }
+
+            let msg = msg.and_then(|msg| Some(Unit::Map(msg.as_map()?))).unwrap_or(u.clone());
 
             inst.task = match or {
                 Or::First(or) =>
@@ -101,6 +110,7 @@ impl FromUnit for Task {
                         ))
                     }
             };
+            None::<()>
         });
 
         Some(inst)
