@@ -135,7 +135,7 @@ impl ServHlr for Task {
 
                 loop {
                     if let Some(_msg) = kern.lock().get_task_result(id) {
-                        msg = _msg;
+                        msg = _msg?;
                         break;
                     }
                     yield;

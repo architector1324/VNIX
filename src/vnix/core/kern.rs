@@ -77,7 +77,7 @@ pub struct Kern {
     services: Vec<Serv>,
     last_task_id: usize,
     tasks: Vec<Task>,
-    task_result: Vec<(usize, Option<Msg>)>
+    task_result: Vec<(usize, Result<Option<Msg>, KernErr>)>
 }
 
 
@@ -149,7 +149,7 @@ impl Kern {
         self.services.iter().find(|s| s.name == name).ok_or(KernErr::ServNotFound).cloned()
     }
 
-    pub fn get_task_result(&mut self, id: usize) -> Option<Option<Msg>> {
+    pub fn get_task_result(&mut self, id: usize) -> Option<Result<Option<Msg>, KernErr>> {
         self.task_result.drain_filter(|(i, _)| *i == id).next().map(|(_, msg)| msg)
     }
 
@@ -255,10 +255,16 @@ impl Kern {
                     }
 
                     if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
-                        kern_mtx.lock().task_result.push((task.id, res?));
-                        *done = true;
+                        match &res {
+                            Ok(..) => writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+                            Err(e) => {
+                                writeln!(kern_mtx.lock().drv.cli, "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                                writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?
+                            }
+                        };
 
-                        writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        kern_mtx.lock().task_result.push((task.id, res));
+                        *done = true;
                     }
                 }
 
