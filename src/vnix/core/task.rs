@@ -17,6 +17,10 @@ pub enum TaskLoop {
     Chain {
         msg: Unit,
         chain: Vec<String>,
+    },
+    ChainLoop {
+        msg: Unit,
+        chain: Vec<String>,
     }
 }
 
@@ -106,6 +110,31 @@ impl Task {
                             }
                         }
                         kern.lock().msg(&self.usr, msg).map(|msg| Some(msg))
+                    },
+                    TaskLoop::ChainLoop{mut msg, chain} => {
+                        loop {
+                            for serv in chain.clone() {
+                                let mut _msg = kern.lock().msg(&self.usr, msg.clone())?;
+    
+                                if let Some(gen) = Kern::send(kern, serv, _msg)? {
+                                    let mut gen = Box::into_pin(gen.0);
+    
+                                    loop {
+                                        if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                                            if let Some(_msg) = res? {
+                                                self.usr = _msg.ath;
+                                                msg = msg.merge(_msg.msg);
+                                            } else {
+                                                return Ok(None)
+                                            }
+                                            break;
+                                        }
+                                        yield;
+                                    }
+                                }
+                            }
+                            yield;
+                        }
                     }
                 }
             }

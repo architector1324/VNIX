@@ -41,7 +41,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // run
-    let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let path = Unit::parse("@task.init.gfx".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
     let task = TaskLoop::Queue(vec![(msg, "sys.task".into())]);

@@ -31,12 +31,21 @@ impl FromUnit for Task {
             SchemaMapSecondRequire(
                 SchemaMapEntry(Unit::Str("name".into()), SchemaStr),
                 SchemaOr(
-                    SchemaMapEntry(
-                        Unit::Str("task".into()),
-                        SchemaOr(
-                            SchemaStr,
-                            SchemaSeq(SchemaStr)
-                        )
+                    SchemaOr(
+                        SchemaMapEntry(
+                            Unit::Str("task".into()),
+                            SchemaOr(
+                                SchemaStr,
+                                SchemaSeq(SchemaStr)
+                            )
+                        ),
+                        SchemaMapEntry(
+                            Unit::Str("task.loop".into()),
+                            SchemaOr(
+                                SchemaStr,
+                                SchemaSeq(SchemaStr)
+                            )
+                        ),
                     ),
                     SchemaOr(
                         SchemaMapEntry(
@@ -59,14 +68,28 @@ impl FromUnit for Task {
             inst.task = match or {
                 Or::First(or) =>
                     match or {
-                        Or::First(serv) => Some(TaskLoop::Chain{
-                            msg,
-                            chain: vec![serv]
-                        }),
-                        Or::Second(chain) => Some(TaskLoop::Chain{
-                            msg,
-                            chain
-                        }),
+                        Or::First(or) =>
+                            match or {
+                                Or::First(serv) => Some(TaskLoop::Chain {
+                                    msg,
+                                    chain: vec![serv],
+                                }),
+                                Or::Second(chain) => Some(TaskLoop::Chain {
+                                    msg,
+                                    chain,
+                                })
+                            },
+                        Or::Second(or) =>
+                            match or {
+                                Or::First(serv) => Some(TaskLoop::ChainLoop {
+                                    msg,
+                                    chain: vec![serv],
+                                }),
+                                Or::Second(chain) => Some(TaskLoop::ChainLoop {
+                                    msg,
+                                    chain,
+                                })
+                            },
                     }
                 Or::Second(or) =>
                     match or {
