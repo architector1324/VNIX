@@ -206,19 +206,36 @@ impl FromUnit for Term {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut term = Term::default();
 
-        let schm = SchemaMapEntry(
-            Unit::Str("term".into()),
+        let schm = SchemaOr(
+            SchemaSeq(SchemaUnit),
             SchemaOr(
-                SchemaSeq(SchemaUnit),
+                SchemaMapEntry(
+                    Unit::Str("term".into()),
+                    SchemaOr(
+                        SchemaSeq(SchemaUnit),
+                        SchemaUnit
+                    )
+                ),
                 SchemaUnit
             )
         );
 
         term.acts = schm.find_loc(u).and_then(|or| {
-            match or {
-                Or::First(seq) => Some(seq.into_iter().map(|act| Act::from_unit(&u, &act)).collect::<Option<Vec<_>>>()?),
-                Or::Second(act) => Some(vec![Act::from_unit(u, &act)?])
-            }
+            let lst = match or {
+                Or::First(seq) => seq,
+                Or::Second(or) =>
+                    match or {
+                        Or::First(or) =>
+                            match or {
+                                Or::First(seq) => seq,
+                                Or::Second(act) => vec![act]
+                            }
+                        Or::Second(act) => vec![act]
+                    }
+            };
+
+            let acts = lst.into_iter().map(|act| Act::from_unit(&u, &act)).collect::<Option<Vec<_>>>()?;
+            Some(acts)
         });
 
         Some(term)

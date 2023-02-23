@@ -38,13 +38,13 @@ enum Act {
 
 #[derive(Debug)]
 pub struct Store {
-    act: Option<Vec<Act>>
+    acts: Option<Vec<Act>>
 }
 
 impl Default for Store {
     fn default() -> Self {
         Store {
-            act: None
+            acts: None
         }
     }
 }
@@ -194,34 +194,35 @@ impl FromUnit for Store {
         let mut store = Store::default();
 
         let schm = SchemaOr(
-            SchemaMapEntry(
-                Unit::Str("store".into()),
-                SchemaOr(
-                    SchemaSeq(SchemaUnit),
-                    SchemaUnit
-                )
-            ),
-            SchemaUnit
+            SchemaSeq(SchemaUnit),
+            SchemaOr(
+                SchemaMapEntry(
+                    Unit::Str("store".into()),
+                    SchemaOr(
+                        SchemaSeq(SchemaUnit),
+                        SchemaUnit
+                    )
+                ),
+                SchemaUnit
+            )
         );
 
-        schm.find_loc(u).map(|or| {
+        store.acts = schm.find_loc(u).and_then(|or| {
             let lst = match or {
-                Or::First(or) => 
+                Or::First(seq) => seq,
+                Or::Second(or) =>
                     match or {
-                        Or::First(seq) => seq,
+                        Or::First(or) =>
+                            match or {
+                                Or::First(seq) => seq,
+                                Or::Second(act) => vec![act]
+                            }
                         Or::Second(act) => vec![act]
-                    },
-                Or::Second(act) => vec![act]
+                    }
             };
 
-            let acts = lst.into_iter().filter_map(|act| Act::from_unit(u, &act));
-
-            acts.for_each(|act| {
-                match store.act.as_mut() {
-                    Some(acts) => acts.push(act),
-                    None => store.act = Some(vec![act]),
-                }
-            });
+            let acts = lst.into_iter().map(|act| Act::from_unit(&u, &act)).collect::<Option<Vec<_>>>()?;
+            Some(acts)
         });
 
         Some(store)
@@ -252,7 +253,7 @@ impl ServHlr for Store {
         let hlr = move || {
             let mut out_u: Option<Unit> = None;
     
-            if let Some(acts) = self.act {
+            if let Some(acts) = self.acts {
                 for act in acts {
                     act.act(&mut kern.lock())?.map(|u| {
                         out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
