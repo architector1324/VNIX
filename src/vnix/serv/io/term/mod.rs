@@ -1,4 +1,5 @@
 mod text;
+mod content;
 
 use core::pin::Pin;
 use core::ops::{Generator, GeneratorState};
@@ -29,6 +30,16 @@ pub struct TermBase {
     pos: (usize, usize)
 }
 
+#[derive(Debug)]
+pub struct Font {
+    glyths: Vec<(char, [u8; 16])>
+}
+
+#[derive(Debug)]
+pub struct TermRes {
+    pub font: Font,
+}
+
 pub struct TermActAsync<'a>(Box<dyn Generator<Yield = (), Return = Result<Unit, KernErr>> + 'a>);
 
 pub trait TermAct {
@@ -49,14 +60,15 @@ struct Act {
 
 #[derive(Debug)]
 pub struct Term {
-    acts: Option<Vec<Act>>
+    acts: Option<Vec<Act>>,
+    res: TermRes
 }
 
 impl Term {
     fn clear(&self, mode: &ActMode, kern: &mut Kern) -> Result<(), CLIErr> {
         match mode {
             ActMode::Cli => kern.drv.cli.clear()?,
-            ActMode::Gfx => todo!()
+            ActMode::Gfx => kern.drv.disp.fill(&|_, _| 0x000000).map_err(|_| CLIErr::Clear)?
         }
         kern.term.pos = (0, 0);
 
@@ -66,7 +78,38 @@ impl Term {
     fn clear_line(&self, mode: &ActMode, kern: &mut Kern) -> Result<(), CLIErr> {
         match mode {
             ActMode::Cli => write!(kern.drv.cli, "\r").map_err(|_| CLIErr::Clear)?,
-            ActMode::Gfx => todo!()
+            ActMode::Gfx => {
+                let (w, _) = kern.drv.disp.res().map_err(|_| CLIErr::Clear)?;
+
+                kern.term.pos.0 = 0;
+
+                for _ in 0..(w / 8 - 1) {
+                    self.print(" ", mode, kern)?;
+                }
+                kern.term.pos.0 = 0;
+            }
+        }
+        Ok(())
+    }
+
+    fn print_glyth(&self, ch: char, pos: (usize, usize), src: u32, mode: &ActMode, kern: &mut Kern) -> Result<(), CLIErr> {
+        match mode {
+            ActMode::Cli => {
+                kern.drv.cli.glyth(ch, (pos.0 / 8, pos.1 / 16))?;
+            },
+            ActMode::Gfx => {
+                let img = self.res.font.glyths.iter().find(|(_ch, _)| *_ch == ch).map_or(Err(CLIErr::Write), |(_, img)| Ok(img))?;
+
+                let mut tmp = Vec::with_capacity(8 * 16);
+
+                for y in 0..16 {
+                    for x in 0..8 {
+                        let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0x000000};
+                        tmp.push(px);
+                    }
+                }
+                kern.drv.disp.blk((pos.0 as i32, pos.1 as i32), (8, 16), src, tmp.as_slice()).map_err(|_| CLIErr::Write)?;
+            }
         }
         Ok(())
     }
@@ -100,7 +143,33 @@ impl Term {
                     write!(kern.drv.cli, "{}", ch).map_err(|_| CLIErr::Write)?;
                 }
             },
-            ActMode::Gfx => todo!()
+            ActMode::Gfx => {
+                let (w, _) = kern.drv.disp.res().map_err(|_| CLIErr::Write)?;
+
+                for ch in out.chars() {
+                    if ch == '\n' {
+                        kern.term.pos.1 += 1;
+                        kern.term.pos.0 = 0;
+                    } else if ch == '\r' {
+                        self.clear_line(mode, kern)?;
+                    } else if ch == '\u{8}' {
+                        if kern.term.pos.0 == 0 && kern.term.pos.1 > 0 {
+                            kern.term.pos.1 -= 1;
+                        } else {
+                            kern.term.pos.0 -= 1;
+                        }
+                        self.print_glyth(' ', (kern.term.pos.0 * 8, kern.term.pos.1 * 16), 0x00ff00, mode, kern)?;
+                    } else {
+                        self.print_glyth(ch, (kern.term.pos.0 * 8, kern.term.pos.1 * 16), 0x00ff00, mode, kern)?;
+                        kern.term.pos.0 += 1;
+                    }
+
+                    if kern.term.pos.0 * 8 >= w {
+                        kern.term.pos.1 += 1;
+                        kern.term.pos.0 = 0;
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -117,7 +186,12 @@ impl Default for TermBase {
 impl Default for Term {
     fn default() -> Self {
         Term {
-            acts: None
+            acts: None,
+            res: TermRes {
+                font: Font {
+                    glyths: content::SYS_FONT.to_vec()
+                }
+            }
         }
     }
 }
@@ -247,6 +321,7 @@ impl TermAct for Act {
         match self.kind {
             ActKind::Cls => TermActAsync(Box::new(move || {
                 term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+                kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                 yield;
 
                 Ok(msg)

@@ -191,6 +191,9 @@ impl TermAct for Say {
                     yield;
                 }
 
+                kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                yield;
+
                 Ok(msg)
             })),
             Unit::Lst(seq) =>
@@ -201,6 +204,9 @@ impl TermAct for Say {
                         if self.nl {
                             term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
                         }
+                        yield;
+
+                        kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                         yield;
 
                         Ok(msg)
@@ -227,6 +233,9 @@ impl TermAct for Say {
                 if self.nl {
                     term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
                 }
+                yield;
+
+                kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                 yield;
 
                 Ok(msg)
