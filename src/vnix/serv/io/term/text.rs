@@ -9,7 +9,7 @@ use spin::Mutex;
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::TaskLoop;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaPair, SchemaUnit, Schema, SchemaStr};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaPair, SchemaUnit, Schema, SchemaStr, SchemaOr, SchemaMapEntry, SchemaMapSecondRequire, SchemaBool, SchemaInt, SchemaRef, Or};
 use crate::vnix::core::kern::{Kern, KernErr};
 
 use super::{TermActAsync, Term, TermAct, ActMode};
@@ -63,40 +63,86 @@ impl FromUnit for Say {
     }
 
     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
-        let schm = SchemaPair(SchemaStr, SchemaUnit);
-        
-        schm.find_deep(glob, u).and_then(|(s, u)| {
-            match s.as_str() {
-                "say" => Some(Say {
-                    msg: u,
-                    shrt: None,
-                    nl: false,
-                    mode: SayMode::Norm,
-                    act_mode: ActMode::Cli
-                }),
-                "say.gfx" => Some(Say {
-                    msg: u,
-                    shrt: None,
-                    nl: false,
-                    mode: SayMode::Norm,
-                    act_mode: ActMode::Gfx
-                }),
-                "say.fmt" => Some(Say {
-                    msg: u,
-                    shrt: None,
-                    nl: false,
-                    mode: SayMode::Fmt,
-                    act_mode: ActMode::Cli
-                }),
-                "say.fmt.gfx" => Some(Say {
-                    msg: u,
-                    shrt: None,
-                    nl: false,
-                    mode: SayMode::Fmt,
-                    act_mode: ActMode::Gfx
-                }),
-                _ => None
-            }
+        let schm = SchemaOr(
+            SchemaPair(SchemaStr, SchemaUnit),
+            SchemaMapSecondRequire(
+                SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
+                SchemaMapSecondRequire(
+                    SchemaMapEntry(Unit::Str("nl".into()), SchemaBool),
+                    SchemaOr(
+                        SchemaOr(
+                            SchemaOr(
+                                SchemaMapEntry(Unit::Str("say".into()), SchemaRef),
+                                SchemaMapEntry(Unit::Str("say".into()), SchemaUnit)
+                            ),
+                            SchemaOr(
+                                SchemaMapEntry(Unit::Str("say.fmt".into()), SchemaRef),
+                                SchemaMapEntry(Unit::Str("say.fmt".into()), SchemaUnit)
+                            )
+                        ),
+                        SchemaOr(
+                            SchemaOr(
+                                SchemaMapEntry(Unit::Str("say.gfx".into()), SchemaRef),
+                                SchemaMapEntry(Unit::Str("say.gfx".into()), SchemaUnit)
+                            ),
+                            SchemaOr(
+                                SchemaMapEntry(Unit::Str("say.fmt.gfx".into()), SchemaRef),
+                                SchemaMapEntry(Unit::Str("say.fmt.gfx".into()), SchemaUnit)
+                            )
+                        )
+                    )
+                )
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|or| {
+            let (msg, shrt, nl, mode, act_mode) = match or {
+                Or::First((s, msg)) =>
+                    match s.as_str() {
+                        "say" => (msg, None, false, SayMode::Norm, ActMode::Cli),
+                        "say.gfx" => (msg, None, false, SayMode::Norm, ActMode::Gfx),
+                        "say.fmt" => (msg, None, false, SayMode::Fmt, ActMode::Cli),
+                        "say.fmt.gfx" => (msg, None, false, SayMode::Fmt, ActMode::Gfx),
+                        _ => return None
+                    },
+                Or::Second((shrt,(nl, or))) =>
+                    match or {
+                        Or::First(say_cli) =>
+                            match say_cli {
+                                Or::First(say) =>
+                                    match say {
+                                        Or::First(path) => (Unit::Ref(path), shrt, nl.unwrap_or(false), SayMode::Norm, ActMode::Cli),
+                                        Or::Second(msg) => (msg, shrt, nl.unwrap_or(false), SayMode::Norm, ActMode::Cli)
+                                    },
+                                Or::Second(say_fmt) =>
+                                    match say_fmt {
+                                        Or::First(path) => (Unit::Ref(path), shrt, nl.unwrap_or(false), SayMode::Fmt, ActMode::Cli),
+                                        Or::Second(msg) => (msg, shrt, nl.unwrap_or(false), SayMode::Fmt, ActMode::Cli)
+                                    }
+                            },
+                        Or::Second(say_gfx) =>
+                            match say_gfx {
+                                Or::First(say) =>
+                                    match say {
+                                        Or::First(path) => (Unit::Ref(path), shrt, nl.unwrap_or(false), SayMode::Norm, ActMode::Gfx),
+                                        Or::Second(msg) => (msg, shrt, nl.unwrap_or(false), SayMode::Norm, ActMode::Gfx)
+                                    },
+                                Or::Second(say_fmt) =>
+                                    match say_fmt {
+                                        Or::First(path) => (Unit::Ref(path), shrt, nl.unwrap_or(false), SayMode::Fmt, ActMode::Gfx),
+                                        Or::Second(msg) => (msg, shrt, nl.unwrap_or(false), SayMode::Fmt, ActMode::Gfx)
+                                    }
+                            },
+                    }
+            };
+
+            Some(Say {
+                msg,
+                shrt: shrt.map(|v| v as usize),
+                nl,
+                mode,
+                act_mode
+            })
         })
     }
 }
