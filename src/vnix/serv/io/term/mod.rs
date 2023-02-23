@@ -7,10 +7,10 @@ use core::ops::{Generator, GeneratorState};
 use spin::Mutex;
 use alloc::sync::Arc;
 
-use alloc::vec;
+use alloc::{vec, format};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
@@ -50,6 +50,7 @@ pub trait TermAct {
 enum ActKind {
     Cls,
     Nl,
+    Trc,
     Say(text::Say)
 }
 
@@ -228,6 +229,14 @@ impl FromUnit for Act {
                             kind: ActKind::Nl,
                             mode: ActMode::Gfx
                         }),
+                        "trc" => Some(Act {
+                            kind: ActKind::Trc,
+                            mode: ActMode::Cli
+                        }),
+                        "trc.gfx" => Some(Act {
+                            kind: ActKind::Trc,
+                            mode: ActMode::Gfx
+                        }),
                         "say" => Some(Act {
                             kind: ActKind::Say(text::Say {
                                 msg: Unit::Ref(vec!["msg".into()]),
@@ -339,6 +348,15 @@ impl TermAct for Act {
             })),
             ActKind::Nl => TermActAsync(Box::new(move || {
                 term.print("\n", &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+
+                if let ActMode::Gfx = self.mode {
+                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                    yield;
+                }
+                Ok(msg)
+            })),
+            ActKind::Trc => TermActAsync(Box::new(move || {
+                term.print(orig.to_string().as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
                 if let ActMode::Gfx = self.mode {
                     kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
