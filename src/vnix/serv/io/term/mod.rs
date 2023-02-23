@@ -15,7 +15,7 @@ use alloc::string::{String, ToString};
 use crate::driver::{CLIErr, DispErr};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::TaskLoop;
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, SchemaSeq, Or, SchemaPair, SchemaRef};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, SchemaSeq, Or, SchemaPair, SchemaRef, SchemaInt};
 use crate::vnix::core::kern::{Kern, KernErr, Addr};
 use crate::vnix::core::serv::{ServHlrAsync, Serv, ServHlr, ServHelpTopic};
 
@@ -39,8 +39,11 @@ struct GetRes {
     mode: ActMode
 }
 
-// #[derive(Debug, Clone)]
-// struct SetRes(usize, usize);
+#[derive(Debug, Clone)]
+struct SetRes {
+    size: (usize, usize),
+    mode: ActMode
+}
 
 #[derive(Debug)]
 pub struct TermBase {
@@ -69,7 +72,7 @@ enum ActKind {
     Nl,
     Trc,
     GetRes(GetRes),
-    // SetRes(SetRes),
+    SetRes(SetRes),
     Stream(Unit, (String, Addr)),
     Say(text::Say)
 }
@@ -261,6 +264,33 @@ impl FromUnit for GetRes {
     }
 }
 
+impl FromUnit for SetRes {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaPair(
+            SchemaStr,
+            SchemaPair(SchemaInt, SchemaInt)
+        );
+
+        schm.find_deep(glob, u).and_then(|(s, (w, h))| {
+            match s.as_str() {
+                "set.res" => Some(SetRes {
+                    size: (w as usize, h as usize),
+                    mode: ActMode::Cli
+                }),
+                "set.res.gfx" => Some(SetRes {
+                    size: (w as usize, h as usize),
+                    mode: ActMode::Gfx
+                }),
+                _ => None
+            }
+        })
+    }
+}
+
 impl FromUnit for Act {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -386,6 +416,13 @@ impl FromUnit for Act {
                         return Some(Act {
                             mode: get_res.mode.clone(),
                             kind: ActKind::GetRes(get_res)
+                        })
+                    }
+
+                    if let Some(set_res) = SetRes::from_unit(glob, &u) {
+                        return Some(Act {
+                            mode: set_res.mode.clone(),
+                            kind: ActKind::SetRes(set_res)
                         })
                     }
 
@@ -522,6 +559,15 @@ impl TermAct for Act {
                 Ok(msg)
             })),
             ActKind::GetRes(get_res) => get_res.act(orig, msg, term, kern),
+            ActKind::SetRes(set_res) => TermActAsync(Box::new(move || {
+                match set_res.mode {
+                    ActMode::Cli => kern.lock().drv.cli.set_res(set_res.size).map_err(|e| KernErr::CLIErr(e))?,
+                    ActMode::Gfx => kern.lock().drv.disp.set_res(set_res.size).map_err(|e| KernErr::DispErr(e))?
+                }
+                yield;
+
+                Ok(msg)
+            })),
             ActKind::Stream(_msg, (serv, _)) => TermActAsync(Box::new(move || {
                 // run stream
                 let task = TaskLoop::Chain {
