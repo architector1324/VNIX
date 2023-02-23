@@ -49,6 +49,7 @@ pub trait TermAct {
 #[derive(Debug, Clone)]
 enum ActKind {
     Cls,
+    Nl,
     Say(text::Say)
 }
 
@@ -219,6 +220,14 @@ impl FromUnit for Act {
                             kind: ActKind::Cls,
                             mode: ActMode::Gfx
                         }),
+                        "nl" => Some(Act {
+                            kind: ActKind::Nl,
+                            mode: ActMode::Cli
+                        }),
+                        "nl.gfx" => Some(Act {
+                            kind: ActKind::Nl,
+                            mode: ActMode::Gfx
+                        }),
                         "say" => Some(Act {
                             kind: ActKind::Say(text::Say {
                                 msg: Unit::Ref(vec!["msg".into()]),
@@ -326,7 +335,15 @@ impl TermAct for Act {
                     kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
                     yield;
                 }
+                Ok(msg)
+            })),
+            ActKind::Nl => TermActAsync(Box::new(move || {
+                term.print("\n", &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
+                if let ActMode::Gfx = self.mode {
+                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                    yield;
+                }
                 Ok(msg)
             })),
             ActKind::Say(say) => say.act(orig, msg, term, kern)
