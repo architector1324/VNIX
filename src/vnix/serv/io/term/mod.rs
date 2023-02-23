@@ -321,8 +321,11 @@ impl TermAct for Act {
         match self.kind {
             ActKind::Cls => TermActAsync(Box::new(move || {
                 term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
-                yield;
+
+                if let ActMode::Gfx = self.mode {
+                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                    yield;
+                }
 
                 Ok(msg)
             })),
@@ -353,7 +356,7 @@ impl ServHlr for Term {
 
     fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
-            writeln!(kern.lock().drv.cli, "io.term: {:?}", self.acts);
+            // writeln!(kern.lock().drv.cli, "io.term: {:?}", self.acts);
 
             if let Some(acts) = self.acts.clone() {
                 let mut out_u = msg.msg.clone();

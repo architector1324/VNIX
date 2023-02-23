@@ -41,7 +41,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let s = "[cls.gfx (say.gfx (load @txt.hello))]";
+    let s = "[cls (say (load @txt.hello)@io.store)]";
     let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // // run
