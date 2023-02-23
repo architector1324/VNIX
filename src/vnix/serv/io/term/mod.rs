@@ -7,15 +7,16 @@ use core::ops::{Generator, GeneratorState};
 use spin::Mutex;
 use alloc::sync::Arc;
 
-use alloc::{vec, format};
+use alloc::vec;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
-use crate::driver::CLIErr;
+use crate::driver::{CLIErr, DispErr};
 use crate::vnix::core::msg::Msg;
+use crate::vnix::core::task::TaskLoop;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, SchemaSeq, Or};
-use crate::vnix::core::kern::{Kern, KernErr};
+use crate::vnix::core::kern::{Kern, KernErr, Addr};
 use crate::vnix::core::serv::{ServHlrAsync, Serv, ServHlr, ServHelpTopic};
 
 
@@ -51,6 +52,7 @@ enum ActKind {
     Cls,
     Nl,
     Trc,
+    Stream(Unit, (String, Addr)),
     Say(text::Say)
 }
 
@@ -175,6 +177,13 @@ impl Term {
         }
         Ok(())
     }
+
+    fn flush(&self, mode: &ActMode, kern: &mut Kern) -> Result<(), DispErr> {
+        if let ActMode::Gfx = mode {
+            kern.drv.disp.flush()?;
+        }
+        Ok(())
+    }
 }
 
 impl Default for TermBase {
@@ -280,6 +289,13 @@ impl FromUnit for Act {
                         _ => None
                     },
                 Or::Second(u) => {
+                    if let Unit::Stream(msg, (serv, addr)) = u {
+                        return Some(Act {
+                            mode: ActMode::Cli,
+                            kind: ActKind::Stream(*msg, (serv, addr))
+                        });
+                    }
+
                     if let Some(say) = text::Say::from_unit(glob, &u) {
                         return Some(Act {
                             mode: say.act_mode.clone(),
@@ -335,33 +351,74 @@ impl FromUnit for Term {
 }
 
 impl TermAct for Act {
-    fn act<'a>(self, orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+    fn act<'a>(self, orig: Arc<Msg>, mut msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         match self.kind {
             ActKind::Cls => TermActAsync(Box::new(move || {
                 term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                yield;
 
-                if let ActMode::Gfx = self.mode {
-                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
-                    yield;
-                }
                 Ok(msg)
             })),
             ActKind::Nl => TermActAsync(Box::new(move || {
                 term.print("\n", &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                yield;
 
-                if let ActMode::Gfx = self.mode {
-                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
-                    yield;
-                }
                 Ok(msg)
             })),
             ActKind::Trc => TermActAsync(Box::new(move || {
                 term.print(orig.to_string().as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                yield;
 
-                if let ActMode::Gfx = self.mode {
-                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
+                Ok(msg)
+            })),
+            ActKind::Stream(_msg, (serv, _)) => TermActAsync(Box::new(move || {
+                // run stream
+                let task = TaskLoop::Chain {
+                    msg: _msg,
+                    chain: vec![serv]
+                };
+
+                let id = kern.lock().reg_task(&orig.ath, "io.term", task)?;
+                let mut act = None;
+
+                loop {
+                    let res = kern.lock().get_task_result(id);
+
+                    if let Some(res) = res {
+                        if let Some(_msg) = res? {
+                            let act_u = if let Some(_msg) = _msg.msg.as_map_find("msg") {
+                                _msg
+                            } else {
+                                _msg.msg
+                            };
+
+                            act = Act::from_unit(&orig.msg, &act_u);
+                        }
+                        break;
+                    }
+
                     yield;
                 }
+
+                // run action
+                if let Some(act) = act {
+                    let mut gen = Box::into_pin(act.act(orig, msg.clone(), term, kern).0);
+
+                    loop {
+                        if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                            msg = msg.merge(res?);
+                            break;
+                        }
+                        yield;
+                    }
+                    yield;
+
+                    return Ok(msg);
+                }
+
                 Ok(msg)
             })),
             ActKind::Say(say) => say.act(orig, msg, term, kern)

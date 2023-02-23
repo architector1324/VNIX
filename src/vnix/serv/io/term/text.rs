@@ -191,10 +191,8 @@ impl TermAct for Say {
                     yield;
                 }
 
-                if let ActMode::Gfx = self.act_mode {
-                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
-                    yield;
-                }
+                term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                yield;
 
                 Ok(msg)
             })),
@@ -208,10 +206,8 @@ impl TermAct for Say {
                         }
                         yield;
 
-                        if let ActMode::Gfx = self.act_mode {
-                            kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
-                            yield;
-                        }
+                        term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                        yield;
 
                         Ok(msg)
                     })),
@@ -239,10 +235,8 @@ impl TermAct for Say {
                 }
                 yield;
 
-                if let ActMode::Gfx = self.act_mode {
-                    kern.lock().drv.disp.flush().map_err(|e| KernErr::DispErr(e))?;
-                    yield;
-                }
+                term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                yield;
 
                 Ok(msg)
             }))
