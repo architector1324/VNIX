@@ -41,7 +41,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let s = "[cls (load @tmp)@io.store nl]";
+    let s = "{term:[cls (get.res @res.cli) (get.res.lst.gfx @res.gfx) (say @res) nl]}";
     let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Queue(vec![(msg, "io.term".into())]);

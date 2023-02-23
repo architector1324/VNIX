@@ -64,7 +64,10 @@ impl FromUnit for Say {
 
     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
         let schm = SchemaOr(
-            SchemaPair(SchemaStr, SchemaUnit),
+            SchemaOr(
+                SchemaPair(SchemaStr, SchemaRef),
+                SchemaPair(SchemaStr, SchemaUnit)
+            ),
             SchemaMapSecondRequire(
                 SchemaMapEntry(Unit::Str("shrt".into()), SchemaInt),
                 SchemaMapSecondRequire(
@@ -97,14 +100,20 @@ impl FromUnit for Say {
 
         schm.find_deep(glob, u).and_then(|or| {
             let (msg, shrt, nl, mode, act_mode) = match or {
-                Or::First((s, msg)) =>
+                Or::First(or) => {
+                    let (s, msg) = match or {
+                        Or::First((s, path)) => (s, Unit::Ref(path)),
+                        Or::Second((s, msg)) => (s, msg)
+                    };
+            
                     match s.as_str() {
                         "say" => (msg, None, false, SayMode::Norm, ActMode::Cli),
                         "say.gfx" => (msg, None, false, SayMode::Norm, ActMode::Gfx),
                         "say.fmt" => (msg, None, false, SayMode::Fmt, ActMode::Cli),
                         "say.fmt.gfx" => (msg, None, false, SayMode::Fmt, ActMode::Gfx),
                         _ => return None
-                    },
+                    }
+                },
                 Or::Second((shrt,(nl, or))) =>
                     match or {
                         Or::First(say_cli) =>
