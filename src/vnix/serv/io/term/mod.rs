@@ -83,7 +83,8 @@ enum ActKind {
     Stream(Unit, (String, Addr)),
     Say(text::Say),
     Inp(text::Inp),
-    Img(media::Img)
+    Img(media::Img),
+    Sprite(media::Sprite)
 }
 
 #[derive(Debug, Clone)]
@@ -527,6 +528,13 @@ impl FromUnit for Act {
                         })
                     }
 
+                    if let Some(spr) = media::Sprite::from_unit(glob, &u) {
+                        return Some(Act {
+                            kind: ActKind::Sprite(spr),
+                            mode: ActMode::Gfx
+                        })
+                    }
+
                     None
                 }
             }
@@ -729,7 +737,8 @@ impl TermAct for Act {
             })),
             ActKind::Say(say) => say.act(orig, msg, term, kern),
             ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
-            ActKind::Img(img) => img.act(orig, msg, term, kern)
+            ActKind::Img(img) => img.act(orig, msg, term, kern),
+            ActKind::Sprite(spr) => spr.act(orig, msg, term, kern)
         }
     }
 }

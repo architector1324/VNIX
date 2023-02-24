@@ -6,7 +6,7 @@ use alloc::boxed::Box;
 use crate::driver::DispErr;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{KernErr, Kern};
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaInt, SchemaStr, Schema, SchemaMapRequire, SchemaPair, SchemaOr, SchemaSeq, Or};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaInt, SchemaStr, Schema, SchemaMapRequire, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaUnit};
 
 use crate::vnix::utils;
 
@@ -38,6 +38,12 @@ pub struct Img {
     size: (usize, usize),
     img: Pixels,
     _cache: Option<Vec<u32>>
+}
+
+#[derive(Debug, Clone)]
+pub struct Sprite {
+    pub pos: (i32, i32),
+    pub img: Img
 }
 
 impl Img {
@@ -151,6 +157,34 @@ impl FromUnit for Img {
     }
 }
 
+impl FromUnit for Sprite {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaMapRequire(
+            SchemaMapEntry(
+                Unit::Str("pos".into()),
+                SchemaPair(SchemaInt, SchemaInt)
+            ),
+            SchemaMapEntry(
+                Unit::Str("spr".into()),
+                SchemaUnit
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|(pos, img)| {
+            let img = Img::from_unit(glob, &img)?;
+
+            Some(Sprite {
+                pos,
+                img
+            })
+        })
+    }
+}
+
 impl TermAct for Img {
     fn act<'a>(mut self, _orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a spin::Mutex<Kern>) -> TermActAsync<'a> {
         let hlr = move || {
@@ -162,6 +196,28 @@ impl TermAct for Img {
             yield;
 
             self.draw(pos, 0, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+            yield;
+
+            term.flush(&ActMode::Gfx, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+
+            Ok(msg)
+        };
+        TermActAsync(Box::new(hlr))
+    }
+}
+
+impl TermAct for Sprite {
+    fn act<'a>(mut self, _orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a spin::Mutex<Kern>) -> TermActAsync<'a> {
+        let hlr = move || {
+            let w = self.img.size.0;
+            let h = self.img.size.1;
+
+            let pos = (
+                self.pos.0 - (w as i32 / 2),
+                self.pos.1 - (h as i32 / 2)
+            );
+
+            self.img.draw(pos, 0, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
             yield;
 
             term.flush(&ActMode::Gfx, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
