@@ -7,12 +7,12 @@ use core::ops::{Generator, GeneratorState};
 use spin::Mutex;
 use alloc::sync::Arc;
 
-use alloc::vec;
+use alloc::{vec, format};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
-use crate::driver::{CLIErr, DispErr};
+use crate::driver::{CLIErr, DispErr, TermKey};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::TaskLoop;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, SchemaSeq, Or, SchemaPair, SchemaRef, SchemaInt};
@@ -45,6 +45,9 @@ struct SetRes {
     mode: ActMode
 }
 
+#[derive(Debug, Clone)]
+struct GetKey(Option<Vec<String>>);
+
 #[derive(Debug)]
 pub struct TermBase {
     pos: (usize, usize)
@@ -73,6 +76,7 @@ enum ActKind {
     Trc,
     GetRes(GetRes),
     SetRes(SetRes),
+    GetKey(GetKey),
     Stream(Unit, (String, Addr)),
     Say(text::Say)
 }
@@ -199,6 +203,10 @@ impl Term {
         Ok(())
     }
 
+    fn get_key(&self, kern: &mut Kern) -> Result<Option<TermKey>, CLIErr> {
+        kern.drv.cli.get_key(false)
+    }
+
     fn flush(&self, mode: &ActMode, kern: &mut Kern) -> Result<(), DispErr> {
         if let ActMode::Gfx = mode {
             kern.drv.disp.flush()?;
@@ -291,6 +299,23 @@ impl FromUnit for SetRes {
     }
 }
 
+impl FromUnit for GetKey {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaPair(SchemaStr, SchemaRef);
+
+        schm.find_deep(glob, u).and_then(|(s, path)| {
+            match s.as_str() {
+                "key" => Some(GetKey(Some(path))),
+                _ => None
+            }
+        })
+    }
+}
+
 impl FromUnit for Act {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         Self::from_unit(u, u)
@@ -362,6 +387,10 @@ impl FromUnit for Act {
                             }),
                             mode: ActMode::Gfx
                         }),
+                        "key" => Some(Act {
+                            kind: ActKind::GetKey(GetKey(None)),
+                            mode: ActMode::Cli
+                        }),
                         "say" => Some(Act {
                             kind: ActKind::Say(text::Say {
                                 msg: Unit::Ref(vec!["msg".into()]),
@@ -423,6 +452,13 @@ impl FromUnit for Act {
                         return Some(Act {
                             mode: set_res.mode.clone(),
                             kind: ActKind::SetRes(set_res)
+                        })
+                    }
+
+                    if let Some(get_key) = GetKey::from_unit(glob, &u) {
+                        return Some(Act {
+                            kind: ActKind::GetKey(get_key),
+                            mode: ActMode::Cli
                         })
                     }
 
@@ -565,6 +601,24 @@ impl TermAct for Act {
                     ActMode::Gfx => kern.lock().drv.disp.set_res(set_res.size).map_err(|e| KernErr::DispErr(e))?
                 }
                 yield;
+
+                Ok(msg)
+            })),
+            ActKind::GetKey(get_key) => TermActAsync(Box::new(move || {
+                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+                yield;
+
+                loop {
+                    if let Some(key) = term.get_key(& mut kern.lock()).map_err(|e| KernErr::CLIErr(e))? {
+                        if let Some(path) = get_key.0 {
+                            if let Some(_msg) = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), msg.clone()) {
+                                return Ok(_msg);
+                            }
+                        }
+                        break;
+                    }
+                    yield;
+                }
 
                 Ok(msg)
             })),

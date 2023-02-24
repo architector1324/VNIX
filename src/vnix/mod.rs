@@ -41,7 +41,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let s = "[(set.res.gfx (1920 1080)) cls.gfx (say.gfx (load @txt.hello)@io.store)]";
+    let s = "{term:[(set.res.gfx (1920 1080)) cls.gfx (say.gfx (load @txt.hello)@io.store) nl.gfx (key @msg) say.gfx]}";
     let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Queue(vec![(msg, "io.term".into())]);
