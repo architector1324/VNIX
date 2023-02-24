@@ -29,14 +29,15 @@ pub struct Task {
     pub usr: String,
     pub name: String,
     pub id: usize,
+    pub parent_id: usize,
     pub task: TaskLoop,
 }
 
 pub struct TaskRunAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>);
 
 impl Task {
-    pub fn new(usr: String, name: String, id: usize, task: TaskLoop) -> Self {
-        Task{usr, name, id, task}
+    pub fn new(usr: String, name: String, id: usize, parent_id: usize, task: TaskLoop) -> Self {
+        Task{usr, name, id, parent_id, task}
     }
 
     pub fn run<'a>(mut self, kern: &'a Mutex<Kern>) -> TaskRunAsync<'a> {
