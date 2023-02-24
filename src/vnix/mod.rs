@@ -41,24 +41,17 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let s = "{term:[cls.gfx {pmt.gfx:'a: ' prs:t} nl.gfx say.gfx]}";
+    let s = "[(set.res.gfx (1920 1080)) cls.gfx (load @img.wall.ai.1)@io.store]";
     let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Queue(vec![(msg, "io.term".into())]);
-    kern.reg_task(&_super.name, "prompt", task)?;
-
-    let s = "{term:[cls.gfx {pmt.gfx:'b: ' prs:t} nl.gfx say.gfx nl.gfx]}";
-    let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    let task = TaskLoop::Queue(vec![(msg, "io.term".into())]);
-    kern.reg_task(&_super.name, "prompt", task)?;
 
     // // run
     // let path = Unit::parse("@task.hello.gfx".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
     // let task = TaskLoop::Queue(vec![(msg, "sys.task".into())]);
-    // kern.reg_task(&_super.name, "init.load", task)?;
+    kern.reg_task(&_super.name, "init.load", task)?;
 
     kern.run()
 }

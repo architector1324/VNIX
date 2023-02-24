@@ -1,4 +1,5 @@
 mod text;
+mod media;
 mod content;
 
 use core::pin::Pin;
@@ -81,7 +82,8 @@ enum ActKind {
     GetKey(GetKey),
     Stream(Unit, (String, Addr)),
     Say(text::Say),
-    Inp(text::Inp)
+    Inp(text::Inp),
+    Img(media::Img)
 }
 
 #[derive(Debug, Clone)]
@@ -518,6 +520,13 @@ impl FromUnit for Act {
                         })
                     }
 
+                    if let Some(img) = media::Img::from_unit(glob, &u) {
+                        return Some(Act {
+                            kind: ActKind::Img(img),
+                            mode: ActMode::Gfx
+                        })
+                    }
+
                     None
                 }
             }
@@ -719,7 +728,8 @@ impl TermAct for Act {
                 Ok(msg)
             })),
             ActKind::Say(say) => say.act(orig, msg, term, kern),
-            ActKind::Inp(inp) => inp.act(orig, msg, term, kern)
+            ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
+            ActKind::Img(img) => img.act(orig, msg, term, kern)
         }
     }
 }
