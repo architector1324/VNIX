@@ -24,6 +24,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         ("math.int", ServKind::MathInt),
         ("sys.task", ServKind::SysTask),
         ("sys.usr", ServKind::SysUsr),
+        ("sys.hw", ServKind::SysHW),
         ("test.dumb", ServKind::TestDumb),
     ];
 

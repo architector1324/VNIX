@@ -31,6 +31,7 @@ pub enum ServKind {
     MathInt,
     SysTask,
     SysUsr,
+    SysHW,
     TestDumb,
 }
 
@@ -43,6 +44,7 @@ pub enum ServInst {
     MathInt(math::Int),
     SysTask(sys::task::Task),
     SysUsr(sys::usr::User),
+    SysHW(sys::hw::HW),
     TestDumb(test::Dumb),
 }
 
@@ -78,6 +80,7 @@ impl Serv {
             ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
             ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
             ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
+            ServKind::SysHW => Some(ServInst::SysHW(sys::hw::HW::from_unit_loc(u)?)),
             ServKind::TestDumb => Some(ServInst::TestDumb(test::Dumb::from_unit_loc(u)?)),
         }
     }
@@ -100,6 +103,7 @@ impl ServHlr for ServInst {
             ServInst::MathInt(inst) => inst.help(ath, topic, kern),
             ServInst::SysTask(inst) => inst.help(ath, topic, kern),
             ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
+            ServInst::SysHW(inst) => inst.help(ath, topic, kern),
             ServInst::TestDumb(inst) => inst.help(ath, topic, kern),
         }
     }
@@ -114,6 +118,7 @@ impl ServHlr for ServInst {
             ServInst::MathInt(inst) => inst.handle(msg, serv, kern),
             ServInst::SysTask(inst) => inst.handle(msg, serv, kern),
             ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
+            ServInst::SysHW(inst) => inst.handle(msg, serv, kern),
             ServInst::TestDumb(inst) => inst.handle(msg, serv, kern),
         }
     }

@@ -371,7 +371,7 @@ impl ServHlr for Task {
                 loop {
                     if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
                         if let Some(msg) = res? {
-                            _msg = Some(kern.lock().msg(&orig.ath, msg)?);
+                            _msg = kern.lock().msg(&orig.ath, msg).map(|msg| Some(msg))?;
                         }
                         break;
                     }

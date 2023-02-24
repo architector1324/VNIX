@@ -98,7 +98,7 @@ pub trait Disp {
     fn flush_blk(&mut self, pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MemSizeUnits {
     Bytes,
     Kilo,

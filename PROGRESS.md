@@ -39,9 +39,9 @@ Progress: 45%
     - [x] `math.int`
     - [ ] `math.dec`
 3. [ ] System:
-    - [x] `sys.usr` - users control
+    - [x] `sys.usr` - users management
     - [x] `sys.task` - run task from message
-    - [ ] `sys.kern` - kernel control
+    - [ ] `sys.hw` - hardware management
 4. [ ] Graphics:
     - [ ] `gfx.2d` - generate 2d image
     - [ ] `gfx.3d` - generate 3d image
@@ -50,7 +50,7 @@ Progress: 45%
     - [ ] `etc.parser` - parser generator
     - [ ] `etc.ast` - tree transformer
     - [x] `etc.fsm` - finite state machine
-    - [ ] `etc.chrono` - time control
+    - [x] `etc.chrono` - time control
 
 
 ## Applications
