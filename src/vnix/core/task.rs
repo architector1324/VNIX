@@ -33,6 +33,11 @@ pub struct Task {
     pub task: TaskLoop,
 }
 
+#[derive(Debug, Clone)]
+pub enum TaskSig {
+    Kill
+}
+
 pub struct TaskRunAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>);
 
 impl Task {

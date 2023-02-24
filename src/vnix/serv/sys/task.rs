@@ -13,9 +13,9 @@ use alloc::string::String;
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::task::{TaskLoop};
+use crate::vnix::core::task::{TaskLoop, TaskSig};
 use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream, SchemaPair, SchemaInt};
 
 
 #[derive(Debug, Clone)]
@@ -31,6 +31,12 @@ struct Run {
     task: Option<TaskLoop>
 }
 
+#[derive(Debug, Clone)]
+struct Signal {
+    id: usize,
+    sig: TaskSig
+}
+
 pub struct TaskActAsync<'a>(Box<dyn Generator<Yield = (), Return = Result<Option<Unit>, KernErr>> + 'a>);
 
 pub trait TaskAct {
@@ -40,7 +46,8 @@ pub trait TaskAct {
 #[derive(Debug, Clone)]
 enum Act {
     Run(Run),
-    Get(GetRunning)
+    Get(GetRunning),
+    Sig(Signal)
 }
 
 pub struct Task {
@@ -174,12 +181,48 @@ impl FromUnit for Run {
     }
 }
 
+impl FromUnit for Signal {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaOr(
+            SchemaMapEntry(
+                Unit::Str("task".into()),
+                SchemaPair(SchemaStr, SchemaInt)
+            ),
+            SchemaPair(SchemaStr, SchemaInt)
+        );
+
+        schm.find_deep(glob, u).and_then(|or| {
+            let (s, id) = match or {
+                Or::First(p) => p,
+                Or::Second(p) => p
+            };
+
+            match s.as_str() {
+                "kill" => Some(Signal {
+                    id: id as usize,
+                    sig: TaskSig::Kill
+                }),
+                _ => None
+            }
+        })
+    }
+}
+
 impl FromUnit for Task {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
         let mut inst = Task::default();
 
         if let Some(get) = GetRunning::from_unit(u, u) {
             inst.act = Some(Act::Get(get));
+            return Some(inst);
+        }
+
+        if let Some(sig) = Signal::from_unit(u, u) {
+            inst.act = Some(Act::Sig(sig));
             return Some(inst);
         }
 
@@ -238,6 +281,18 @@ impl TaskAct for GetRunning {
 
             let msg = orig.msg.clone().merge(Unit::Map(vec![(Unit::Str("msg".into()), msg)]));
             Ok(Some(msg))
+        };
+        TaskActAsync(Box::new(hlr))
+    }
+}
+
+impl TaskAct for Signal {
+    fn act<'a>(self, orig: Arc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+        let hlr = move || {
+            kern.lock().task_sig(self.id, self.sig)?;
+            yield;
+
+            Ok(Some(orig.msg.clone()))
         };
         TaskActAsync(Box::new(hlr))
     }
@@ -306,7 +361,8 @@ impl ServHlr for Task {
 
                 let act = match act {
                     Act::Get(get) => get.act(orig.clone(), kern),
-                    Act::Run(run) => run.act(orig.clone(), kern)
+                    Act::Run(run) => run.act(orig.clone(), kern),
+                    Act::Sig(sig) => sig.act(orig.clone(), kern)
                 };
 
                 let mut gen = Box::into_pin(act.0);

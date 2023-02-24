@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 
 use super::msg::Msg;
-use super::task::{Task, TaskLoop};
+use super::task::{Task, TaskLoop, TaskSig};
 use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaUnit, Schema, SchemaBool, SchemaMap};
 use super::serv::{Serv, ServHlr, ServErr, ServHelpTopic, ServHlrAsync};
 
@@ -47,6 +47,7 @@ pub enum KernErr {
     ServAlreadyReg,
     CannotCreateServInstance,
     TaskAlreadyReg,
+    TaskNotFound,
     DbLoadFault,
     DbSaveFault,
     HelpTopicNotFound,
@@ -80,6 +81,7 @@ pub struct Kern {
     curr_task_id: usize,
     tasks_queue: Vec<Task>,
     tasks_running: Vec<Task>,
+    tasks_signals: Vec<(usize, TaskSig)>,
     task_result: Vec<(usize, Result<Option<Msg>, KernErr>)>
 }
 
@@ -108,6 +110,7 @@ impl Kern {
             curr_task_id: 0,
             tasks_queue: Vec::new(),
             tasks_running: Vec::new(),
+            tasks_signals: Vec::new(),
             task_result: Vec::new()
         };
 
@@ -148,6 +151,11 @@ impl Kern {
         self.tasks_queue.push(Task::new(usr.into(), name.into(), self.last_task_id, self.curr_task_id, task));
         self.last_task_id += 1;
         Ok(self.last_task_id - 1)
+    }
+
+    pub fn task_sig(&mut self, id: usize, sig: TaskSig) -> Result<(), KernErr> {
+        self.tasks_signals.push((id, sig));
+        Ok(())
     }
 
     fn get_serv(&self, name: &str) -> Result<Serv, KernErr> {
@@ -257,6 +265,7 @@ impl Kern {
 
             kern_mtx.lock().tasks_queue = Vec::new();
 
+            // run tasks
             for (task, _) in runs.iter() {
                 kern_mtx.lock().tasks_running.push(task.clone());
                 writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
@@ -264,11 +273,19 @@ impl Kern {
 
             loop {
                 for (task, (run, done)) in &mut runs {
+                    // check signals
+                    if let Some(sig) = kern_mtx.lock().tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
+                        match sig {
+                            TaskSig::Kill => *done = true
+                        }
+                    }
+
                     if *done {
                         kern_mtx.lock().tasks_running.drain_filter(|t| t.id == task.id).next();
                         continue;
                     }
 
+                    // run task
                     kern_mtx.lock().curr_task_id = task.id;
 
                     if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
