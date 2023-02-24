@@ -73,7 +73,7 @@ impl Task {
 
                             if let Some(gen) = Kern::send(kern, serv, msg)? {
                                 let mut gen = Box::into_pin(gen.0);
-    
+
                                 loop {
                                     if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
                                         if let Some(msg) = res? {
