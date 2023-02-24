@@ -2,6 +2,7 @@ mod text;
 mod content;
 
 use core::pin::Pin;
+use core::fmt::Write;
 use core::ops::{Generator, GeneratorState};
 
 use spin::Mutex;
@@ -50,7 +51,8 @@ struct GetKey(Option<Vec<String>>);
 
 #[derive(Debug)]
 pub struct TermBase {
-    pos: (usize, usize)
+    pos: (usize, usize),
+    inp_lck: bool
 }
 
 #[derive(Debug)]
@@ -78,7 +80,8 @@ enum ActKind {
     SetRes(SetRes),
     GetKey(GetKey),
     Stream(Unit, (String, Addr)),
-    Say(text::Say)
+    Say(text::Say),
+    Inp(text::Inp)
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +210,44 @@ impl Term {
         kern.drv.cli.get_key(false)
     }
 
+    fn input<'a>(self: Arc<Self>, mode: ActMode, secret: bool, kern: &'a Mutex<Kern>) -> text::InpAsync {
+        let hlr = move || {
+            let mut out = String::new();
+            let save_cur = kern.lock().term.pos.clone();
+
+            self.flush(&mode, &mut kern.lock()).map_err(|_| CLIErr::Write)?;
+            yield;
+
+            // process
+            loop {
+                let mut kern_grd = kern.lock();
+
+                if let Some(key) = kern_grd.drv.cli.get_key(false)? {
+                    if let TermKey::Char(c) = key {
+                        if c == '\r' || c == '\n' {
+                            break;
+                        } else if c == '\u{8}' && kern_grd.term.pos.0 > save_cur.0 {
+                            out.pop();
+                            self.print(format!("{}", c).as_str(), &mode, &mut kern_grd)?;
+                            self.flush(&mode, &mut kern_grd).map_err(|_| CLIErr::Write)?;
+                        } else if !c.is_ascii_control() {
+                            write!(out, "{}", c).map_err(|_| CLIErr::Write)?;
+                            if !secret {
+                                self.print(format!("{}", c).as_str(), &mode, &mut kern_grd)?;
+                                self.flush(&mode, &mut kern_grd).map_err(|_| CLIErr::Write)?;
+                            }
+                        }
+                    }
+                }
+
+                drop(kern_grd);
+                yield;
+            }
+            Ok(out)
+        };
+        text::InpAsync(Box::new(hlr))
+    }
+
     fn flush(&self, mode: &ActMode, kern: &mut Kern) -> Result<(), DispErr> {
         if let ActMode::Gfx = mode {
             kern.drv.disp.flush()?;
@@ -218,7 +259,8 @@ impl Term {
 impl Default for TermBase {
     fn default() -> Self {
         TermBase {
-            pos: (0, 0)
+            pos: (0, 0),
+            inp_lck: false
         }
     }
 }
@@ -469,6 +511,13 @@ impl FromUnit for Act {
                         });
                     }
 
+                    if let Some(inp) = text::Inp::from_unit(glob, &u) {
+                        return Some(Act {
+                            mode: inp.mode.clone(),
+                            kind: ActKind::Inp(inp)
+                        })
+                    }
+
                     None
                 }
             }
@@ -669,7 +718,8 @@ impl TermAct for Act {
 
                 Ok(msg)
             })),
-            ActKind::Say(say) => say.act(orig, msg, term, kern)
+            ActKind::Say(say) => say.act(orig, msg, term, kern),
+            ActKind::Inp(inp) => inp.act(orig, msg, term, kern)
         }
     }
 }

@@ -2,6 +2,8 @@ use core::pin::Pin;
 use core::ops::{Generator, GeneratorState};
 
 use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use alloc::{format, vec};
 use alloc::sync::Arc;
 use spin::Mutex;
@@ -9,7 +11,7 @@ use spin::Mutex;
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::TaskLoop;
-use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaPair, SchemaUnit, Schema, SchemaStr, SchemaOr, SchemaMapEntry, SchemaMapSecondRequire, SchemaBool, SchemaInt, SchemaRef, Or};
+use crate::vnix::core::unit::{Unit, FromUnit, DisplayShort, SchemaPair, SchemaUnit, Schema, SchemaStr, SchemaOr, SchemaMapEntry, SchemaMapSecondRequire, SchemaBool, SchemaInt, SchemaRef, Or, SchemaMapRequire, SchemaMap};
 use crate::vnix::core::kern::{Kern, KernErr};
 
 use super::{TermActAsync, Term, TermAct, ActMode};
@@ -30,6 +32,16 @@ pub struct Say {
     pub act_mode: ActMode
 }
 
+pub struct InpAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<String, CLIErr>> + 'a>);
+
+#[derive(Debug, Clone)]
+pub struct Inp {
+    pmt: String,
+    prs: bool,
+    sct: bool,
+    out: Vec<String>,
+    pub mode: ActMode
+}
 
 impl Say {
     fn say_unit(&self, msg: &Unit, term: &Term, kern: &mut Kern) -> Result<(), CLIErr> {
@@ -250,5 +262,104 @@ impl TermAct for Say {
                 Ok(msg)
             }))
         } 
+    }
+}
+
+
+impl FromUnit for Inp {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
+
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaOr(
+            SchemaMapRequire(
+                SchemaMapEntry(Unit::Str("pmt".into()), SchemaStr),
+                SchemaMapSecondRequire(
+                    SchemaMapEntry(Unit::Str("prs".into()), SchemaBool),
+                    SchemaMap(
+                        SchemaMapEntry(Unit::Str("sct".into()), SchemaBool),
+                        SchemaMapEntry(Unit::Str("out".into()), SchemaRef),
+                    )
+                )
+            ),
+            SchemaMapRequire(
+                SchemaMapEntry(Unit::Str("pmt.gfx".into()), SchemaStr),
+                SchemaMapSecondRequire(
+                    SchemaMapEntry(Unit::Str("prs".into()), SchemaBool),
+                    SchemaMap(
+                        SchemaMapEntry(Unit::Str("sct".into()), SchemaBool),
+                        SchemaMapEntry(Unit::Str("out".into()), SchemaRef),
+                    )
+                )
+            ),
+        );
+
+        schm.find_deep(glob, u).map(|or| {
+            let (pmt, prs, sct, out, mode) = match or {
+                Or::First((pmt, (prs, (sct, out)))) => (pmt, prs, sct, out, ActMode::Cli),
+                Or::Second((pmt, (prs, (sct, out)))) => (pmt, prs, sct, out, ActMode::Gfx)
+            };
+
+            Inp {
+                pmt,
+                prs: prs.unwrap_or(false),
+                sct: sct.unwrap_or(false),
+                out: out.unwrap_or(vec!["msg".into()]),
+                mode
+            }
+        })
+    }
+}
+
+impl TermAct for Inp {
+    fn act<'a>(self, _orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+        let hlr = move || {
+            // check input lock
+            loop {
+                let kern_grd = kern.lock();
+
+                if kern_grd.term.inp_lck {
+                    drop(kern_grd);
+                    yield;
+                    continue;
+                }
+                break;
+            }
+            kern.lock().term.inp_lck = true;
+            yield;
+
+            // process
+            term.print(self.pmt.as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+            yield;
+
+            let mut gen = Box::into_pin(term.input(self.mode, self.sct, kern).0);
+
+            let out;
+            loop {
+                if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                    kern.lock().term.inp_lck = false;
+                    out = res.map_err(|e| KernErr::CLIErr(e))?;
+                    break;
+                }
+                yield;
+            }
+
+            if out.is_empty() {
+                return Ok(msg);
+            }
+
+            let out = if self.prs {
+                Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
+            } else {
+                Unit::Str(out)
+            };
+
+            if let Some(u) = Unit::merge_ref(self.out.into_iter(), out, msg.clone()) {
+                return Ok(u);
+            }
+            Ok(msg)
+        };
+        TermActAsync(Box::new(hlr))
     }
 }
