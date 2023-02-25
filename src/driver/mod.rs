@@ -1,9 +1,12 @@
 pub mod uefi;
 pub mod stub;
 
+use core::ops::Generator;
 use core::fmt::{Write, Display};
 
 use alloc::vec::Vec;
+use alloc::boxed::Box;
+
 
 #[derive(Debug)]
 pub enum CLIErr {
@@ -66,8 +69,11 @@ pub struct Mouse {
     pub click: (bool, bool)
 }
 
+pub type TimeAsync = Box<dyn Generator<Yield = (), Return = Result<(), TimeErr>>>;
+
 pub trait Time {
     fn wait(&mut self, mcs: usize) -> Result<(), TimeErr>;
+    fn wait_async(&self, mcs: usize) -> TimeAsync;
 }
 
 pub trait CLI: Write {

@@ -1,6 +1,10 @@
+use core::pin::Pin;
+use core::ops::{Generator, GeneratorState};
+
+use alloc::vec;
 use alloc::boxed::Box;
 use alloc::string::String;
-use alloc::vec;
+
 use spin::Mutex;
 
 use crate::vnix::core::msg::Msg;
@@ -70,8 +74,15 @@ impl ServHlr for Chrono {
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(mcs) = self.wait {
-                kern.lock().drv.time.wait(mcs).map_err(|e| KernErr::TimeErr(e))?;
-                yield;
+                let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(mcs));
+
+                loop {
+                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                        res.map_err(|e| KernErr::TimeErr(e))?;
+                        break;
+                    }
+                    yield;
+                }
             }
             Ok(Some(msg))
         };

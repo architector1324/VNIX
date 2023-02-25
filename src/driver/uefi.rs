@@ -1,5 +1,6 @@
 use core::fmt::Write;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use uefi::Handle;
 use uefi::proto::console::gop::{GraphicsOutput, BltPixel, BltOp, BltRegion};
@@ -7,9 +8,11 @@ use uefi::proto::console::pointer::Pointer;
 use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
 use uefi::proto::rng::{Rng, RngAlgorithmType};
 use uefi::prelude::{SystemTable, Boot};
-use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType};
+use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType, EventType, Tpl, TimerTrigger};
 
 use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
+
+use super::TimeAsync;
 
 
 pub struct UefiCLI {
@@ -346,6 +349,27 @@ impl Time for UefiTime {
     fn wait(&mut self, mcs: usize) -> Result<(), TimeErr> {
         self.st.boot_services().stall(mcs);
         Ok(())
+    }
+
+    fn wait_async(&self, mcs: usize) -> TimeAsync {
+        let st = unsafe {
+            self.st.unsafe_clone()
+        };
+
+        let hlr = move || {
+            unsafe {
+                let e = st.boot_services().create_event(EventType::TIMER, Tpl::APPLICATION, None, None).map_err(|_| TimeErr::Wait)?;
+                st.boot_services().set_timer(&e, TimerTrigger::Relative(10 * mcs as u64)).map_err(|_| TimeErr::Wait)?;
+
+                loop {
+                    if st.boot_services().check_event(e.unsafe_clone()).map_err(|_| TimeErr::Wait)? {
+                        return Ok(())
+                    }
+                    yield;
+                }
+            }
+        };
+        Box::new(hlr)
     }
 }
 

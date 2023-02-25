@@ -1,5 +1,7 @@
 use alloc::rc::Rc;
+use core::pin::Pin;
 use core::cell::RefCell;
+use core::ops::{Generator, GeneratorState};
 
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -521,8 +523,15 @@ impl TermAct for Video {
                 img.borrow_mut().draw(pos, 0x00ff00, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
                 kern.lock().drv.disp.flush_blk(pos, img.borrow().size).map_err(|e| KernErr::DispErr(e))?;
 
-                // kern.lock().drv.time.wait(15000).map_err(|e| KernErr::TimeErr(e))?;
-                yield;
+                // wait
+                let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(15000));
+                loop {
+                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                        res.map_err(|e| KernErr::TimeErr(e))?;
+                        break;
+                    }
+                    yield;
+                }
             }
 
             Ok(msg)
