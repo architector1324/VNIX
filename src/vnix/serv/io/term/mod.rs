@@ -7,7 +7,7 @@ use core::fmt::Write;
 use core::ops::{Generator, GeneratorState};
 
 use spin::Mutex;
-use alloc::sync::Arc;
+use alloc::rc::Rc;
 
 use alloc::{vec, format};
 use alloc::vec::Vec;
@@ -69,7 +69,7 @@ pub struct TermRes {
 pub struct TermActAsync<'a>(Box<dyn Generator<Yield = (), Return = Result<Unit, KernErr>> + 'a>);
 
 pub trait TermAct {
-    fn act<'a>(self, orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a>;
+    fn act<'a>(self, orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a>;
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +84,8 @@ enum ActKind {
     Say(text::Say),
     Inp(text::Inp),
     Img(media::Img),
-    Sprite(media::Sprite)
+    Sprite(media::Sprite),
+    Vid(media::Video)
 }
 
 #[derive(Debug, Clone)]
@@ -213,7 +214,7 @@ impl Term {
         kern.drv.cli.get_key(false)
     }
 
-    fn input<'a>(self: Arc<Self>, mode: ActMode, secret: bool, kern: &'a Mutex<Kern>) -> text::InpAsync {
+    fn input<'a>(self: Rc<Self>, mode: ActMode, secret: bool, kern: &'a Mutex<Kern>) -> text::InpAsync {
         let hlr = move || {
             let mut out = String::new();
             let save_cur = kern.lock().term.pos.clone();
@@ -535,6 +536,13 @@ impl FromUnit for Act {
                         })
                     }
 
+                    if let Some(vid) = media::Video::from_unit(glob, &u) {
+                        return Some(Act {
+                            kind: ActKind::Vid(vid),
+                            mode: ActMode::Gfx
+                        })
+                    }
+
                     None
                 }
             }
@@ -583,7 +591,7 @@ impl FromUnit for Term {
 }
 
 impl TermAct for GetRes {
-    fn act<'a>(self, _orig: Arc<Msg>, msg: Unit, _term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+    fn act<'a>(self, _orig: Rc<Msg>, msg: Unit, _term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         let hlr = move || {
             let _msg = match self.mode {
                 ActMode::Cli =>
@@ -637,7 +645,7 @@ impl TermAct for GetRes {
 }
 
 impl TermAct for Act {
-    fn act<'a>(self, orig: Arc<Msg>, mut msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+    fn act<'a>(self, orig: Rc<Msg>, mut msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         match self.kind {
             ActKind::Cls => TermActAsync(Box::new(move || {
                 term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
@@ -738,7 +746,8 @@ impl TermAct for Act {
             ActKind::Say(say) => say.act(orig, msg, term, kern),
             ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
             ActKind::Img(img) => img.act(orig, msg, term, kern),
-            ActKind::Sprite(spr) => spr.act(orig, msg, term, kern)
+            ActKind::Sprite(spr) => spr.act(orig, msg, term, kern),
+            ActKind::Vid(vid) => vid.act(orig, msg, term, kern)
         }
     }
 }
@@ -770,8 +779,8 @@ impl ServHlr for Term {
             if let Some(acts) = self.acts.clone() {
                 let mut out_u = msg.msg.clone();
 
-                let term = Arc::new(self);
-                let msg = Arc::new(msg);
+                let term = Rc::new(self);
+                let msg = Rc::new(msg);
 
                 for act in acts {
                     let mut gen = Box::into_pin(act.act(msg.clone(), out_u.clone(), term.clone(), kern).0);

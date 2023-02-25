@@ -1,12 +1,13 @@
 use core::pin::Pin;
 use core::ops::{Generator, GeneratorState};
 
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
-use alloc::{format, vec};
-use alloc::sync::Arc;
 use spin::Mutex;
+use alloc::rc::Rc;
+
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use alloc::{format, vec};
+use alloc::string::String;
 
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
@@ -169,7 +170,7 @@ impl FromUnit for Say {
 }
 
 impl TermAct for Say {
-    fn act<'a>(mut self, orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+    fn act<'a>(mut self, orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         match self.msg.clone() {
             Unit::Ref(path) => {
                 if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
@@ -313,7 +314,7 @@ impl FromUnit for Inp {
 }
 
 impl TermAct for Inp {
-    fn act<'a>(self, _orig: Arc<Msg>, msg: Unit, term: Arc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+    fn act<'a>(self, _orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         let hlr = move || {
             // check input lock
             loop {

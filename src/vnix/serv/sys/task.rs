@@ -2,7 +2,7 @@ use core::ops::{Generator, GeneratorState};
 use core::pin::Pin;
 use core::slice::Iter;
 
-use alloc::sync::Arc;
+use alloc::rc::Rc;
 use spin::Mutex;
 
 use alloc::vec;
@@ -40,7 +40,7 @@ struct Signal {
 pub struct TaskActAsync<'a>(Box<dyn Generator<Yield = (), Return = Result<Option<Unit>, KernErr>> + 'a>);
 
 pub trait TaskAct {
-    fn act<'a>(self, orig: Arc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a>;
+    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a>;
 }
 
 #[derive(Debug, Clone)]
@@ -236,7 +236,7 @@ impl FromUnit for Task {
 }
 
 impl TaskAct for GetRunning {
-    fn act<'a>(self, orig: Arc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
         let hlr = move || {
             let msg = match self {
                 GetRunning::Curr => Unit::Int(kern.lock().get_task_running() as i32),
@@ -287,7 +287,7 @@ impl TaskAct for GetRunning {
 }
 
 impl TaskAct for Signal {
-    fn act<'a>(self, orig: Arc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
         let hlr = move || {
             kern.lock().task_sig(self.id, self.sig)?;
             yield;
@@ -299,7 +299,7 @@ impl TaskAct for Signal {
 }
 
 impl TaskAct for Run {
-    fn act<'a>(self, orig: Arc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
         let hlr = move || {
             if let Some(task) = self.task {
                 let id = kern.lock().reg_task(&orig.ath, &self.name, task)?;
@@ -357,7 +357,7 @@ impl ServHlr for Task {
     fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(act) = self.act {
-                let orig = Arc::new(msg);
+                let orig = Rc::new(msg);
 
                 let act = match act {
                     Act::Get(get) => get.act(orig.clone(), kern),
