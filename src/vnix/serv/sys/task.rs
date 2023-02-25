@@ -2,8 +2,9 @@ use core::ops::{Generator, GeneratorState};
 use core::pin::Pin;
 use core::slice::Iter;
 
-use alloc::rc::Rc;
 use spin::Mutex;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -28,7 +29,7 @@ enum GetRunning {
 #[derive(Debug, Clone)]
 struct Run {
     name: String,
-    task: Option<TaskLoop>
+    task: TaskLoop
 }
 
 #[derive(Debug, Clone)]
@@ -40,7 +41,7 @@ struct Signal {
 pub type TaskActAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Option<Unit>, KernErr>> + 'a>;
 
 pub trait TaskAct {
-    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a>;
+    fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a>;
 }
 
 #[derive(Debug, Clone)]
@@ -145,35 +146,35 @@ impl FromUnit for Run {
                     match or {
                         Or::First(or) =>
                             match or {
-                                Or::First(serv) => Some(TaskLoop::Chain {
+                                Or::First(serv) => TaskLoop::Chain {
                                     msg,
                                     chain: vec![serv],
-                                }),
-                                Or::Second(chain) => Some(TaskLoop::Chain {
+                                },
+                                Or::Second(chain) => TaskLoop::Chain {
                                     msg,
                                     chain,
-                                })
+                                }
                             },
                         Or::Second(or) =>
                             match or {
-                                Or::First(serv) => Some(TaskLoop::ChainLoop {
+                                Or::First(serv) => TaskLoop::ChainLoop {
                                     msg,
                                     chain: vec![serv],
-                                }),
-                                Or::Second(chain) => Some(TaskLoop::ChainLoop {
+                                },
+                                Or::Second(chain) => TaskLoop::ChainLoop {
                                     msg,
                                     chain,
-                                })
+                                }
                             },
                     }
                 Or::Second(or) =>
                     match or {
-                        Or::First(sim) => Some(TaskLoop::Sim(
+                        Or::First(sim) => TaskLoop::Sim(
                             sim.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
-                        )),
-                        Or::Second(queue) => Some(TaskLoop::Queue(
+                        ),
+                        Or::Second(queue) => TaskLoop::Queue(
                             queue.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
-                        ))
+                        )
                     }
             };
             Some(Run{name, task})
@@ -236,7 +237,7 @@ impl FromUnit for Task {
 }
 
 impl TaskAct for GetRunning {
-    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+    fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
         let hlr = move || {
             let msg = match self {
                 GetRunning::Curr => Unit::Int(kern.lock().get_task_running() as i32),
@@ -279,7 +280,7 @@ impl TaskAct for GetRunning {
             };
             yield;
 
-            let msg = orig.msg.clone().merge(Unit::Map(vec![(Unit::Str("msg".into()), msg)]));
+            let msg = orig.borrow().msg.clone().merge(Unit::Map(vec![(Unit::Str("msg".into()), msg)]));
             Ok(Some(msg))
         };
         Box::new(hlr)
@@ -287,48 +288,46 @@ impl TaskAct for GetRunning {
 }
 
 impl TaskAct for Signal {
-    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+    fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
         let hlr = move || {
             kern.lock().task_sig(self.id, self.sig)?;
             yield;
 
-            Ok(Some(orig.msg.clone()))
+            Ok(Some(orig.borrow().msg.clone()))
         };
         Box::new(hlr)
     }
 }
 
 impl TaskAct for Run {
-    fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
+    fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
         let hlr = move || {
-            if let Some(task) = self.task {
-                let id = kern.lock().reg_task(&orig.ath, &self.name, task)?;
-                let msg;
+            let id = kern.lock().reg_task(&orig.borrow().ath, &self.name, self.task)?;
+            let msg;
 
-                loop {
-                    if let Some(_msg) = kern.lock().get_task_result(id) {
-                        msg = _msg?;
-                        break;
-                    }
-                    yield;
+            loop {
+                if let Some(_msg) = kern.lock().get_task_result(id) {
+                    msg = _msg?;
+                    break;
                 }
-
-                let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
-
-                if let Some(msg) = msg {
-                    if let Some(out) = schm.find_loc(&msg.msg) {
-                        let msg = Unit::Map(vec![
-                            (Unit::Str("msg".into()), out)
-                        ]);
-
-                        return Ok(Some(msg))
-                    }
-                }
-
-                return Ok(None);
+                yield;
             }
 
-            Ok(Some(orig.msg.clone()))
+            let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
+
+            if let Some(msg) = msg {
+                orig.borrow_mut().ath = msg.ath;
+
+                if let Some(out) = schm.find_loc(&msg.msg) {
+                    let msg = Unit::Map(vec![
+                        (Unit::Str("msg".into()), out)
+                    ]);
+
+                    return Ok(Some(msg))
+                }
+            }
+
+            return Ok(None);
         };
         Box::new(hlr)
     }
@@ -362,7 +361,7 @@ impl ServHlr for Task {
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(act) = self.act {
-                let orig = Rc::new(msg);
+                let orig = Rc::new(RefCell::new(msg));
 
                 let act = match act {
                     Act::Get(get) => get.act(orig.clone(), kern),
@@ -376,13 +375,12 @@ impl ServHlr for Task {
                 loop {
                     if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
                         if let Some(msg) = res? {
-                            _msg = kern.lock().msg(&orig.ath, msg).map(|msg| Some(msg))?;
+                            _msg = kern.lock().msg(&orig.borrow().ath, msg).map(|msg| Some(msg))?;
                         }
                         break;
                     }
                     yield;
                 }
-
                 Ok(_msg)
             } else {
                 Ok(Some(msg))
