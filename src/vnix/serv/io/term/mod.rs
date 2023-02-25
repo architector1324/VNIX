@@ -19,7 +19,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::TaskLoop;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, SchemaSeq, Or, SchemaPair, SchemaRef, SchemaInt};
 use crate::vnix::core::kern::{Kern, KernErr, Addr};
-use crate::vnix::core::serv::{ServHlrAsync, Serv, ServHlr, ServHelpTopic};
+use crate::vnix::core::serv::{ServHlrAsync, ServHlr, ServHelpTopic, ServInfo};
 
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ pub struct TermRes {
     pub font: Font,
 }
 
-pub struct TermActAsync<'a>(Box<dyn Generator<Yield = (), Return = Result<Unit, KernErr>> + 'a>);
+pub type TermActAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Unit, KernErr>> + 'a>;
 
 pub trait TermAct {
     fn act<'a>(self, orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a>;
@@ -640,36 +640,36 @@ impl TermAct for GetRes {
             }
             Ok(msg)
         };
-        TermActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
 
 impl TermAct for Act {
     fn act<'a>(self, orig: Rc<Msg>, mut msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         match self.kind {
-            ActKind::Cls => TermActAsync(Box::new(move || {
+            ActKind::Cls => Box::new(move || {
                 term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
                 term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
                 yield;
 
                 Ok(msg)
-            })),
-            ActKind::Nl => TermActAsync(Box::new(move || {
+            }),
+            ActKind::Nl => Box::new(move || {
                 term.print("\n", &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
                 term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
                 yield;
 
                 Ok(msg)
-            })),
-            ActKind::Trc => TermActAsync(Box::new(move || {
+            }),
+            ActKind::Trc => Box::new(move || {
                 term.print(orig.to_string().as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
                 term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
                 yield;
 
                 Ok(msg)
-            })),
+            }),
             ActKind::GetRes(get_res) => get_res.act(orig, msg, term, kern),
-            ActKind::SetRes(set_res) => TermActAsync(Box::new(move || {
+            ActKind::SetRes(set_res) => Box::new(move || {
                 match set_res.mode {
                     ActMode::Cli => kern.lock().drv.cli.set_res(set_res.size).map_err(|e| KernErr::CLIErr(e))?,
                     ActMode::Gfx => kern.lock().drv.disp.set_res(set_res.size).map_err(|e| KernErr::DispErr(e))?
@@ -677,8 +677,8 @@ impl TermAct for Act {
                 yield;
 
                 Ok(msg)
-            })),
-            ActKind::GetKey(get_key) => TermActAsync(Box::new(move || {
+            }),
+            ActKind::GetKey(get_key) => Box::new(move || {
                 term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
                 yield;
 
@@ -695,8 +695,8 @@ impl TermAct for Act {
                 }
 
                 Ok(msg)
-            })),
-            ActKind::Stream(_msg, (serv, _)) => TermActAsync(Box::new(move || {
+            }),
+            ActKind::Stream(_msg, (serv, _)) => Box::new(move || {
                 // run stream
                 let task = TaskLoop::Chain {
                     msg: _msg,
@@ -727,7 +727,7 @@ impl TermAct for Act {
 
                 // run action
                 if let Some(act) = act {
-                    let mut gen = Box::into_pin(act.act(orig, msg.clone(), term, kern).0);
+                    let mut gen = Box::into_pin(act.act(orig, msg.clone(), term, kern));
 
                     loop {
                         if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
@@ -742,7 +742,7 @@ impl TermAct for Act {
                 }
 
                 Ok(msg)
-            })),
+            }),
             ActKind::Say(say) => say.act(orig, msg, term, kern),
             ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
             ActKind::Img(img) => img.act(orig, msg, term, kern),
@@ -753,7 +753,12 @@ impl TermAct for Act {
 }
 
 impl ServHlr for Term {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: hello@io.term\nFor gfx mode: (say.gfx hello)@io.term".into())
@@ -769,21 +774,21 @@ impl ServHlr for Term {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
+            let term = Rc::new(Term::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?);
             // writeln!(kern.lock().drv.cli, "io.term: {:?}", self.acts);
 
             if let Some(acts) = self.acts.clone() {
                 let mut out_u = msg.msg.clone();
 
-                let term = Rc::new(self);
                 let msg = Rc::new(msg);
 
                 for act in acts {
-                    let mut gen = Box::into_pin(act.act(msg.clone(), out_u.clone(), term.clone(), kern).0);
+                    let mut gen = Box::into_pin(act.act(msg.clone(), out_u.clone(), term.clone(), kern));
 
                     loop {
                         if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
@@ -801,6 +806,6 @@ impl ServHlr for Term {
 
             Ok(Some(msg))
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

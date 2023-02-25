@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 use super::msg::Msg;
 use super::task::{Task, TaskLoop, TaskSig};
 use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaUnit, Schema, SchemaBool, SchemaMap};
-use super::serv::{Serv, ServHlr, ServErr, ServHelpTopic, ServHlrAsync};
+use super::serv::{Serv, ServErr, ServHelpTopic, ServHlrAsync};
 
 use super::user::Usr;
 
@@ -139,7 +139,7 @@ impl Kern {
     }
 
     pub fn reg_serv(&mut self, serv: Serv) -> Result<(), KernErr> {
-        if self.services.iter().find(|s| s.name == serv.name).is_some() {
+        if self.services.iter().find(|s| s.info.name == serv.info.name).is_some() {
             return Err(KernErr::ServAlreadyReg);
         }
 
@@ -158,8 +158,8 @@ impl Kern {
         Ok(())
     }
 
-    fn get_serv(&self, name: &str) -> Result<Serv, KernErr> {
-        self.services.iter().find(|s| s.name == name).ok_or(KernErr::ServNotFound).cloned()
+    fn get_serv(&self, name: &str) -> Result<&Serv, KernErr> {
+        self.services.iter().find(|s| s.info.name == name).ok_or(KernErr::ServNotFound)
     }
 
     pub fn get_tasks_running(&self) -> Vec<Task> {
@@ -203,7 +203,7 @@ impl Kern {
     }
 
     fn help_serv(&self, ath: &str) -> Result<Msg, KernErr> {
-        let serv = self.services.iter().cloned().map(|serv| Unit::Str(serv.name)).collect();
+        let serv = self.services.iter().map(|serv| Unit::Str(serv.info.name.clone())).collect();
         let u = Unit::Map(vec![(
             Unit::Str("msg".into()),
             Unit::Lst(serv)
@@ -224,8 +224,9 @@ impl Kern {
             return Ok(None);
         }
 
-        let serv = mtx.lock().get_serv(serv.as_str())?;
-        let inst = serv.inst(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
+        let tmp = mtx.lock();
+        let serv = tmp.get_serv(serv.as_str())?;
+        let inst = serv.hlr.inst(&msg.msg)?;
 
         // check help
         let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
@@ -239,17 +240,17 @@ impl Kern {
         if let Some(topic) = topic {
             match topic.as_str() {
                 "info" => return Ok(Some(inst.help(msg.ath, ServHelpTopic::Info, mtx))),
-                "serv" => return Ok(Some(ServHlrAsync(Box::new(move || {
+                "serv" => return Ok(Some(Box::new(move || {
                     let out = mtx.lock().help_serv(&msg.ath).map(|m| Some(m));
                     yield;
                     out
-                })))),
+                }))),
                 _ => ()
             }
         }
 
         // send
-        Ok(Some(inst.handle(msg, serv, mtx)))
+        Ok(Some(inst.handle(msg, serv.info.clone(), mtx)))
     }
 
     pub fn run<'a>(self) -> Result<(), KernErr> {

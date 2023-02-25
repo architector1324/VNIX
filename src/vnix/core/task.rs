@@ -51,9 +51,10 @@ impl Task {
             match self.task {
                 TaskLoop::Sim(sim) => {
                     let mut sim = sim.into_iter().map(|(u, serv)| {
-                        let msg = kern.lock().msg(&self.usr, u).unwrap();
-                        (Box::into_pin(Kern::send(kern, serv, msg).unwrap().unwrap().0), false)
-                    }).collect::<Vec<_>>();
+                        let msg = kern.lock().msg(&self.usr, u).ok()?;
+                        let gen = Box::into_pin(Kern::send(kern, serv, msg).ok()??);
+                        Some((gen, false))
+                    }).collect::<Option<Vec<_>>>().ok_or(KernErr::CannotCreateServInstance)?;
 
                     loop {
                         for (gen, done) in &mut sim {
@@ -78,7 +79,7 @@ impl Task {
                         let msg = kern.lock().msg(&self.usr, u)?;
 
                         if let Some(gen) = Kern::send(kern, serv, msg)? {
-                            let mut gen = Box::into_pin(gen.0);
+                            let mut gen = Box::into_pin(gen);
 
                             loop {
                                 if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
@@ -99,7 +100,7 @@ impl Task {
                         let mut _msg = kern.lock().msg(&self.usr, msg.clone())?;
 
                         if let Some(gen) = Kern::send(kern, serv, _msg)? {
-                            let mut gen = Box::into_pin(gen.0);
+                            let mut gen = Box::into_pin(gen);
 
                             loop {
                                 if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
@@ -123,7 +124,7 @@ impl Task {
                             let mut _msg = kern.lock().msg(&self.usr, msg.clone())?;
 
                             if let Some(gen) = Kern::send(kern, serv, _msg)? {
-                                let mut gen = Box::into_pin(gen.0);
+                                let mut gen = Box::into_pin(gen);
 
                                 loop {
                                     if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {

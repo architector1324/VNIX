@@ -6,7 +6,7 @@ use alloc::string::String;
 use crate::driver::CLIErr;
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMap, SchemaMapEntry, SchemaStr, SchemaMapSecondRequire, Schema, SchemaOr, Or};
 use crate::vnix::core::user::Usr;
@@ -86,7 +86,12 @@ impl FromUnit for User {
 }
 
 impl ServHlr for User {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr".into())
@@ -102,10 +107,10 @@ impl ServHlr for User {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, mut msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, mut msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(act) = self.act {
                 let (usr, out) = match act {
@@ -135,6 +140,6 @@ impl ServHlr for User {
     
             Ok(Some(msg))
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

@@ -7,7 +7,7 @@ use spin::Mutex;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, SchemaPair, Schema, SchemaRef, SchemaStr, SchemaOr, SchemaSeq, Or, SchemaMapFirstRequire, SchemaMapRequire};
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::kern::{KernErr, Kern};
 
 
@@ -230,7 +230,12 @@ impl FromUnit for Store {
 }
 
 impl ServHlr for Store {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store".into())
@@ -246,14 +251,15 @@ impl ServHlr for Store {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
+            let inst = Store::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
             let mut out_u: Option<Unit> = None;
     
-            if let Some(acts) = self.acts {
+            if let Some(acts) = inst.acts {
                 for act in acts {
                     act.act(&mut kern.lock())?.map(|u| {
                         out_u = out_u.clone().map_or(Some(u.clone()), |out_u| Some(out_u.merge(u)))
@@ -268,6 +274,6 @@ impl ServHlr for Store {
 
             Ok(Some(msg))
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

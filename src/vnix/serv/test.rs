@@ -1,4 +1,4 @@
-use crate::{vnix::core::{serv::{ServHlr, Serv, ServHelpTopic, ServHlrAsync}, kern::{Kern, KernErr}, msg::Msg, unit::{FromUnit, Unit, SchemaUnit, Schema}}, driver::CLIErr};
+use crate::{vnix::core::{serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo}, kern::{Kern, KernErr}, msg::Msg, unit::{FromUnit, Unit, SchemaUnit, Schema}}, driver::CLIErr};
 use alloc::boxed::Box;
 use alloc::string::String;
 use spin::Mutex;
@@ -24,11 +24,16 @@ impl FromUnit for Dumb {
 }
 
 impl ServHlr for Dumb {
-    fn help<'a>(self, _ath: String, _topic: ServHelpTopic, _kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Dumb::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, _ath: String, _topic: ServHelpTopic, _kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         unimplemented!()
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(_msg) = self.msg {
                 for i in 0..5 {
@@ -38,6 +43,6 @@ impl ServHlr for Dumb {
             }
             kern.lock().msg(&msg.ath, Unit::Str("b".into())).map(|msg| Some(msg))
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

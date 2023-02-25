@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaInt, Schema, SchemaOr, Or};
 
@@ -43,7 +43,12 @@ impl FromUnit for Chrono {
 }
 
 impl ServHlr for Chrono {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait:1000000}@etc.chrono # wait for 1 sec.".into())
@@ -59,10 +64,10 @@ impl ServHlr for Chrono {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(mcs) = self.wait {
                 kern.lock().drv.time.wait(mcs).map_err(|e| KernErr::TimeErr(e))?;
@@ -70,6 +75,6 @@ impl ServHlr for Chrono {
             }
             Ok(Some(msg))
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

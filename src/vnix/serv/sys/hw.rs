@@ -8,7 +8,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::driver::MemSizeUnits;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, Schema, SchemaOr, Or, SchemaStr};
 
 
@@ -74,7 +74,12 @@ impl FromUnit for HW {
 }
 
 impl ServHlr for HW {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for hardware management\nExample: get.mem.free.mb@sys.hw".into())
@@ -90,10 +95,10 @@ impl ServHlr for HW {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(act) = self.act {
                 let u = match act {
@@ -111,6 +116,6 @@ impl ServHlr for HW {
                 Ok(Some(msg))
             }
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

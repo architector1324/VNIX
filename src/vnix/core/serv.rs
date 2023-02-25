@@ -5,9 +5,7 @@ use alloc::string::String;
 
 use super::msg::Msg;
 use super::kern::{KernErr, Kern};
-use super::unit::{FromUnit, Unit};
-
-use crate::vnix::serv::{io, math, gfx, etc, sys, test};
+use super::unit::Unit;
 
 use spin::Mutex;
 
@@ -22,104 +20,32 @@ pub enum ServErr {
 }
 
 #[derive(Debug, Clone)]
-pub enum ServKind {
-    IOTerm,
-    IOStore,
-    EtcChrono,
-    EtcFSM,
-    GFX2D,
-    MathInt,
-    SysTask,
-    SysUsr,
-    SysHW,
-    TestDumb,
+pub struct ServInfo {
+    pub name: String
 }
 
-pub enum ServInst {
-    IOTerm(io::term::Term),
-    IOStore(io::store::Store),
-    EtcChrono(etc::chrono::Chrono),
-    EtcFSM(etc::fsm::FSM),
-    GFX2D(gfx::GFX2D),
-    MathInt(math::Int),
-    SysTask(sys::task::Task),
-    SysUsr(sys::usr::User),
-    SysHW(sys::hw::HW),
-    TestDumb(test::Dumb),
-}
-
-#[derive(Debug, Clone)]
 pub struct Serv {
-    pub name: String,
-    pub kind: ServKind
+    pub info: ServInfo,
+    pub hlr: Box<dyn ServHlr>
 }
 
-pub struct ServHlrAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>);
+pub type ServHlrAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>;
 
-pub trait ServHlr: FromUnit {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
-    fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
+pub trait ServHlr {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr>;
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
+    fn handle<'a>(self: Box<Self>, msg: Msg, serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
 }
 
 
 impl Serv {
-    pub fn new(name: &str, kind: ServKind) -> Self {
+    pub fn new(name: &str, hlr: Box<dyn ServHlr>) -> Self {
         Serv {
-            name: name.into(),
-            kind
-        }
-    }
-
-    pub fn inst(&self, u: &Unit) -> Option<ServInst> {
-        match self.kind {
-            ServKind::IOTerm => Some(ServInst::IOTerm(io::term::Term::from_unit_loc(u)?)),
-            ServKind::IOStore => Some(ServInst::IOStore(io::store::Store::from_unit_loc(u)?)),
-            ServKind::EtcChrono => Some(ServInst::EtcChrono(etc::chrono::Chrono::from_unit_loc(u)?)),
-            ServKind::EtcFSM => Some(ServInst::EtcFSM(etc::fsm::FSM::from_unit_loc(u)?)),
-            ServKind::GFX2D => Some(ServInst::GFX2D(gfx::GFX2D::from_unit_loc(u)?)),
-            ServKind::MathInt => Some(ServInst::MathInt(math::Int::from_unit_loc(u)?)),
-            ServKind::SysTask => Some(ServInst::SysTask(sys::task::Task::from_unit_loc(u)?)),
-            ServKind::SysUsr => Some(ServInst::SysUsr(sys::usr::User::from_unit_loc(u)?)),
-            ServKind::SysHW => Some(ServInst::SysHW(sys::hw::HW::from_unit_loc(u)?)),
-            ServKind::TestDumb => Some(ServInst::TestDumb(test::Dumb::from_unit_loc(u)?)),
-        }
-    }
-}
-
-impl FromUnit for ServInst {
-    fn from_unit_loc(_u: &Unit) -> Option<Self> {
-        None
-    }
-}
-
-impl ServHlr for ServInst {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        match self {
-            ServInst::IOTerm(inst) => inst.help(ath, topic, kern),
-            ServInst::IOStore(inst) => inst.help(ath, topic, kern),
-            ServInst::EtcChrono(inst) => inst.help(ath, topic, kern),
-            ServInst::EtcFSM(inst) => inst.help(ath, topic, kern),
-            ServInst::GFX2D(inst) => inst.help(ath, topic, kern),
-            ServInst::MathInt(inst) => inst.help(ath, topic, kern),
-            ServInst::SysTask(inst) => inst.help(ath, topic, kern),
-            ServInst::SysUsr(inst) => inst.help(ath, topic, kern),
-            ServInst::SysHW(inst) => inst.help(ath, topic, kern),
-            ServInst::TestDumb(inst) => inst.help(ath, topic, kern),
-        }
-    }
-
-    fn handle<'a>(self, msg: Msg, serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        match self {
-            ServInst::IOTerm(inst) => inst.handle(msg, serv, kern),
-            ServInst::IOStore(inst) => inst.handle(msg, serv, kern),
-            ServInst::EtcChrono(inst) => inst.handle(msg, serv, kern),
-            ServInst::EtcFSM(inst) => inst.handle(msg, serv, kern),
-            ServInst::GFX2D(inst) => inst.handle(msg, serv, kern),
-            ServInst::MathInt(inst) => inst.handle(msg, serv, kern),
-            ServInst::SysTask(inst) => inst.handle(msg, serv, kern),
-            ServInst::SysUsr(inst) => inst.handle(msg, serv, kern),
-            ServInst::SysHW(inst) => inst.handle(msg, serv, kern),
-            ServInst::TestDumb(inst) => inst.handle(msg, serv, kern),
+            info: ServInfo {
+                name: name.into(),
+            },
+            hlr
         }
     }
 }

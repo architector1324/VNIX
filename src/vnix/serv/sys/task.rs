@@ -14,7 +14,7 @@ use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::task::{TaskLoop, TaskSig};
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream, SchemaPair, SchemaInt};
 
 
@@ -37,7 +37,7 @@ struct Signal {
     sig: TaskSig
 }
 
-pub struct TaskActAsync<'a>(Box<dyn Generator<Yield = (), Return = Result<Option<Unit>, KernErr>> + 'a>);
+pub type TaskActAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Option<Unit>, KernErr>> + 'a>;
 
 pub trait TaskAct {
     fn act<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a>;
@@ -282,7 +282,7 @@ impl TaskAct for GetRunning {
             let msg = orig.msg.clone().merge(Unit::Map(vec![(Unit::Str("msg".into()), msg)]));
             Ok(Some(msg))
         };
-        TaskActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
 
@@ -294,7 +294,7 @@ impl TaskAct for Signal {
 
             Ok(Some(orig.msg.clone()))
         };
-        TaskActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
 
@@ -330,12 +330,17 @@ impl TaskAct for Run {
 
             Ok(Some(orig.msg.clone()))
         };
-        TaskActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
 
 impl ServHlr for Task {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for run task from message\nExample: {store:(load @txt.hello) task:io.store}@sys.task".into())
@@ -351,10 +356,10 @@ impl ServHlr for Task {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             if let Some(act) = self.act {
                 let orig = Rc::new(msg);
@@ -365,7 +370,7 @@ impl ServHlr for Task {
                     Act::Sig(sig) => sig.act(orig.clone(), kern)
                 };
 
-                let mut gen = Box::into_pin(act.0);
+                let mut gen = Box::into_pin(act);
                 let mut _msg = None;
 
                 loop {
@@ -383,6 +388,6 @@ impl ServHlr for Task {
                 Ok(Some(msg))
             }
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

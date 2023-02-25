@@ -177,13 +177,13 @@ impl TermAct for Say {
                     self.msg = _msg;
                     return self.act(orig, msg, term, kern);
                 } else {
-                    return TermActAsync(Box::new(move || {
+                    return Box::new(move || {
                         yield;
                         Ok(msg)
-                    }))
+                    })
                 }
             },
-            Unit::Stream(_msg, (serv, _)) => TermActAsync(Box::new(move || {
+            Unit::Stream(_msg, (serv, _)) => Box::new(move || {
                 let task = TaskLoop::Chain {
                     msg: *_msg,
                     chain: vec![serv]
@@ -217,10 +217,10 @@ impl TermAct for Say {
                 yield;
 
                 Ok(msg)
-            })),
+            }),
             Unit::Lst(seq) =>
                 match self.mode {
-                    SayMode::Norm => TermActAsync(Box::new(move || {
+                    SayMode::Norm => Box::new(move || {
                         self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
                         if self.nl {
@@ -232,11 +232,11 @@ impl TermAct for Say {
                         yield;
 
                         Ok(msg)
-                    })),
-                    SayMode::Fmt => TermActAsync(Box::new(move || {
+                    }),
+                    SayMode::Fmt => Box::new(move || {
                         for u in seq {
                             self.msg = u;
-                            let mut act = Box::into_pin(self.clone().act(orig.clone(), msg.clone(), term.clone(), kern).0);
+                            let mut act = Box::into_pin(self.clone().act(orig.clone(), msg.clone(), term.clone(), kern));
 
                             loop {
                                 if let GeneratorState::Complete(res) = Pin::new(&mut act).resume(()) {
@@ -247,9 +247,9 @@ impl TermAct for Say {
                             }
                         }
                         Ok(msg)
-                    }))
+                    })
                 },
-            _ => TermActAsync(Box::new(move || {
+            _ => Box::new(move || {
                 self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
                 if self.nl {
@@ -261,7 +261,7 @@ impl TermAct for Say {
                 yield;
 
                 Ok(msg)
-            }))
+            })
         } 
     }
 }
@@ -361,6 +361,6 @@ impl TermAct for Inp {
             }
             Ok(msg)
         };
-        TermActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

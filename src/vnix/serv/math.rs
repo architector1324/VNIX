@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::vnix::core::msg::Msg;
 
-use crate::vnix::core::serv::{Serv, ServHlr, ServHelpTopic, ServHlrAsync};
+use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaPair, SchemaInt, Schema, SchemaOr, SchemaSeq, Or, SchemaUnit, SchemaRef};
 
@@ -244,7 +244,12 @@ impl FromUnit for Int {
 }
 
 impl ServHlr for Int {
-    fn help<'a>(self, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
+        let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
+        Ok(Box::new(inst))
+    }
+
+    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.int".into())
@@ -260,12 +265,14 @@ impl ServHlr for Int {
 
             out
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 
-    fn handle<'a>(self, msg: Msg, _serv: Serv, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
+    fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
-            if let Some((op, path)) = self.op {
+            let inst = Int::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
+
+            if let Some((op, path)) = inst.op {
                 let out = Int::calc_op(op);
                 yield;
 
@@ -276,6 +283,6 @@ impl ServHlr for Int {
 
             return Ok(Some(msg))
         };
-        ServHlrAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }

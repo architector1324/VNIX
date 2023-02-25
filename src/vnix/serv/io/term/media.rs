@@ -479,7 +479,7 @@ impl TermAct for Img {
 
             Ok(msg)
         };
-        TermActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
 
@@ -501,7 +501,7 @@ impl TermAct for Sprite {
 
             Ok(msg)
         };
-        TermActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
 
@@ -527,6 +527,6 @@ impl TermAct for Video {
 
             Ok(msg)
         };
-        TermActAsync(Box::new(hlr))
+        Box::new(hlr)
     }
 }
