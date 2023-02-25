@@ -752,10 +752,10 @@ impl Unit {
 
     fn parse_byte<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         if let Some(s) = it.as_str().get(0..4) {
-            it.next().unwrap();
-            it.next().unwrap();
-            it.next().unwrap();
-            it.next().unwrap();
+            it.next().ok_or(UnitParseErr::NotByte)?;
+            it.next().ok_or(UnitParseErr::NotByte)?;
+            it.next().ok_or(UnitParseErr::NotByte)?;
+            it.next().ok_or(UnitParseErr::NotByte)?;
 
             if let Ok(v) = u8::from_str_radix(s.trim_start_matches("0x"), 16) {
                 return Ok((Unit::Byte(v), it))
