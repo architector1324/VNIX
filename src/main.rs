@@ -6,6 +6,7 @@
 #![feature(drain_filter)]
 #![feature(iter_array_chunks)]
 #![feature(generators, generator_trait)]
+#![feature(type_alias_impl_trait)]
 
 extern crate alloc;
 

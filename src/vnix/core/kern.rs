@@ -258,7 +258,7 @@ impl Kern {
         loop {
             let mut runs = kern_mtx.lock().tasks_queue.clone().into_iter().map(|t| {
                 let task = t.clone();
-                let run = Box::into_pin(t.run(&kern_mtx).0);
+                let run = t.run(&kern_mtx);
 
                 (task, (run, false))
             }).collect::<Vec<_>>();
@@ -306,8 +306,8 @@ impl Kern {
                 if !kern_mtx.lock().tasks_queue.is_empty() {
                     let mut new_runs = kern_mtx.lock().tasks_queue.clone().into_iter().map(|t| {
                         let task = t.clone();
-                        let run = Box::into_pin(t.run(&kern_mtx).0);
-        
+                        let run = t.run(&kern_mtx);
+
                         (task, (run, false))
                     }).collect::<Vec<_>>();
 
