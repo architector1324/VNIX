@@ -12,17 +12,28 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaInt, Schema, SchemaOr, Or};
+use crate::driver::Duration;
 
 
 #[derive(Debug)]
+struct Wait {
+    dur: Duration,
+}
+
+#[derive(Debug)]
+enum Act {
+    Wait(Wait)
+}
+
+#[derive(Debug)]
 pub struct Chrono {
-    wait: Option<usize>
+    act: Option<Act>
 }
 
 impl Default for Chrono {
     fn default() -> Self {
         Chrono {
-            wait: None
+            act: None
         }
     }
 }
@@ -33,13 +44,32 @@ impl FromUnit for Chrono {
 
         let schm = SchemaOr(
             SchemaInt,
-            SchemaMapEntry(Unit::Str("wait".into()), SchemaInt)
+            SchemaOr(
+                SchemaMapEntry(Unit::Str("wait".into()), SchemaInt),
+                SchemaOr(
+                    SchemaMapEntry(Unit::Str("wait.ms".into()), SchemaInt),
+                    SchemaMapEntry(Unit::Str("wait.mcs".into()), SchemaInt)
+                )
+            )
         );
-        inst.wait = schm.find_loc(u).map(|or| {
-            match or {
-                Or::First(mcs) => mcs as usize,
-                Or::Second(mcs) => mcs as usize
-            }
+
+        inst.act = schm.find_loc(u).map(|or| {
+            let dur = match or {
+                Or::First(sec) => Duration::Seconds(sec as usize),
+                Or::Second(or) =>
+                    match or {
+                        Or::First(sec) => Duration::Seconds(sec as usize),
+                        Or::Second(or) =>
+                            match or {
+                                Or::First(ms) => Duration::Milli(ms as usize),
+                                Or::Second(mcs) => Duration::Micro(mcs as usize),
+                            }
+                    }
+            };
+
+            Act::Wait(Wait {
+                dur
+            })
         });
 
         Some(inst)
@@ -55,7 +85,7 @@ impl ServHlr for Chrono {
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
-                ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait:1000000}@etc.chrono # wait for 1 sec.".into())
+                ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait.ms:500}@etc.chrono # wait for 0.5 sec.".into())
             };
     
             let m = Unit::Map(vec![(
@@ -73,15 +103,19 @@ impl ServHlr for Chrono {
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
-            if let Some(mcs) = self.wait {
-                let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(mcs));
+            if let Some(act) = self.act {
+                match act {
+                    Act::Wait(wait) => {
+                        let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(wait.dur));
 
-                loop {
-                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                        res.map_err(|e| KernErr::TimeErr(e))?;
-                        break;
+                        loop {
+                            if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                                res.map_err(|e| KernErr::TimeErr(e))?;
+                                break;
+                            }
+                            yield;
+                        }
                     }
-                    yield;
                 }
             }
             Ok(Some(msg))

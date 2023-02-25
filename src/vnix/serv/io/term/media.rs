@@ -6,7 +6,7 @@ use core::ops::{Generator, GeneratorState};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 
-use crate::driver::DispErr;
+use crate::driver::{DispErr, Duration};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{KernErr, Kern};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaInt, SchemaStr, Schema, SchemaMapRequire, SchemaPair, SchemaOr, SchemaSeq, Or, SchemaUnit, SchemaMapSeq};
@@ -524,7 +524,7 @@ impl TermAct for Video {
                 kern.lock().drv.disp.flush_blk(pos, img.borrow().size).map_err(|e| KernErr::DispErr(e))?;
 
                 // wait
-                let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(15000));
+                let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(Duration::Milli(15)));
                 loop {
                     if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
                         res.map_err(|e| KernErr::TimeErr(e))?;

@@ -12,7 +12,7 @@ use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType, 
 
 use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
 
-use super::TimeAsync;
+use super::{TimeAsync, Duration};
 
 
 pub struct UefiCLI {
@@ -346,18 +346,30 @@ impl Disp for UefiDisp {
 }
 
 impl Time for UefiTime {
-    fn wait(&mut self, mcs: usize) -> Result<(), TimeErr> {
+    fn wait(&mut self, dur: Duration) -> Result<(), TimeErr> {
+        let mcs = match dur {
+            Duration::Micro(mcs) => mcs,
+            Duration::Milli(ms) => 1000 * ms,
+            Duration::Seconds(sec) => 1000 * 1000 * sec
+        };
+
         self.st.boot_services().stall(mcs);
         Ok(())
     }
 
-    fn wait_async(&self, mcs: usize) -> TimeAsync {
+    fn wait_async(&self, dur: Duration) -> TimeAsync {
         let st = unsafe {
             self.st.unsafe_clone()
         };
 
         let hlr = move || {
             unsafe {
+                let mcs = match dur {
+                    Duration::Micro(mcs) => mcs,
+                    Duration::Milli(ms) => 1000 * ms,
+                    Duration::Seconds(sec) => 1000 * 1000 * sec
+                };
+
                 let e = st.boot_services().create_event(EventType::TIMER, Tpl::APPLICATION, None, None).map_err(|_| TimeErr::Wait)?;
                 st.boot_services().set_timer(&e, TimerTrigger::Relative(10 * mcs as u64)).map_err(|_| TimeErr::Wait)?;
 

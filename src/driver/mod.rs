@@ -71,9 +71,16 @@ pub struct Mouse {
 
 pub type TimeAsync = Box<dyn Generator<Yield = (), Return = Result<(), TimeErr>>>;
 
+#[derive(Debug)]
+pub enum Duration {
+    Micro(usize),
+    Milli(usize),
+    Seconds(usize)
+}
+
 pub trait Time {
-    fn wait(&mut self, mcs: usize) -> Result<(), TimeErr>;
-    fn wait_async(&self, mcs: usize) -> TimeAsync;
+    fn wait(&mut self, dur: Duration) -> Result<(), TimeErr>;
+    fn wait_async(&self, dur: Duration) -> TimeAsync;
 }
 
 pub trait CLI: Write {
