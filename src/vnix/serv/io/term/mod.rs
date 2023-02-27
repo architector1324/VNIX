@@ -1,3 +1,4 @@
+mod tui;
 mod text;
 mod media;
 mod content;

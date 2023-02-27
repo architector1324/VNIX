@@ -85,7 +85,7 @@ impl ServHlr for Chrono {
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
-                ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait.ms:500}@etc.chrono # wait for 0.5 sec.".into())
+                ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait.ms:500}@time.chrono # wait for 0.5 sec.".into())
             };
     
             let m = Unit::Map(vec![(

@@ -58,19 +58,19 @@ pub enum Operation {
 }
 
 
-pub struct Int {
+pub struct Calc {
     op: Option<(Operation, Vec<String>)>
 }
 
-impl Default for Int {
+impl Default for Calc {
     fn default() -> Self {
-        Int {
+        Calc {
             op: None
         }
     }
 }
 
-impl Int {
+impl Calc {
     fn find_single_op_with(path: &str, act: SingleOpAct, glob: &Unit, u: &Unit) -> Option<Operation> {
         let schm = SchemaMapEntry(
             Unit::Str(path.into()),
@@ -80,7 +80,7 @@ impl Int {
         schm.find_deep(glob, u).and_then(|or| {
             let op = match or {
                 Or::First(v) => Operand::Int(v),
-                Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?)),
+                Or::Second(u) => Operand::Operation(Box::new(Calc::find_op(glob, &u)?)),
             };
 
             Some(Operation::Single(
@@ -109,12 +109,12 @@ impl Int {
                 Or::First((a, b)) => {
                     let a = match a {
                         Or::First(v) => Operand::Int(v),
-                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?))
+                        Or::Second(u) => Operand::Operation(Box::new(Calc::find_op(glob, &u)?))
                     };
         
                     let b = match b {
                         Or::First(v) => Operand::Int(v),
-                        Or::Second(u) => Operand::Operation(Box::new(Int::find_op(glob, &u)?))
+                        Or::Second(u) => Operand::Operation(Box::new(Calc::find_op(glob, &u)?))
                     };
         
                     vec![a, b]
@@ -123,7 +123,7 @@ impl Int {
                     seq.iter().map(|or| {
                         match or {
                             Or::First(v) => Some(Operand::Int(*v)),
-                            Or::Second(u) => Some(Operand::Operation(Box::new(Int::find_op(glob, u)?)))
+                            Or::Second(u) => Some(Operand::Operation(Box::new(Calc::find_op(glob, u)?)))
                         }
                     }).filter_map(|v| v).collect::<Vec<_>>()
             };
@@ -149,7 +149,7 @@ impl Int {
             ("log", SingleOpAct::Log),
         ];
 
-        ops.iter().find_map(|(path, act)| Int::find_single_op_with(path.clone(), act.clone(), glob, u))
+        ops.iter().find_map(|(path, act)| Calc::find_single_op_with(path.clone(), act.clone(), glob, u))
     }
 
     fn find_multi_op(glob: &Unit, u: &Unit) -> Option<Operation> {
@@ -162,29 +162,29 @@ impl Int {
             ("pow", MultiOpAct::Pow)
         ];
 
-        ops.iter().find_map(|(path, act)| Int::find_multi_op_with(path.clone(), act.clone(), glob, u))
+        ops.iter().find_map(|(path, act)| Calc::find_multi_op_with(path.clone(), act.clone(), glob, u))
     }
 
     fn find_op(glob: &Unit, u: &Unit) -> Option<Operation> {
-        let op = Int::find_single_op(glob, u);
+        let op = Calc::find_single_op(glob, u);
         if op.is_some() {
             return op;
         }
 
-        Int::find_multi_op(glob, u)
+        Calc::find_multi_op(glob, u)
     }
 
     fn calc_op(op: Operation) -> i32 {
         match op {
-            Operation::Single(op) => Int::calc_single_op(op),
-            Operation::Multi(op) => Int::calc_multi_op(op)
+            Operation::Single(op) => Calc::calc_single_op(op),
+            Operation::Multi(op) => Calc::calc_multi_op(op)
         }
     }
 
     fn calc_single_op(op: SingleOp) -> i32 {
         let v = match op.op {
             Operand::Int(v) => v,
-            Operand::Operation(op) => Int::calc_op(*op)
+            Operand::Operation(op) => Calc::calc_op(*op)
         };
 
         match op.act {
@@ -203,7 +203,7 @@ impl Int {
         let lst = op.op.into_iter().map(|op| {
             match op {
                 Operand::Int(v) => v,
-                Operand::Operation(op) => Int::calc_op(*op)
+                Operand::Operation(op) => Calc::calc_op(*op)
             }
         });
 
@@ -220,11 +220,11 @@ impl Int {
     }
 }
 
-impl FromUnit for Int {
+impl FromUnit for Calc {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
-        let mut inst = Int::default();
+        let mut inst = Calc::default();
 
-        if let Some(op) = Int::find_op(u, u) {
+        if let Some(op) = Calc::find_op(u, u) {
             inst.op = Some((op, vec!["msg".into()]));
         } else {
             let schm = SchemaMapEntry(
@@ -233,7 +233,7 @@ impl FromUnit for Int {
             );
 
             schm.find_loc(u).map(|(path, loc)| {
-                if let Some(op) = Int::find_op(&u, &loc) {
+                if let Some(op) = Calc::find_op(&u, &loc) {
                     inst.op = Some((op, path))
                 }
             });
@@ -243,7 +243,7 @@ impl FromUnit for Int {
     }
 }
 
-impl ServHlr for Int {
+impl ServHlr for Calc {
     fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr> {
         let inst = Self::from_unit_loc(msg).ok_or(KernErr::CannotCreateServInstance)?;
         Ok(Box::new(inst))
@@ -252,7 +252,7 @@ impl ServHlr for Int {
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
-                ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.int".into())
+                ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.calc".into())
             };
     
             let m = Unit::Map(vec![(
@@ -270,10 +270,10 @@ impl ServHlr for Int {
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
-            let inst = Int::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
+            let inst = Calc::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
 
             if let Some((op, path)) = inst.op {
-                let out = Int::calc_op(op);
+                let out = Calc::calc_op(op);
                 yield;
 
                 let m = Unit::merge_ref(path.clone().into_iter(), Unit::Int(out), msg.msg).ok_or(KernErr::DbLoadFault)?;

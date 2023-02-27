@@ -12,7 +12,7 @@ use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
-use self::serv::{io, math, gfx, etc, sys, test};
+use self::serv::{io, math, gfx, etc, sys, time, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -20,10 +20,10 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let services = [
         ("io.term", Box::new(io::term::Term::default()) as Box<dyn ServHlr>),
         ("io.store", Box::new(io::store::Store::default()) as Box<dyn ServHlr>),
-        ("etc.chrono", Box::new(etc::chrono::Chrono::default()) as Box<dyn ServHlr>),
         ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
+        ("time.chrono", Box::new(time::Chrono::default()) as Box<dyn ServHlr>),
         ("gfx.2d", Box::new(gfx::GFX2D::default()) as Box<dyn ServHlr>),
-        ("math.int", Box::new(math::Int::default()) as Box<dyn ServHlr>),
+        ("math.calc", Box::new(math::Calc::default()) as Box<dyn ServHlr>),
         ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
         ("sys.usr", Box::new(sys::usr::User::default()) as Box<dyn ServHlr>),
         ("sys.hw", Box::new(sys::hw::HW::default()) as Box<dyn ServHlr>),
