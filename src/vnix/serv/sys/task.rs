@@ -16,7 +16,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::task::{TaskLoop, TaskSig};
 use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream, SchemaPair, SchemaInt};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream, SchemaPair, SchemaInt, SchemaMap};
 
 
 #[derive(Debug, Clone)]
@@ -94,90 +94,105 @@ impl FromUnit for Run {
     }
 
     fn from_unit(_glob: &Unit, u: &Unit) -> Option<Self> {
-        let schm = SchemaMapSecondRequire(
-            SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit),
-            SchemaMapSecondRequire(
-                SchemaMapEntry(Unit::Str("name".into()), SchemaStr),
-                SchemaOr(
+        let schm = SchemaOr(
+            SchemaStream,
+            SchemaMap(
+                SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit),
+                SchemaMapSecondRequire(
+                    SchemaMapEntry(Unit::Str("name".into()), SchemaStr),
                     SchemaOr(
-                        SchemaMapEntry(
-                            Unit::Str("task".into()),
-                            SchemaOr(
-                                SchemaStr,
-                                SchemaSeq(SchemaStr)
-                            )
+                        SchemaOr(
+                            SchemaMapEntry(
+                                Unit::Str("task".into()),
+                                SchemaOr(
+                                    SchemaStr,
+                                    SchemaSeq(SchemaStr)
+                                )
+                            ),
+                            SchemaMapEntry(
+                                Unit::Str("task.loop".into()),
+                                SchemaOr(
+                                    SchemaStr,
+                                    SchemaSeq(SchemaStr)
+                                )
+                            ),
                         ),
-                        SchemaMapEntry(
-                            Unit::Str("task.loop".into()),
-                            SchemaOr(
-                                SchemaStr,
-                                SchemaSeq(SchemaStr)
-                            )
-                        ),
-                    ),
-                    SchemaOr(
-                        SchemaMapEntry(
-                            Unit::Str("task.sim".into()),
-                            SchemaSeq(SchemaStream)
-                        ),
-                        SchemaMapEntry(
-                            Unit::Str("task.que".into()),
-                            SchemaSeq(SchemaStream)
-                        ),
+                        SchemaOr(
+                            SchemaMapEntry(
+                                Unit::Str("task.sim".into()),
+                                SchemaSeq(SchemaStream)
+                            ),
+                            SchemaMapEntry(
+                                Unit::Str("task.que".into()),
+                                SchemaSeq(SchemaStream)
+                            ),
+                        )
                     )
                 )
             )
         );
 
-        schm.find_loc(u).and_then(|(msg, (name, or))| {
-            let name = name.unwrap_or("sys.task".into());
+        schm.find_loc(u).and_then(|or| {
+            match or {
+                Or::First((msg, (serv, _))) => Some(Run {
+                    name: "sys.task".into(),
+                    task: TaskLoop::Chain {msg, chain: vec![serv, "sys.task".into()]}
+                }),
+                Or::Second((msg, name_or)) => {
+                    if let Some(msg) = msg.clone() {
+                        if let Some(m) = msg.as_map() {
+                            let u = Unit::Map(m);
+                            return Run::from_unit_loc(&u);
+                        }
+                    }
 
-            if let Some(msg) = msg.clone() {
-                if let Some(m) = msg.as_map() {
-                    let u = Unit::Map(m);
-                    return Run::from_unit_loc(&u);
+                    if let Some((name, or)) = name_or {
+                        let name = name.unwrap_or("sys.task".into());
+    
+    
+                        let msg = msg.and_then(|msg| Some(Unit::Map(msg.as_map()?))).unwrap_or(u.clone());
+    
+                        let task = match or {
+                            Or::First(or) =>
+                                match or {
+                                    Or::First(or) =>
+                                        match or {
+                                            Or::First(serv) => TaskLoop::Chain {
+                                                msg,
+                                                chain: vec![serv],
+                                            },
+                                            Or::Second(chain) => TaskLoop::Chain {
+                                                msg,
+                                                chain,
+                                            }
+                                        },
+                                    Or::Second(or) =>
+                                        match or {
+                                            Or::First(serv) => TaskLoop::ChainLoop {
+                                                msg,
+                                                chain: vec![serv],
+                                            },
+                                            Or::Second(chain) => TaskLoop::ChainLoop {
+                                                msg,
+                                                chain,
+                                            }
+                                        },
+                                }
+                            Or::Second(or) =>
+                                match or {
+                                    Or::First(sim) => TaskLoop::Sim(
+                                        sim.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
+                                    ),
+                                    Or::Second(queue) => TaskLoop::Queue(
+                                        queue.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
+                                    )
+                                }
+                        };
+                        return Some(Run{name, task})
+                    }
+                    None
                 }
             }
-
-            let msg = msg.and_then(|msg| Some(Unit::Map(msg.as_map()?))).unwrap_or(u.clone());
-
-            let task = match or {
-                Or::First(or) =>
-                    match or {
-                        Or::First(or) =>
-                            match or {
-                                Or::First(serv) => TaskLoop::Chain {
-                                    msg,
-                                    chain: vec![serv],
-                                },
-                                Or::Second(chain) => TaskLoop::Chain {
-                                    msg,
-                                    chain,
-                                }
-                            },
-                        Or::Second(or) =>
-                            match or {
-                                Or::First(serv) => TaskLoop::ChainLoop {
-                                    msg,
-                                    chain: vec![serv],
-                                },
-                                Or::Second(chain) => TaskLoop::ChainLoop {
-                                    msg,
-                                    chain,
-                                }
-                            },
-                    }
-                Or::Second(or) =>
-                    match or {
-                        Or::First(sim) => TaskLoop::Sim(
-                            sim.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
-                        ),
-                        Or::Second(queue) => TaskLoop::Queue(
-                            queue.into_iter().map(|(msg, (serv, _))| (msg, serv)).collect()
-                        )
-                    }
-            };
-            Some(Run{name, task})
         })
     }
 }
@@ -342,7 +357,7 @@ impl ServHlr for Task {
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let u = match topic {
-                ServHelpTopic::Info => Unit::Str("Service for run task from message\nExample: {store:(load @txt.hello) task:io.store}@sys.task".into())
+                ServHelpTopic::Info => Unit::Str("Service for run task from message\nExample: (load @txt.hello)@io.store@sys.task".into())
             };
 
             let m = Unit::Map(vec![(

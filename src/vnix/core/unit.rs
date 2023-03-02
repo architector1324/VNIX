@@ -995,8 +995,7 @@ impl Unit {
         }
     }
 
-    fn parse_stream<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let (u, it) = Unit::parse_loc(it)?;
+    fn parse_stream<'a>(u: Unit, it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
         let mut tmp = it.clone();
 
         if let Some(ch) = tmp.next() {
@@ -1004,7 +1003,13 @@ impl Unit {
                 let (serv, tmp) = Unit::parse_str(tmp)?;
                 let serv = serv.as_str().ok_or(UnitParseErr::StreamInvalidServ)?;
 
-                return Ok((Unit::Stream(Box::new(u), (serv, Addr::Local)), tmp))
+                let new_u = Unit::Stream(Box::new(u), (serv, Addr::Local));
+
+                if let Some(..) = tmp.clone().next() {
+                    return Unit::parse_stream(new_u, tmp);
+                }
+
+                return Ok((new_u, tmp))
             }
         }
 
@@ -1066,8 +1071,9 @@ impl Unit {
     }
 
     pub fn parse<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
+        let (u, it) = Unit::parse_loc(it)?;
         // stream
-        Unit::parse_stream(it)
+        Unit::parse_stream(u, it)
     }
 
     pub fn find_ref<I>(mut path: I, u: &Unit) -> Option<Unit> where I: Iterator<Item = String> {
