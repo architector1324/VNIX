@@ -140,11 +140,9 @@ impl CLI for UefiCLI {
 
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr> {
         let cli = self.st.stdout();
-        let save = cli.cursor_position();
 
         cli.set_cursor_position(pos.0, pos.1).map_err(|_| CLIErr::Write)?;
         write!(cli, "{ch}").map_err(|_| CLIErr::Write)?;
-        cli.set_cursor_position(save.0, save.1).map_err(|_| CLIErr::Write)?;
 
         Ok(())
     }

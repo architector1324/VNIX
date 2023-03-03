@@ -71,7 +71,7 @@ pub struct Mouse {
 
 pub type TimeAsync = Box<dyn Generator<Yield = (), Return = Result<(), TimeErr>>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Duration {
     Micro(usize),
     Milli(usize),

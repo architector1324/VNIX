@@ -86,7 +86,8 @@ enum ActKind {
     Inp(text::Inp),
     Img(media::Img),
     Sprite(media::Sprite),
-    Vid(media::Video)
+    Vid(media::Video),
+    WinTUI(tui::Win)
 }
 
 #[derive(Debug, Clone)]
@@ -544,6 +545,13 @@ impl FromUnit for Act {
                         })
                     }
 
+                    if let Some(win) = tui::Win::from_unit(glob, &u) {
+                        return Some(Act {
+                            mode: win.mode.clone(),
+                            kind: ActKind::WinTUI(win)
+                        })
+                    }
+
                     None
                 }
             }
@@ -748,7 +756,8 @@ impl TermAct for Act {
             ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
             ActKind::Img(img) => img.act(orig, msg, term, kern),
             ActKind::Sprite(spr) => spr.act(orig, msg, term, kern),
-            ActKind::Vid(vid) => vid.act(orig, msg, term, kern)
+            ActKind::Vid(vid) => vid.act(orig, msg, term, kern),
+            ActKind::WinTUI(win) => win.act(orig, msg, term, kern)
         }
     }
 }
