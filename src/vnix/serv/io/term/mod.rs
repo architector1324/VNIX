@@ -303,12 +303,12 @@ impl FromUnit for GetRes {
                     path,
                     mode: ActMode::Gfx
                 }),
-                "get.res.lst" => Some(GetRes {
+                "get.res.all" => Some(GetRes {
                     kind: GetResKind::All,
                     path,
                     mode: ActMode::Cli
                 }),
-                "get.res.lst.gfx" => Some(GetRes {
+                "get.res.gfx.all" => Some(GetRes {
                     kind: GetResKind::All,
                     path,
                     mode: ActMode::Gfx
@@ -418,7 +418,7 @@ impl FromUnit for Act {
                             }),
                             mode: ActMode::Gfx
                         }),
-                        "get.res.lst" => Some(Act {
+                        "get.res.all" => Some(Act {
                             kind: ActKind::GetRes(GetRes {
                                 kind: GetResKind::All,
                                 path: vec!["msg".into()],
@@ -426,7 +426,7 @@ impl FromUnit for Act {
                             }),
                             mode: ActMode::Cli
                         }),
-                        "get.res.lst.gfx" => Some(Act {
+                        "get.res.gfx.all" => Some(Act {
                             kind: ActKind::GetRes(GetRes {
                                 kind: GetResKind::All,
                                 path: vec!["msg".into()],
