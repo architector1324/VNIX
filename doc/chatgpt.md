@@ -86,6 +86,28 @@ To display a message on the terminal using the io.term service, you can use the 
 
 This will send a message to the io.term service containing the text "Hello, vnix!". The service will then display the message on the terminal.
 
+### 3. Cluster example with gfx.rt and io.term Services
+This example is written by human.
+
+In this example we want to render some image with raytracing on powerful server and after display the result on our local machine:
+
+```css
+{
+    scn:[{sphr:1 pos:[0 1 0]}]
+    task.chain:[
+        gfx.rt:82a3:b7e2:8543:5a1c:ee99:5be4:f7d3:e839
+        io.term
+    ]
+}@sys.task
+```
+
+This command will run a new task with `sys.task` service that will send a message to the `gfx.rt` service based on machine with `82a3:b7e2:8543:5a1c:ee99:5be4:f7d3:e839` ipv6 address. It will respond a message contains an image represented in vxmn notation to local machine. After that it will be sended to the `io.term` service and the image will shown.
+
+Also short form of this example using streams:
+```css
+[{sphr:1 pos:[0 1 0]}]@gfx.rt:82a3:b7e2:8543:5a1c:ee99:5be4:f7d3:e839@io.term
+```
+
 ## Examples of VNIX Services
 VNIX provides a range of services that can be used to build custom applications or clusters. Some examples of VNIX services include:
 
