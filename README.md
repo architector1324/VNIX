@@ -11,6 +11,8 @@ My Contacts:
 - discord: Architector#9979
 - patreon: https://www.patreon.com/architector1324
 
+Also [read](./doc/chatgpt.md) what **ChatGPT** is thinking about vnix.
+
 **Virtual Networking Information and Computing System (vnix)** – it is an operating system with non-Turing cloud architecture following principles:
 
 - Conceptual:
