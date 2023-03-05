@@ -10,7 +10,7 @@ use alloc::string::String;
 
 use crate::driver::{CLIErr, TermKey};
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, Or, SchemaMapSecondRequire};
+use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, Or, SchemaMapSecondRequire, SchemaSeq};
 use crate::vnix::core::kern::{Kern, KernErr};
 
 
@@ -70,8 +70,32 @@ impl FromUnit for TUI {
         Self::from_unit(u, u)
     }
 
-    fn from_unit(_glob: &Unit, _u: &Unit) -> Option<Self> {
-        None
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaOr(
+            SchemaSeq(SchemaUnit),
+            SchemaOr(
+                SchemaMapEntry(
+                    Unit::Str("hor".into()),
+                    SchemaSeq(SchemaUnit),
+                ),
+                SchemaUnit
+            )
+        );
+
+        schm.find_deep(glob, u).and_then(|or| {
+            match or {
+                Or::First(content) => Some(TUI::VStack(
+                    content.into_iter().filter_map(|u| TUI::from_unit(glob, &u)).collect()
+                )),
+                Or::Second(or) =>
+                    match or {
+                        Or::First(content) => Some(TUI::HStack(
+                            content.into_iter().filter_map(|u| TUI::from_unit(glob, &u)).collect()
+                        )),
+                        Or::Second(win) => Win::from_unit(glob, &win).map(|win| TUI::Win(Box::new(win)))
+                    }
+            }
+        })
     }
 }
 
@@ -121,6 +145,13 @@ impl TUIAct for Win {
     fn tui_act<'a>(self, pos: (usize, usize), size:(usize, usize), term: Rc<super::Term>, kern: &'a Mutex<Kern>) -> TUIActAsync<'a> {
         let hlr = move || {
             let mut redraw = true;
+            let mut content_gen = self.content.clone().map(|content| {
+                let size = (size.0 - 16, size.1 - 32);
+                let pos = (pos.0 + 8, pos.1 + 16);
+
+                Box::into_pin(content.tui_act(pos, size, term.clone(), kern))
+            });
+
             loop {
                 // render
                 if redraw {
@@ -141,10 +172,62 @@ impl TUIAct for Win {
 
                     redraw = false;
                 }
+
+                // content
+                if let Some(content) = content_gen.as_mut() {
+                    if let GeneratorState::Complete(res) = Pin::new(content).resume(()) {
+                        res?;
+                    }
+                }
+
                 yield;
             }
         };
         Box::new(hlr)
+    }
+}
+
+impl TUIAct for TUI {
+    fn tui_act<'a>(self, pos: (usize, usize), size:(usize, usize), term: Rc<super::Term>, kern: &'a Mutex<Kern>) -> TUIActAsync<'a> {
+        match self {
+            TUI::VStack(content) => Box::new(move || {
+                let count = content.len();
+                let mut content_gen = content.into_iter().enumerate().map(|(i, e)| {
+                    let pos = (pos.0, pos.1 + i * size.1 / count);
+                    let size = (size.0, size.1 / count);
+
+                    Box::into_pin(e.tui_act(pos, size, term.clone(), kern))
+                }).collect::<Vec<_>>();
+
+                loop {
+                    for gen in &mut content_gen {
+                        if let GeneratorState::Complete(res) = Pin::new(gen).resume(()) {
+                            res?;
+                        }
+                    }
+                    yield;
+                }
+            }),
+            TUI::HStack(content) => Box::new(move || {
+                let count = content.len();
+                let mut content_gen = content.into_iter().enumerate().map(|(i, e)| {
+                    let pos = (pos.0 + i * size.0 / count, pos.1);
+                    let size = (size.0 / count, size.1);
+
+                    Box::into_pin(e.tui_act(pos, size, term.clone(), kern))
+                }).collect::<Vec<_>>();
+
+                loop {
+                    for gen in &mut content_gen {
+                        if let GeneratorState::Complete(res) = Pin::new(gen).resume(()) {
+                            res?;
+                        }
+                    }
+                    yield;
+                }
+            }),
+            TUI::Win(win) => win.tui_act(pos, size, term, kern)
+        }
     }
 }
 

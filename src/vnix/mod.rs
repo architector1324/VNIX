@@ -44,7 +44,30 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
 
     // test
-    let s = "[{win.cli:- name:MyApp} {win.cli.gfx:- name:MyApp} cls cls.gfx]";
+    let s = "[
+        {
+            name:MyApp
+            win.cli:[
+                {win.cli:- name:Form0}
+                {hor:[
+                    {win.cli:- name:Form1}
+                    {win.cli:-}
+                ]}
+            ]
+        }
+        cls
+        {
+            name:MyApp
+            win.cli.gfx:{hor:[
+                {win.cli.gfx:- name:Form0}
+                [
+                    {win.cli.gfx:- name:Form1}
+                    {win.cli.gfx:-}
+                ]
+            ]}
+        }
+        cls.gfx
+    ]";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run
