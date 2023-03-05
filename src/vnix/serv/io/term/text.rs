@@ -44,31 +44,31 @@ pub struct Inp {
     pub mode: ActMode
 }
 
-impl Say {
-    fn say_unit(&self, msg: &Unit, term: &Term, kern: &mut Kern) -> Result<(), CLIErr> {
-        if let Some(shrt) = self.shrt {
-            term.print(format!("{}", DisplayShort(&msg, shrt)).as_str(), &self.act_mode, kern)?;
-        } else {
-            term.print(format!("{}", msg).as_str(), &self.act_mode, kern)?;
-        }
+// impl Say {
+//     fn say_unit(&self, msg: &Unit, term: &Term, kern: &mut Kern) -> Result<(), CLIErr> {
+//         if let Some(shrt) = self.shrt {
+//             term.print(format!("{}", DisplayShort(&msg, shrt)).as_str(), &self.act_mode, kern)?;
+//         } else {
+//             term.print(format!("{}", msg).as_str(), &self.act_mode, kern)?;
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    fn say(&mut self, orig: &Unit, term: &Term, kern: &mut Kern) -> Result<(), CLIErr> {
-        match self.msg.clone() {
-            Unit::Str(out) => term.print(out.replace("\\n", "\n").replace("\\r", "\r").trim_matches('`'), &self.act_mode, kern)?,
-            Unit::Ref(path) => {
-                if let Some(_msg) = Unit::find_ref(path.into_iter(), orig) {
-                    self.msg = _msg;
-                    return self.say(orig, term, kern);
-                }
-            },
-            _ => return self.say_unit(&self.msg, term, kern)
-        }
-        Ok(())
-    }
-}
+//     fn say(&mut self, orig: &Unit, term: &Term, kern: &mut Kern) -> Result<(), CLIErr> {
+//         match self.msg.clone() {
+//             Unit::Str(out) => term.print(out.replace("\\n", "\n").replace("\\r", "\r").trim_matches('`'), &self.act_mode, kern)?,
+//             Unit::Ref(path) => {
+//                 if let Some(_msg) = Unit::find_ref(path.into_iter(), orig) {
+//                     self.msg = _msg;
+//                     return self.say(orig, term, kern);
+//                 }
+//             },
+//             _ => return self.say_unit(&self.msg, term, kern)
+//         }
+//         Ok(())
+//     }
+// }
 
 impl FromUnit for Say {
     fn from_unit_loc(u: &Unit) -> Option<Self> {
@@ -169,102 +169,102 @@ impl FromUnit for Say {
     }
 }
 
-impl TermAct for Say {
-    fn act<'a>(mut self, orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
-        match self.msg.clone() {
-            Unit::Ref(path) => {
-                if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
-                    self.msg = _msg;
-                    return self.act(orig, msg, term, kern);
-                } else {
-                    return Box::new(move || {
-                        yield;
-                        Ok(msg)
-                    })
-                }
-            },
-            Unit::Stream(_msg, (serv, _)) => Box::new(move || {
-                let task = TaskLoop::Chain {
-                    msg: *_msg,
-                    chain: vec![serv]
-                };
+// impl TermAct for Say {
+//     fn act<'a>(mut self, orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+//         match self.msg.clone() {
+//             Unit::Ref(path) => {
+//                 if let Some(_msg) = Unit::find_ref(path.into_iter(), &msg) {
+//                     self.msg = _msg;
+//                     return self.act(orig, msg, term, kern);
+//                 } else {
+//                     return Box::new(move || {
+//                         yield;
+//                         Ok(msg)
+//                     })
+//                 }
+//             },
+//             Unit::Stream(_msg, (serv, _)) => Box::new(move || {
+//                 let task = TaskLoop::Chain {
+//                     msg: *_msg,
+//                     chain: vec![serv]
+//                 };
 
-                let id = kern.lock().reg_task(&orig.ath, "io.term.say", task)?;
+//                 let id = kern.lock().reg_task(&orig.ath, "io.term.say", task)?;
 
-                loop {
-                    let res = kern.lock().get_task_result(id);
+//                 loop {
+//                     let res = kern.lock().get_task_result(id);
 
-                    if let Some(res) = res {
-                        if let Some(_msg) = res? {
-                            self.msg = if let Some(_msg) = _msg.msg.as_map_find("msg") {
-                                _msg
-                            } else {
-                                _msg.msg
-                            };
+//                     if let Some(res) = res {
+//                         if let Some(_msg) = res? {
+//                             self.msg = if let Some(_msg) = _msg.msg.as_map_find("msg") {
+//                                 _msg
+//                             } else {
+//                                 _msg.msg
+//                             };
 
-                            self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//                             self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
-                            if self.nl {
-                                term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                            }
-                        }
-                        break;
-                    }
-                    yield;
-                }
+//                             if self.nl {
+//                                 term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//                             }
+//                         }
+//                         break;
+//                     }
+//                     yield;
+//                 }
 
-                term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                yield;
+//                 term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+//                 yield;
 
-                Ok(msg)
-            }),
-            Unit::Lst(seq) =>
-                match self.mode {
-                    SayMode::Norm => Box::new(move || {
-                        self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//                 Ok(msg)
+//             }),
+//             Unit::Lst(seq) =>
+//                 match self.mode {
+//                     SayMode::Norm => Box::new(move || {
+//                         self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
-                        if self.nl {
-                            term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                        }
-                        yield;
+//                         if self.nl {
+//                             term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//                         }
+//                         yield;
 
-                        term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                        yield;
+//                         term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+//                         yield;
 
-                        Ok(msg)
-                    }),
-                    SayMode::Fmt => Box::new(move || {
-                        for u in seq {
-                            self.msg = u;
-                            let mut act = Box::into_pin(self.clone().act(orig.clone(), msg.clone(), term.clone(), kern));
+//                         Ok(msg)
+//                     }),
+//                     SayMode::Fmt => Box::new(move || {
+//                         for u in seq {
+//                             self.msg = u;
+//                             let mut act = Box::into_pin(self.clone().act(orig.clone(), msg.clone(), term.clone(), kern));
 
-                            loop {
-                                if let GeneratorState::Complete(res) = Pin::new(&mut act).resume(()) {
-                                    res?;
-                                    break;
-                                }
-                                yield;
-                            }
-                        }
-                        Ok(msg)
-                    })
-                },
-            _ => Box::new(move || {
-                self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//                             loop {
+//                                 if let GeneratorState::Complete(res) = Pin::new(&mut act).resume(()) {
+//                                     res?;
+//                                     break;
+//                                 }
+//                                 yield;
+//                             }
+//                         }
+//                         Ok(msg)
+//                     })
+//                 },
+//             _ => Box::new(move || {
+//                 self.say(&msg, &term, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
 
-                if self.nl {
-                    term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                }
-                yield;
+//                 if self.nl {
+//                     term.print("\n", &self.act_mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//                 }
+//                 yield;
 
-                term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                yield;
+//                 term.flush(&self.act_mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+//                 yield;
 
-                Ok(msg)
-            })
-        } 
-    }
-}
+//                 Ok(msg)
+//             })
+//         } 
+//     }
+// }
 
 
 impl FromUnit for Inp {
@@ -313,54 +313,54 @@ impl FromUnit for Inp {
     }
 }
 
-impl TermAct for Inp {
-    fn act<'a>(self, _orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
-        let hlr = move || {
-            // check input lock
-            loop {
-                let kern_grd = kern.lock();
+// impl TermAct for Inp {
+//     fn act<'a>(self, _orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+//         let hlr = move || {
+//             // check input lock
+//             loop {
+//                 let kern_grd = kern.lock();
 
-                if kern_grd.term.inp_lck {
-                    drop(kern_grd);
-                    yield;
-                    continue;
-                }
-                break;
-            }
-            kern.lock().term.inp_lck = true;
-            yield;
+//                 if kern_grd.term.inp_lck {
+//                     drop(kern_grd);
+//                     yield;
+//                     continue;
+//                 }
+//                 break;
+//             }
+//             kern.lock().term.inp_lck = true;
+//             yield;
 
-            // process
-            term.print(self.pmt.as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-            yield;
+//             // process
+//             term.print(self.pmt.as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+//             yield;
 
-            let mut gen = Box::into_pin(term.input(self.mode, self.sct, kern).0);
+//             let mut gen = Box::into_pin(term.input(self.mode, self.sct, kern).0);
 
-            let out;
-            loop {
-                if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                    kern.lock().term.inp_lck = false;
-                    out = res.map_err(|e| KernErr::CLIErr(e))?;
-                    break;
-                }
-                yield;
-            }
+//             let out;
+//             loop {
+//                 if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+//                     kern.lock().term.inp_lck = false;
+//                     out = res.map_err(|e| KernErr::CLIErr(e))?;
+//                     break;
+//                 }
+//                 yield;
+//             }
 
-            if out.is_empty() {
-                return Ok(msg);
-            }
+//             if out.is_empty() {
+//                 return Ok(msg);
+//             }
 
-            let out = if self.prs {
-                Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
-            } else {
-                Unit::Str(out)
-            };
+//             let out = if self.prs {
+//                 Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0
+//             } else {
+//                 Unit::Str(out)
+//             };
 
-            if let Some(u) = Unit::merge_ref(self.out.into_iter(), out, msg.clone()) {
-                return Ok(u);
-            }
-            Ok(msg)
-        };
-        Box::new(hlr)
-    }
-}
+//             if let Some(u) = Unit::merge_ref(self.out.into_iter(), out, msg.clone()) {
+//                 return Ok(u);
+//             }
+//             Ok(msg)
+//         };
+//         Box::new(hlr)
+//     }
+// }

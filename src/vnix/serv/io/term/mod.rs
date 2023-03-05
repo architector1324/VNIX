@@ -1,6 +1,6 @@
-mod tui;
+// mod tui;
 mod text;
-mod media;
+// mod media;
 mod content;
 
 use core::pin::Pin;
@@ -82,12 +82,12 @@ enum ActKind {
     SetRes(SetRes),
     GetKey(GetKey),
     Stream(Unit, (String, Addr)),
-    Say(text::Say),
-    Inp(text::Inp),
-    Img(media::Img),
-    Sprite(media::Sprite),
-    Vid(media::Video),
-    WinTUI(tui::Win)
+    // Say(text::Say),
+    // Inp(text::Inp),
+    // Img(media::Img),
+    // Sprite(media::Sprite),
+    // Vid(media::Video),
+    // WinTUI(tui::Win)
 }
 
 #[derive(Debug, Clone)]
@@ -439,46 +439,46 @@ impl FromUnit for Act {
                             kind: ActKind::GetKey(GetKey(None)),
                             mode: ActMode::Cli
                         }),
-                        "say" => Some(Act {
-                            kind: ActKind::Say(text::Say {
-                                msg: Unit::Ref(vec!["msg".into()]),
-                                shrt: None,
-                                nl: false,
-                                mode: text::SayMode::Norm,
-                                act_mode: ActMode::Cli
-                            }),
-                            mode: ActMode::Cli
-                        }),
-                        "say.gfx" => Some(Act {
-                            kind: ActKind::Say(text::Say {
-                                msg: Unit::Ref(vec!["msg".into()]),
-                                shrt: None,
-                                nl: false,
-                                mode: text::SayMode::Norm,
-                                act_mode: ActMode::Gfx
-                            }),
-                            mode: ActMode::Cli
-                        }),
-                        "say.fmt" => Some(Act {
-                            kind: ActKind::Say(text::Say {
-                                msg: Unit::Ref(vec!["msg".into()]),
-                                shrt: None,
-                                nl: false,
-                                mode: text::SayMode::Fmt,
-                                act_mode: ActMode::Cli
-                            }),
-                            mode: ActMode::Cli
-                        }),
-                        "say.fmt.gfx" => Some(Act {
-                            kind: ActKind::Say(text::Say {
-                                msg: Unit::Ref(vec!["msg".into()]),
-                                shrt: None,
-                                nl: false,
-                                mode: text::SayMode::Fmt,
-                                act_mode: ActMode::Gfx
-                            }),
-                            mode: ActMode::Cli
-                        }),
+                        // "say" => Some(Act {
+                        //     kind: ActKind::Say(text::Say {
+                        //         msg: Unit::Ref(vec!["msg".into()]),
+                        //         shrt: None,
+                        //         nl: false,
+                        //         mode: text::SayMode::Norm,
+                        //         act_mode: ActMode::Cli
+                        //     }),
+                        //     mode: ActMode::Cli
+                        // }),
+                        // "say.gfx" => Some(Act {
+                        //     kind: ActKind::Say(text::Say {
+                        //         msg: Unit::Ref(vec!["msg".into()]),
+                        //         shrt: None,
+                        //         nl: false,
+                        //         mode: text::SayMode::Norm,
+                        //         act_mode: ActMode::Gfx
+                        //     }),
+                        //     mode: ActMode::Cli
+                        // }),
+                        // "say.fmt" => Some(Act {
+                        //     kind: ActKind::Say(text::Say {
+                        //         msg: Unit::Ref(vec!["msg".into()]),
+                        //         shrt: None,
+                        //         nl: false,
+                        //         mode: text::SayMode::Fmt,
+                        //         act_mode: ActMode::Cli
+                        //     }),
+                        //     mode: ActMode::Cli
+                        // }),
+                        // "say.fmt.gfx" => Some(Act {
+                        //     kind: ActKind::Say(text::Say {
+                        //         msg: Unit::Ref(vec!["msg".into()]),
+                        //         shrt: None,
+                        //         nl: false,
+                        //         mode: text::SayMode::Fmt,
+                        //         act_mode: ActMode::Gfx
+                        //     }),
+                        //     mode: ActMode::Cli
+                        // }),
                         _ => None
                     },
                 Or::Second(u) => {
@@ -510,47 +510,47 @@ impl FromUnit for Act {
                         })
                     }
 
-                    if let Some(say) = text::Say::from_unit(glob, &u) {
-                        return Some(Act {
-                            mode: say.act_mode.clone(),
-                            kind: ActKind::Say(say)
-                        });
-                    }
+                    // if let Some(say) = text::Say::from_unit(glob, &u) {
+                    //     return Some(Act {
+                    //         mode: say.act_mode.clone(),
+                    //         kind: ActKind::Say(say)
+                    //     });
+                    // }
 
-                    if let Some(inp) = text::Inp::from_unit(glob, &u) {
-                        return Some(Act {
-                            mode: inp.mode.clone(),
-                            kind: ActKind::Inp(inp)
-                        })
-                    }
+                    // if let Some(inp) = text::Inp::from_unit(glob, &u) {
+                    //     return Some(Act {
+                    //         mode: inp.mode.clone(),
+                    //         kind: ActKind::Inp(inp)
+                    //     })
+                    // }
 
-                    if let Some(img) = media::Img::from_unit(glob, &u) {
-                        return Some(Act {
-                            kind: ActKind::Img(img),
-                            mode: ActMode::Gfx
-                        })
-                    }
+                    // if let Some(img) = media::Img::from_unit(glob, &u) {
+                    //     return Some(Act {
+                    //         kind: ActKind::Img(img),
+                    //         mode: ActMode::Gfx
+                    //     })
+                    // }
 
-                    if let Some(spr) = media::Sprite::from_unit(glob, &u) {
-                        return Some(Act {
-                            kind: ActKind::Sprite(spr),
-                            mode: ActMode::Gfx
-                        })
-                    }
+                    // if let Some(spr) = media::Sprite::from_unit(glob, &u) {
+                    //     return Some(Act {
+                    //         kind: ActKind::Sprite(spr),
+                    //         mode: ActMode::Gfx
+                    //     })
+                    // }
 
-                    if let Some(vid) = media::Video::from_unit(glob, &u) {
-                        return Some(Act {
-                            kind: ActKind::Vid(vid),
-                            mode: ActMode::Gfx
-                        })
-                    }
+                    // if let Some(vid) = media::Video::from_unit(glob, &u) {
+                    //     return Some(Act {
+                    //         kind: ActKind::Vid(vid),
+                    //         mode: ActMode::Gfx
+                    //     })
+                    // }
 
-                    if let Some(win) = tui::Win::from_unit(glob, &u) {
-                        return Some(Act {
-                            mode: win.mode.clone(),
-                            kind: ActKind::WinTUI(win)
-                        })
-                    }
+                    // if let Some(win) = tui::Win::from_unit(glob, &u) {
+                    //     return Some(Act {
+                    //         mode: win.mode.clone(),
+                    //         kind: ActKind::WinTUI(win)
+                    //     })
+                    // }
 
                     None
                 }
@@ -656,27 +656,27 @@ impl TermAct for GetRes {
 impl TermAct for Act {
     fn act<'a>(self, orig: Rc<Msg>, mut msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
         match self.kind {
-            ActKind::Cls => Box::new(move || {
-                term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                yield;
+            // ActKind::Cls => Box::new(move || {
+            //     term.clear(&self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+            //     term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+            //     yield;
 
-                Ok(msg)
-            }),
-            ActKind::Nl => Box::new(move || {
-                term.print("\n", &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                yield;
+            //     Ok(msg)
+            // }),
+            // ActKind::Nl => Box::new(move || {
+            //     term.print("\n", &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+            //     term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+            //     yield;
 
-                Ok(msg)
-            }),
-            ActKind::Trc => Box::new(move || {
-                term.print(orig.to_string().as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
-                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                yield;
+            //     Ok(msg)
+            // }),
+            // ActKind::Trc => Box::new(move || {
+            //     term.print(orig.to_string().as_str(), &self.mode, &mut kern.lock()).map_err(|e| KernErr::CLIErr(e))?;
+            //     term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+            //     yield;
 
-                Ok(msg)
-            }),
+            //     Ok(msg)
+            // }),
             ActKind::GetRes(get_res) => get_res.act(orig, msg, term, kern),
             ActKind::SetRes(set_res) => Box::new(move || {
                 match set_res.mode {
@@ -687,24 +687,24 @@ impl TermAct for Act {
 
                 Ok(msg)
             }),
-            ActKind::GetKey(get_key) => Box::new(move || {
-                term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
-                yield;
+            // ActKind::GetKey(get_key) => Box::new(move || {
+            //     term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
+            //     yield;
 
-                loop {
-                    if let Some(key) = term.get_key(& mut kern.lock()).map_err(|e| KernErr::CLIErr(e))? {
-                        if let Some(path) = get_key.0 {
-                            if let Some(_msg) = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), msg.clone()) {
-                                return Ok(_msg);
-                            }
-                        }
-                        break;
-                    }
-                    yield;
-                }
+            //     loop {
+            //         if let Some(key) = term.get_key(& mut kern.lock()).map_err(|e| KernErr::CLIErr(e))? {
+            //             if let Some(path) = get_key.0 {
+            //                 if let Some(_msg) = Unit::merge_ref(path.into_iter(), Unit::Str(format!("{}", key)), msg.clone()) {
+            //                     return Ok(_msg);
+            //                 }
+            //             }
+            //             break;
+            //         }
+            //         yield;
+            //     }
 
-                Ok(msg)
-            }),
+            //     Ok(msg)
+            // }),
             ActKind::Stream(_msg, (serv, _)) => Box::new(move || {
                 // run stream
                 let task = TaskLoop::Chain {
@@ -752,12 +752,13 @@ impl TermAct for Act {
 
                 Ok(msg)
             }),
-            ActKind::Say(say) => say.act(orig, msg, term, kern),
-            ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
-            ActKind::Img(img) => img.act(orig, msg, term, kern),
-            ActKind::Sprite(spr) => spr.act(orig, msg, term, kern),
-            ActKind::Vid(vid) => vid.act(orig, msg, term, kern),
-            ActKind::WinTUI(win) => win.act(orig, msg, term, kern)
+            // ActKind::Say(say) => say.act(orig, msg, term, kern),
+            // ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
+            // ActKind::Img(img) => img.act(orig, msg, term, kern),
+            // ActKind::Sprite(spr) => spr.act(orig, msg, term, kern),
+            // ActKind::Vid(vid) => vid.act(orig, msg, term, kern),
+            // ActKind::WinTUI(win) => win.act(orig, msg, term, kern),
+            _ => todo!()
         }
     }
 }
@@ -790,7 +791,7 @@ impl ServHlr for Term {
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
         let hlr = move || {
             let term = Rc::new(Term::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?);
-            // writeln!(kern.lock().drv.cli, "io.term: {:?}", self.acts);
+            writeln!(kern.lock().drv.cli, "io.term: {:?}", self.acts);
 
             if let Some(acts) = self.acts.clone() {
                 let mut out_u = msg.msg.clone();
