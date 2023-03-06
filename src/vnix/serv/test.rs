@@ -1,4 +1,4 @@
-use crate::{vnix::core::{serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo}, kern::{Kern, KernErr}, msg::Msg, unit::{FromUnit, Unit, SchemaUnit, Schema}}, driver::CLIErr};
+use crate::{vnix::core::{serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo}, kern::{Kern, KernErr}, msg::Msg, unit::{FromUnit, Unit, SchemaUnit, Schema}}, driver::CLIErr, thread};
 use alloc::boxed::Box;
 use alloc::string::String;
 use spin::Mutex;
@@ -34,7 +34,7 @@ impl ServHlr for Dumb {
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             if let Some(_msg) = self.msg {
                 for i in 0..5 {
                     writeln!(kern.lock().drv.cli, "test[{}]{i}: {_msg}", msg.ath).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
@@ -42,7 +42,6 @@ impl ServHlr for Dumb {
                 }
             }
             kern.lock().msg(&msg.ath, Unit::Str("b".into())).map(|msg| Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }

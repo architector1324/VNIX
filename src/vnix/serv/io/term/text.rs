@@ -33,7 +33,7 @@ pub struct Say {
     pub act_mode: ActMode
 }
 
-pub struct InpAsync<'a>(pub Box<dyn Generator<Yield = (), Return = Result<String, CLIErr>> + 'a>);
+pub type InpAsync<'a> = ThreadAsync<'a, Result<String, CLIErr>>;
 
 #[derive(Debug, Clone)]
 pub struct Inp {

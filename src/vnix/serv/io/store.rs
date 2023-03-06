@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use spin::Mutex;
 
+use crate::thread;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, SchemaPair, Schema, SchemaRef, SchemaStr, SchemaOr, SchemaSeq, Or, SchemaMapFirstRequire, SchemaMapRequire};
 
@@ -236,7 +237,7 @@ impl ServHlr for Store {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store".into())
             };
@@ -248,14 +249,13 @@ impl ServHlr for Store {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let inst = Store::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
             let mut out_u: Option<Unit> = None;
     
@@ -267,13 +267,12 @@ impl ServHlr for Store {
                     yield;
                 }
             }
-
+    
             if let Some(u) = out_u {
                 return kern.lock().msg(&msg.ath, u).map(|msg| Some(msg));
             }
-
+    
             Ok(Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }

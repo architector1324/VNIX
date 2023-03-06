@@ -4,6 +4,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
+use crate::thread;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaMap, SchemaUnit, SchemaMapSeq, SchemaOr, SchemaPair, Schema, Or};
 
@@ -135,7 +136,7 @@ impl ServHlr for FSM {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Finite state machine service\nExample: {fsm:{a:(b hello) b:a} state:a}@etc.fsm # switch state `a -> b` and get `hello` msg".into())
             };
@@ -147,14 +148,13 @@ impl ServHlr for FSM {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             // writeln!(kern.lock().drv.cli, "DEBG vnix:fsm: {:?}", self).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
     
             let out = self.table.iter().find(|e| e.state == self.state).map(|t| {
@@ -191,7 +191,7 @@ impl ServHlr for FSM {
                 }
             });
             yield;
-
+    
             if let Some(out) = out {
                 let mut m = vec![
                     (Unit::Str("state".into()), out.state),
@@ -202,12 +202,11 @@ impl ServHlr for FSM {
                         (Unit::Str("msg".into()), msg),
                     );
                 }
-
+    
                 return kern.lock().msg(&msg.ath, Unit::Map(m)).map(|msg| Some(msg));
             }
     
             Ok(None)
-        };
-        Box::new(hlr)
+        })
     }
 }

@@ -7,6 +7,7 @@ use alloc::string::String;
 
 use spin::Mutex;
 
+use crate::{thread, thread_await};
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
@@ -83,7 +84,7 @@ impl ServHlr for Chrono {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for time control\nExample: {wait.ms:500}@time.chrono # wait for 0.5 sec.".into())
             };
@@ -95,31 +96,22 @@ impl ServHlr for Chrono {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             if let Some(act) = self.act {
                 match act {
                     Act::Wait(wait) => {
-                        let mut gen = Box::into_pin(kern.lock().drv.time.wait_async(wait.dur));
-
-                        loop {
-                            if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                                res.map_err(|e| KernErr::TimeErr(e))?;
-                                break;
-                            }
-                            yield;
-                        }
+                        let wait = kern.lock().drv.time.wait_async(wait.dur);
+                        thread_await!(wait).map_err(|e| KernErr::TimeErr(e))?;
                     }
                 }
             }
             Ok(Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }

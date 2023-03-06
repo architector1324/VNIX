@@ -11,10 +11,11 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::{thread, thread_await};
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::task::{TaskLoop, TaskSig};
+use crate::vnix::core::task::{TaskLoop, TaskSig, ThreadAsync};
 use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaMapEntry, SchemaUnit, Schema, SchemaOr, Or, SchemaSeq, SchemaStr, SchemaMapSecondRequire, SchemaStream, SchemaPair, SchemaInt, SchemaMap};
 
@@ -38,7 +39,7 @@ struct Signal {
     sig: TaskSig
 }
 
-pub type TaskActAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Option<Unit>, KernErr>> + 'a>;
+pub type TaskActAsync<'a> = ThreadAsync<'a, Result<Option<Unit>, KernErr>>;
 
 pub trait TaskAct {
     fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a>;
@@ -253,7 +254,7 @@ impl FromUnit for Task {
 
 impl TaskAct for GetRunning {
     fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
-        let hlr = move || {
+        thread!({
             let msg = match self {
                 GetRunning::Curr => Unit::Int(kern.lock().get_task_running() as i32),
                 GetRunning::All => {
@@ -269,17 +270,17 @@ impl TaskAct for GetRunning {
                 GetRunning::Tree => {
                     let mut tasks = kern.lock().get_tasks_running();
                     tasks.sort_by(|prev, t| prev.id.cmp(&t.id));
-
+    
                     if let Some(first) = tasks.get(0) {
                         fn tree(t: &crate::vnix::core::task::Task, it: Iter<crate::vnix::core::task::Task>) -> Unit {
                             let lst = it.clone().filter(|_t| _t.id != t.id && _t.parent_id == t.id).map(|_t| tree(_t, it.clone())).collect::<Vec<_>>();
-
+    
                             let childs = if !lst.is_empty() {
                                 Unit::Lst(lst)
                             } else {
                                 Unit::None
                             };
-
+    
                             Unit::Map(vec![
                                 (Unit::Str("id".into()), Unit::Int(t.id as i32)),
                                 (Unit::Str("usr".into()), Unit::Str(t.usr.clone())),
@@ -294,32 +295,30 @@ impl TaskAct for GetRunning {
                 },
             };
             yield;
-
+    
             let msg = orig.borrow().msg.clone().merge(Unit::Map(vec![(Unit::Str("msg".into()), msg)]));
             Ok(Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }
 
 impl TaskAct for Signal {
     fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
-        let hlr = move || {
+        thread!({
             kern.lock().task_sig(self.id, self.sig)?;
             yield;
-
+    
             Ok(Some(orig.borrow().msg.clone()))
-        };
-        Box::new(hlr)
+        })
     }
 }
 
 impl TaskAct for Run {
     fn act<'a>(self, orig: Rc<RefCell<Msg>>, kern: &'a Mutex<Kern>) -> TaskActAsync<'a> {
-        let hlr = move || {
+        thread!({
             let id = kern.lock().reg_task(&orig.borrow().ath, &self.name, self.task)?;
             let msg;
-
+    
             loop {
                 if let Some(_msg) = kern.lock().get_task_result(id) {
                     msg = _msg?;
@@ -327,24 +326,23 @@ impl TaskAct for Run {
                 }
                 yield;
             }
-
+    
             let schm = SchemaMapEntry(Unit::Str("msg".into()), SchemaUnit);
-
+    
             if let Some(msg) = msg {
                 orig.borrow_mut().ath = msg.ath;
-
+    
                 if let Some(out) = schm.find_loc(&msg.msg) {
                     let msg = Unit::Map(vec![
                         (Unit::Str("msg".into()), out)
                     ]);
-
+    
                     return Ok(Some(msg))
                 }
             }
-
+    
             return Ok(None);
-        };
-        Box::new(hlr)
+        })
     }
 }
 
@@ -355,11 +353,11 @@ impl ServHlr for Task {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for run task from message\nExample: (load @txt.hello)@io.store@sys.task".into())
             };
-
+    
             let m = Unit::Map(vec![(
                 Unit::Str("msg".into()),
                 u
@@ -367,40 +365,29 @@ impl ServHlr for Task {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             if let Some(act) = self.act {
                 let orig = Rc::new(RefCell::new(msg));
-
+    
                 let act = match act {
                     Act::Get(get) => get.act(orig.clone(), kern),
                     Act::Run(run) => run.act(orig.clone(), kern),
                     Act::Sig(sig) => sig.act(orig.clone(), kern)
                 };
 
-                let mut gen = Box::into_pin(act);
-                let mut _msg = None;
-
-                loop {
-                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                        if let Some(msg) = res? {
-                            _msg = kern.lock().msg(&orig.borrow().ath, msg).map(|msg| Some(msg))?;
-                        }
-                        break;
-                    }
-                    yield;
+                if let Some(msg) = thread_await!(act)? {
+                    return kern.lock().msg(&orig.borrow().ath, msg).map(|msg| Some(msg));
                 }
-                Ok(_msg)
+                Ok(None)
             } else {
                 Ok(Some(msg))
             }
-        };
-        Box::new(hlr)
+        })
     }
 }

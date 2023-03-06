@@ -4,6 +4,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::driver::CLIErr;
+use crate::thread;
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
@@ -92,7 +93,7 @@ impl ServHlr for User {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr".into())
             };
@@ -104,21 +105,20 @@ impl ServHlr for User {
     
             let out = kern.lock().msg(ath.as_str(), m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, mut msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             if let Some(act) = self.act {
                 let (usr, out) = match act {
                     UserAct::Reg{ref ath} => Usr::new(ath, &mut kern.lock())?,
                     UserAct::Guest{ref ath, ref pub_key} => (Usr::guest(ath, pub_key)?, String::new()),
                     UserAct::Login{ref ath, ref pub_key, ref priv_key} => (Usr::login(ath, priv_key, pub_key)?, String::new())
                 };
-
+    
                 kern.lock().reg_usr(usr.clone())?;
                 writeln!(kern.lock().drv.cli, "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                 yield;
@@ -139,7 +139,6 @@ impl ServHlr for User {
             }
     
             Ok(Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }

@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use spin::Mutex;
 
+use crate::thread;
 use crate::vnix::core::msg::Msg;
 
 use crate::vnix::core::serv::{ServHlr, ServHelpTopic, ServHlrAsync, ServInfo};
@@ -250,7 +251,7 @@ impl ServHlr for Calc {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.calc".into())
             };
@@ -262,27 +263,25 @@ impl ServHlr for Calc {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let inst = Calc::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
-
+    
             if let Some((op, path)) = inst.op {
                 let out = Calc::calc_op(op);
                 yield;
-
+    
                 let m = Unit::merge_ref(path.clone().into_iter(), Unit::Int(out), msg.msg).ok_or(KernErr::DbLoadFault)?;
-
+    
                 return kern.lock().msg(&msg.ath, m).map(|msg| Some(msg));
             }
-
+    
             return Ok(Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }

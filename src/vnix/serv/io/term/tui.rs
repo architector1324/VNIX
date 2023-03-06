@@ -43,7 +43,7 @@ trait TUIBorder {
     }
 }
 
-type TUIActAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<(), KernErr>> + 'a>;
+type TUIActAsync<'a> = ThreadAsync<'a, Result<(), KernErr>>;
 
 trait TUIAct {
     fn tui_act<'a>(self, pos: (usize, usize), size:(usize, usize), term: Rc<super::Term>, kern: &'a Mutex<Kern>) -> TUIActAsync<'a>;

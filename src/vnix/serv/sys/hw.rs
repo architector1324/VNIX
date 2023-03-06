@@ -4,6 +4,7 @@ use alloc::vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::thread;
 use crate::vnix::core::msg::Msg;
 
 use crate::driver::MemSizeUnits;
@@ -80,11 +81,11 @@ impl ServHlr for HW {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for hardware management\nExample: get.mem.free.mb@sys.hw".into())
             };
-
+    
             let m = Unit::Map(vec![(
                 Unit::Str("msg".into()),
                 u
@@ -92,30 +93,28 @@ impl ServHlr for HW {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             if let Some(act) = self.act {
                 let u = match act {
                     Act::FreeMem(free_mem) => Unit::Int(kern.lock().drv.mem.free(free_mem.0).map_err(|e| KernErr::MemErr(e))? as i32)
                 };
                 yield;
-
+    
                 let m = Unit::Map(vec![
                     (Unit::Str("msg".into()), u)]
                 );
-
+    
                 let _msg = msg.msg.merge(m);
                 kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
             } else {
                 Ok(Some(msg))
             }
-        };
-        Box::new(hlr)
+        })
     }
 }

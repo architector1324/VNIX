@@ -3,6 +3,7 @@ use spin::Mutex;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::thread;
 use crate::vnix::core::serv::ServInfo;
 use crate::vnix::utils;
 use crate::vnix::core::unit::Or;
@@ -95,7 +96,7 @@ impl ServHlr for GFX2D {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Service for rendering 2d graphics\nExample: {fill:#ff0000}@gfx.2d # fill screen with red color".into())
             };
@@ -107,20 +108,19 @@ impl ServHlr for GFX2D {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let inst = GFX2D::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?;
-
+    
             if let Some(fill) = inst.fill {
                 let res = fill.0.get(&mut kern.lock())?;
                 yield;
-
+    
                 let m = Unit::Map(vec![
                     (
                         Unit::Str("msg".into()),
@@ -151,9 +151,8 @@ impl ServHlr for GFX2D {
     
                 return kern.lock().msg(&msg.ath, m).map(|msg| Some(msg));
             }
-
+    
             Ok(None)
-        };
-        Box::new(hlr)
+        })
     }
 }

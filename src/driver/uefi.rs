@@ -11,6 +11,7 @@ use uefi::prelude::{SystemTable, Boot};
 use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType, EventType, Tpl, TimerTrigger};
 
 use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
+use crate::thread;
 
 use super::{TimeAsync, Duration};
 
@@ -360,7 +361,7 @@ impl Time for UefiTime {
             self.st.unsafe_clone()
         };
 
-        let hlr = move || {
+        thread!({
             unsafe {
                 let mcs = match dur {
                     Duration::Micro(mcs) => mcs,
@@ -378,8 +379,7 @@ impl Time for UefiTime {
                     yield;
                 }
             }
-        };
-        Box::new(hlr)
+        })
     }
 }
 

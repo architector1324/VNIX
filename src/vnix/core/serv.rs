@@ -1,10 +1,9 @@
-use core::ops::Generator;
-
 use alloc::boxed::Box;
 use alloc::string::String;
 
 use super::msg::Msg;
 use super::kern::{KernErr, Kern};
+use super::task::ThreadAsync;
 use super::unit::Unit;
 
 use spin::Mutex;
@@ -29,7 +28,7 @@ pub struct Serv {
     pub hlr: Box<dyn ServHlr>
 }
 
-pub type ServHlrAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a>;
+pub type ServHlrAsync<'a> = ThreadAsync<'a, Result<Option<Msg>, KernErr>>;
 
 pub trait ServHlr {
     fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr>;
