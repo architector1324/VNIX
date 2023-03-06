@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
-use crate::thread_await;
+use crate::{thread_await, thread};
 
 use crate::driver::{CLIErr, DispErr, TermKey};
 use crate::vnix::core::msg::Msg;
@@ -31,24 +31,24 @@ pub enum Mode {
     Gfx,
 }
 
-// #[derive(Debug, Clone)]
-// enum GetResKind {
-//     Curr,
-//     All
-// }
+#[derive(Debug, Clone)]
+enum GetResKind {
+    Curr,
+    All
+}
 
-// #[derive(Debug, Clone)]
-// struct GetRes {
-//     kind: GetResKind,
-//     path: Vec<String>,
-//     mode: Mode
-// }
+#[derive(Debug, Clone)]
+struct GetRes {
+    kind: GetResKind,
+    path: Vec<String>,
+    mode: Mode
+}
 
-// #[derive(Debug, Clone)]
-// struct SetRes {
-//     size: (usize, usize),
-//     mode: Mode
-// }
+#[derive(Debug, Clone)]
+struct SetRes {
+    size: (usize, usize),
+    mode: Mode
+}
 
 // #[derive(Debug, Clone)]
 // struct GetKey(Option<Vec<String>>);
@@ -88,8 +88,8 @@ enum Act {
     Cls,
     Nl,
     Trc,
-    // GetRes(GetRes),
-    // SetRes(SetRes),
+    GetRes(GetRes),
+    SetRes(SetRes),
     // GetKey(GetKey),
     // Stream(Unit, (String, Addr)),
     // Say(text::Say),
@@ -303,68 +303,68 @@ impl Display for Mode {
     }
 }
 
-// impl FromUnit for GetRes {
-//     fn from_unit_loc(u: &Unit) -> Option<Self> {
-//         Self::from_unit(u, u)
-//     }
+impl FromUnit for GetRes {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
 
-//     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
-//         let schm = SchemaPair(SchemaStr, SchemaRef);
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaPair(SchemaStr, SchemaRef);
 
-//         schm.find_deep(glob, u).and_then(|(s, path)| {
-//             match s.as_str() {
-//                 "get.res" => Some(GetRes {
-//                     kind: GetResKind::Curr,
-//                     path,
-//                     mode: Mode::Cli
-//                 }),
-//                 "get.res.gfx" => Some(GetRes {
-//                     kind: GetResKind::Curr,
-//                     path,
-//                     mode: Mode::Gfx
-//                 }),
-//                 "get.res.all" => Some(GetRes {
-//                     kind: GetResKind::All,
-//                     path,
-//                     mode: Mode::Cli
-//                 }),
-//                 "get.res.gfx.all" => Some(GetRes {
-//                     kind: GetResKind::All,
-//                     path,
-//                     mode: Mode::Gfx
-//                 }),
-//                 _ => None
-//             }
-//         })
-//     }
-// }
+        schm.find_deep(glob, u).and_then(|(s, path)| {
+            match s.as_str() {
+                "get.res" => Some(GetRes {
+                    kind: GetResKind::Curr,
+                    path,
+                    mode: Mode::Text
+                }),
+                "get.res.gfx" => Some(GetRes {
+                    kind: GetResKind::Curr,
+                    path,
+                    mode: Mode::Gfx
+                }),
+                "get.res.all" => Some(GetRes {
+                    kind: GetResKind::All,
+                    path,
+                    mode: Mode::Text
+                }),
+                "get.res.gfx.all" => Some(GetRes {
+                    kind: GetResKind::All,
+                    path,
+                    mode: Mode::Gfx
+                }),
+                _ => None
+            }
+        })
+    }
+}
 
-// impl FromUnit for SetRes {
-//     fn from_unit_loc(u: &Unit) -> Option<Self> {
-//         Self::from_unit(u, u)
-//     }
+impl FromUnit for SetRes {
+    fn from_unit_loc(u: &Unit) -> Option<Self> {
+        Self::from_unit(u, u)
+    }
 
-//     fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
-//         let schm = SchemaPair(
-//             SchemaStr,
-//             SchemaPair(SchemaInt, SchemaInt)
-//         );
+    fn from_unit(glob: &Unit, u: &Unit) -> Option<Self> {
+        let schm = SchemaPair(
+            SchemaStr,
+            SchemaPair(SchemaInt, SchemaInt)
+        );
 
-//         schm.find_deep(glob, u).and_then(|(s, (w, h))| {
-//             match s.as_str() {
-//                 "set.res" => Some(SetRes {
-//                     size: (w as usize, h as usize),
-//                     mode: Mode::Cli
-//                 }),
-//                 "set.res.gfx" => Some(SetRes {
-//                     size: (w as usize, h as usize),
-//                     mode: Mode::Gfx
-//                 }),
-//                 _ => None
-//             }
-//         })
-//     }
-// }
+        schm.find_deep(glob, u).and_then(|(s, (w, h))| {
+            match s.as_str() {
+                "set.res" => Some(SetRes {
+                    size: (w as usize, h as usize),
+                    mode: Mode::Text
+                }),
+                "set.res.gfx" => Some(SetRes {
+                    size: (w as usize, h as usize),
+                    mode: Mode::Gfx
+                }),
+                _ => None
+            }
+        })
+    }
+}
 
 // impl FromUnit for GetKey {
 //     fn from_unit_loc(u: &Unit) -> Option<Self> {
@@ -401,38 +401,34 @@ impl FromUnit for Act {
                         "cls" => Some(Act::Cls),
                         "nl" => Some(Act::Nl),
                         "trc" => Some(Act::Trc),
-                        // "get.res" => Some(Act {
-                        //     kind: ActKind::GetRes(GetRes {
-                        //         kind: GetResKind::Curr,
-                        //         path: vec!["msg".into()],
-                        //         mode: Mode::Cli
-                        //     }),
-                        //     mode: Mode::Cli
-                        // }),
-                        // "get.res.gfx" => Some(Act {
-                        //     kind: ActKind::GetRes(GetRes {
-                        //         kind: GetResKind::Curr,
-                        //         path: vec!["msg".into()],
-                        //         mode: Mode::Gfx
-                        //     }),
-                        //     mode: Mode::Gfx
-                        // }),
-                        // "get.res.all" => Some(Act {
-                        //     kind: ActKind::GetRes(GetRes {
-                        //         kind: GetResKind::All,
-                        //         path: vec!["msg".into()],
-                        //         mode: Mode::Cli
-                        //     }),
-                        //     mode: Mode::Cli
-                        // }),
-                        // "get.res.gfx.all" => Some(Act {
-                        //     kind: ActKind::GetRes(GetRes {
-                        //         kind: GetResKind::All,
-                        //         path: vec!["msg".into()],
-                        //         mode: Mode::Gfx
-                        //     }),
-                        //     mode: Mode::Gfx
-                        // }),
+                        "get.res" => Some(
+                            Act::GetRes(GetRes {
+                                kind: GetResKind::Curr,
+                                path: vec!["msg".into()],
+                                mode: Mode::Text
+                            })
+                        ),
+                        "get.res.gfx" => Some(
+                            Act::GetRes(GetRes {
+                                kind: GetResKind::Curr,
+                                path: vec!["msg".into()],
+                                mode: Mode::Gfx
+                            })
+                        ),
+                        "get.res.all" => Some(
+                            Act::GetRes(GetRes {
+                                kind: GetResKind::All,
+                                path: vec!["msg".into()],
+                                mode: Mode::Text
+                            })
+                        ),
+                        "get.res.gfx.all" => Some(
+                            Act::GetRes(GetRes {
+                                kind: GetResKind::All,
+                                path: vec!["msg".into()],
+                                mode: Mode::Gfx
+                            })
+                        ),
                         // "key" => Some(Act {
                         //     kind: ActKind::GetKey(GetKey(None)),
                         //     mode: Mode::Cli
@@ -487,19 +483,13 @@ impl FromUnit for Act {
                     //     });
                     // }
 
-                    // if let Some(get_res) = GetRes::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         mode: get_res.mode.clone(),
-                    //         kind: ActKind::GetRes(get_res)
-                    //     })
-                    // }
+                    if let Some(get_res) = GetRes::from_unit(glob, &u) {
+                        return Some(Act::GetRes(get_res))
+                    }
 
-                    // if let Some(set_res) = SetRes::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         mode: set_res.mode.clone(),
-                    //         kind: ActKind::SetRes(set_res)
-                    //     })
-                    // }
+                    if let Some(set_res) = SetRes::from_unit(glob, &u) {
+                        return Some(Act::SetRes(set_res))
+                    }
 
                     // if let Some(get_key) = GetKey::from_unit(glob, &u) {
                     //     return Some(Act {
@@ -597,59 +587,58 @@ impl FromUnit for Term {
     }
 }
 
-// impl TermAct for GetRes {
-//     fn act<'a>(self, _orig: Rc<Msg>, msg: Unit, _term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
-//         let hlr = move || {
-//             let _msg = match self.mode {
-//                 Mode::Cli =>
-//                     match self.kind {
-//                         GetResKind::Curr => {
-//                             let res = kern.lock().drv.cli.res().map_err(|e| KernErr::CLIErr(e))?;
-//                             Unit::Pair(
-//                                 Box::new(Unit::Int(res.0 as i32)),
-//                                 Box::new(Unit::Int(res.1 as i32))
-//                             )
-//                         },
-//                         GetResKind::All => {
-//                             let res = kern.lock().drv.cli.res_list().map_err(|e| KernErr::CLIErr(e))?;
-//                             Unit::Lst(res.into_iter().map(|(w, h)| {
-//                                 Unit::Pair(
-//                                     Box::new(Unit::Int(w as i32)),
-//                                     Box::new(Unit::Int(h as i32))
-//                                 )
-//                             }).collect())
-//                         }
-//                     },
-//                 Mode::Gfx =>
-//                     match self.kind {
-//                         GetResKind::Curr => {
-//                             let res = kern.lock().drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
-//                             Unit::Pair(
-//                                 Box::new(Unit::Int(res.0 as i32)),
-//                                 Box::new(Unit::Int(res.1 as i32))
-//                             )
-//                         },
-//                         GetResKind::All => {
-//                             let res = kern.lock().drv.disp.res_list().map_err(|e| KernErr::DispErr(e))?;
-//                             Unit::Lst(res.into_iter().map(|(w, h)| {
-//                                 Unit::Pair(
-//                                     Box::new(Unit::Int(w as i32)),
-//                                     Box::new(Unit::Int(h as i32))
-//                                 )
-//                             }).collect())
-//                         }
-//                     }
-//             };
-//             yield;
+impl TermAct for GetRes {
+    fn act<'a>(self, _orig: Rc<Msg>, msg: Unit, _term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
+        thread!({
+            let _msg = match self.mode {
+                Mode::Text =>
+                    match self.kind {
+                        GetResKind::Curr => {
+                            let res = kern.lock().drv.cli.res().map_err(|e| KernErr::CLIErr(e))?;
+                            Unit::Pair(
+                                Box::new(Unit::Int(res.0 as i32)),
+                                Box::new(Unit::Int(res.1 as i32))
+                            )
+                        },
+                        GetResKind::All => {
+                            let res = kern.lock().drv.cli.res_list().map_err(|e| KernErr::CLIErr(e))?;
+                            Unit::Lst(res.into_iter().map(|(w, h)| {
+                                Unit::Pair(
+                                    Box::new(Unit::Int(w as i32)),
+                                    Box::new(Unit::Int(h as i32))
+                                )
+                            }).collect())
+                        }
+                    },
+                Mode::Gfx =>
+                    match self.kind {
+                        GetResKind::Curr => {
+                            let res = kern.lock().drv.disp.res().map_err(|e| KernErr::DispErr(e))?;
+                            Unit::Pair(
+                                Box::new(Unit::Int(res.0 as i32)),
+                                Box::new(Unit::Int(res.1 as i32))
+                            )
+                        },
+                        GetResKind::All => {
+                            let res = kern.lock().drv.disp.res_list().map_err(|e| KernErr::DispErr(e))?;
+                            Unit::Lst(res.into_iter().map(|(w, h)| {
+                                Unit::Pair(
+                                    Box::new(Unit::Int(w as i32)),
+                                    Box::new(Unit::Int(h as i32))
+                                )
+                            }).collect())
+                        }
+                    }
+            };
+            yield;
 
-//             if let Some(_msg) = Unit::merge_ref(self.path.into_iter(), _msg, msg.clone()) {
-//                 return Ok(_msg);
-//             }
-//             Ok(msg)
-//         };
-//         Box::new(hlr)
-//     }
-// }
+            if let Some(_msg) = Unit::merge_ref(self.path.into_iter(), _msg, msg.clone()) {
+                return Ok(_msg);
+            }
+            Ok(msg)
+        })
+    }
+}
 
 impl TermAct for Act {
     fn act<'a>(self, orig: Rc<Msg>, mut msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a> {
@@ -675,16 +664,16 @@ impl TermAct for Act {
 
             //     Ok(msg)
             // }),
-            // ActKind::GetRes(get_res) => get_res.act(orig, msg, term, kern),
-            // ActKind::SetRes(set_res) => Box::new(move || {
-            //     match set_res.mode {
-            //         Mode::Cli => kern.lock().drv.cli.set_res(set_res.size).map_err(|e| KernErr::CLIErr(e))?,
-            //         Mode::Gfx => kern.lock().drv.disp.set_res(set_res.size).map_err(|e| KernErr::DispErr(e))?
-            //     }
-            //     yield;
+            Act::GetRes(get_res) => get_res.act(orig, msg, term, kern),
+            Act::SetRes(set_res) => thread!({
+                match set_res.mode {
+                    Mode::Text => kern.lock().drv.cli.set_res(set_res.size).map_err(|e| KernErr::CLIErr(e))?,
+                    Mode::Gfx => kern.lock().drv.disp.set_res(set_res.size).map_err(|e| KernErr::DispErr(e))?
+                }
+                yield;
 
-            //     Ok(msg)
-            // }),
+                Ok(msg)
+            }),
             // ActKind::GetKey(get_key) => Box::new(move || {
             //     term.flush(&self.mode, &mut kern.lock()).map_err(|e| KernErr::DispErr(e))?;
             //     yield;
@@ -768,11 +757,11 @@ impl ServHlr for Term {
     }
 
     fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let u = match topic {
                 ServHelpTopic::Info => Unit::Str("Terminal I/O service\nExample: hello@io.term\nFor gfx mode: (say.gfx hello)@io.term".into())
             };
-
+    
             let m = Unit::Map(vec![(
                 Unit::Str("msg".into()),
                 u
@@ -780,35 +769,33 @@ impl ServHlr for Term {
     
             let out = kern.lock().msg(&ath, m).map(|msg| Some(msg));
             yield;
-
+    
             out
-        };
-        Box::new(hlr)
+        })
     }
 
     fn handle<'a>(self: Box<Self>, msg: Msg, _serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a> {
-        let hlr = move || {
+        thread!({
             let term = Rc::new(Term::from_unit_loc(&msg.msg).ok_or(KernErr::CannotCreateServInstance)?);
             writeln!(kern.lock().drv.cli, "io.term: {:?}", self.acts);
-
+    
             if let Some(acts) = self.acts.clone() {
                 let mut out_u = msg.msg.clone();
-
+    
                 let msg = Rc::new(msg);
-
+    
                 for act in acts {
                     let res = thread_await!(act.act(msg.clone(), out_u.clone(), term.clone(), kern));
                     out_u = out_u.merge(res?);
-
+    
                     yield;
                 }
-
+    
                 let msg = kern.lock().msg(&msg.ath, out_u)?;
                 return Ok(Some(msg))
             }
-
+    
             Ok(Some(msg))
-        };
-        Box::new(hlr)
+        })
     }
 }

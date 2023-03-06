@@ -42,6 +42,16 @@ pub type TaskRunAsync<'a> = impl Generator<Yield = (), Return = Result<Option<Ms
 pub type ThreadAsync<'a, T> = Box<dyn Generator<Yield = (), Return = T> + 'a>;
 
 #[macro_export]
+macro_rules! thread {
+    ($s:tt) => {
+       {
+            let hlr = move || $s;
+            Box::new(hlr)
+       } 
+    };
+}
+
+#[macro_export]
 macro_rules! thread_await {
     ($t:expr) => {
         {
