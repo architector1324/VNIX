@@ -91,7 +91,7 @@ enum Act {
     GetRes(GetRes),
     SetRes(SetRes),
     // GetKey(GetKey),
-    // Stream(Unit, (String, Addr)),
+    Source(Unit),
     // Say(text::Say),
     // Inp(text::Inp),
     // Img(media::Img),
@@ -394,7 +394,7 @@ impl FromUnit for Act {
             SchemaUnit
         );
 
-        schm.find_deep(glob, u).and_then(|or| {
+        schm.find_loc(u).and_then(|or| {
             match or {
                 Or::First(s) =>
                     match s.as_str() {
@@ -476,71 +476,69 @@ impl FromUnit for Act {
                         _ => None
                     },
                 Or::Second(u) => {
-                    // if let Unit::Stream(msg, (serv, addr)) = u {
-                    //     return Some(Act {
-                    //         mode: Mode::Cli,
-                    //         kind: ActKind::Stream(*msg, (serv, addr))
-                    //     });
-                    // }
-
-                    if let Some(get_res) = GetRes::from_unit(glob, &u) {
-                        return Some(Act::GetRes(get_res))
+                    match u {
+                        Unit::Ref(..) | Unit::Stream(..) => Some(Act::Source(u)),
+                        _ => {
+                            if let Some(get_res) = GetRes::from_unit(glob, &u) {
+                                return Some(Act::GetRes(get_res))
+                            }
+        
+                            if let Some(set_res) = SetRes::from_unit(glob, &u) {
+                                return Some(Act::SetRes(set_res))
+                            }
+        
+                            // if let Some(get_key) = GetKey::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         kind: ActKind::GetKey(get_key),
+                            //         mode: Mode::Cli
+                            //     })
+                            // }
+        
+                            // if let Some(say) = text::Say::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         mode: say.act_mode.clone(),
+                            //         kind: ActKind::Say(say)
+                            //     });
+                            // }
+        
+                            // if let Some(inp) = text::Inp::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         mode: inp.mode.clone(),
+                            //         kind: ActKind::Inp(inp)
+                            //     })
+                            // }
+        
+                            // if let Some(img) = media::Img::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         kind: ActKind::Img(img),
+                            //         mode: ActMode::Gfx
+                            //     })
+                            // }
+        
+                            // if let Some(spr) = media::Sprite::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         kind: ActKind::Sprite(spr),
+                            //         mode: ActMode::Gfx
+                            //     })
+                            // }
+        
+                            // if let Some(vid) = media::Video::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         kind: ActKind::Vid(vid),
+                            //         mode: ActMode::Gfx
+                            //     })
+                            // }
+        
+                            // if let Some(win) = tui::Win::from_unit(glob, &u) {
+                            //     return Some(Act {
+                            //         mode: win.mode.clone(),
+                            //         kind: ActKind::WinTUI(win)
+                            //     })
+                            // }
+        
+                            None
+                        }
                     }
-
-                    if let Some(set_res) = SetRes::from_unit(glob, &u) {
-                        return Some(Act::SetRes(set_res))
-                    }
-
-                    // if let Some(get_key) = GetKey::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         kind: ActKind::GetKey(get_key),
-                    //         mode: Mode::Cli
-                    //     })
-                    // }
-
-                    // if let Some(say) = text::Say::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         mode: say.act_mode.clone(),
-                    //         kind: ActKind::Say(say)
-                    //     });
-                    // }
-
-                    // if let Some(inp) = text::Inp::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         mode: inp.mode.clone(),
-                    //         kind: ActKind::Inp(inp)
-                    //     })
-                    // }
-
-                    // if let Some(img) = media::Img::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         kind: ActKind::Img(img),
-                    //         mode: ActMode::Gfx
-                    //     })
-                    // }
-
-                    // if let Some(spr) = media::Sprite::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         kind: ActKind::Sprite(spr),
-                    //         mode: ActMode::Gfx
-                    //     })
-                    // }
-
-                    // if let Some(vid) = media::Video::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         kind: ActKind::Vid(vid),
-                    //         mode: ActMode::Gfx
-                    //     })
-                    // }
-
-                    // if let Some(win) = tui::Win::from_unit(glob, &u) {
-                    //     return Some(Act {
-                    //         mode: win.mode.clone(),
-                    //         kind: ActKind::WinTUI(win)
-                    //     })
-                    // }
-
-                    None
                 }
             }
         })
@@ -692,53 +690,14 @@ impl TermAct for Act {
 
             //     Ok(msg)
             // }),
-            // ActKind::Stream(_msg, (serv, _)) => Box::new(move || {
-            //     // run stream
-            //     let task = TaskLoop::Chain {
-            //         msg: _msg,
-            //         chain: vec![serv]
-            //     };
-
-            //     let id = kern.lock().reg_task(&orig.ath, "io.term", task)?;
-            //     let mut act = None;
-
-            //     loop {
-            //         let res = kern.lock().get_task_result(id);
-
-            //         if let Some(res) = res {
-            //             if let Some(_msg) = res? {
-            //                 let act_u = if let Some(_msg) = _msg.msg.as_map_find("msg") {
-            //                     _msg
-            //                 } else {
-            //                     _msg.msg
-            //                 };
-
-            //                 act = Act::from_unit(&orig.msg, &act_u);
-            //             }
-            //             break;
-            //         }
-
-            //         yield;
-            //     }
-
-            //     // run action
-            //     if let Some(act) = act {
-            //         let mut gen = Box::into_pin(act.act(orig, msg.clone(), term, kern));
-
-            //         loop {
-            //             if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-            //                 msg = msg.merge(res?);
-            //                 break;
-            //             }
-            //             yield;
-            //         }
-            //         yield;
-
-            //         return Ok(msg);
-            //     }
-
-            //     Ok(msg)
-            // }),
+            Act::Source(u) => thread!({
+                if let Some(u) = thread_await!(u.read_async(orig.clone(), kern))? {
+                    if let Some(act) = Act::from_unit(&orig.msg, &u) {
+                        return thread_await!(act.act(orig, msg.clone(), term, kern))
+                    }
+                }
+                Ok(msg)
+            }),
             // ActKind::Say(say) => say.act(orig, msg, term, kern),
             // ActKind::Inp(inp) => inp.act(orig, msg, term, kern),
             // ActKind::Img(img) => img.act(orig, msg, term, kern),

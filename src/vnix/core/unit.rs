@@ -1327,11 +1327,11 @@ impl Unit {
         u
     }
 
-    pub fn read_async<'a>(self, ath: String, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Unit>, KernErr>> {
+    pub fn read_async<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Unit>, KernErr>> {
         thread!({
             match self {
                 Unit::Ref(path) => {
-                    Ok(Unit::find_ref(path.into_iter(), &orig))
+                    Ok(Unit::find_ref(path.into_iter(), &orig.msg))
                 },
                 Unit::Stream(msg, (serv, _)) => {
                     let task = TaskLoop::Chain {
@@ -1339,7 +1339,7 @@ impl Unit {
                         chain: vec![serv]
                     };
 
-                    let id = kern.lock().reg_task(&ath, "unit.read", task)?;
+                    let id = kern.lock().reg_task(&orig.ath, "unit.read", task)?;
 
                     loop {
                         if let Some(res) = kern.lock().get_task_result(id) {
