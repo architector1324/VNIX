@@ -17,7 +17,7 @@ use alloc::string::{String, ToString};
 
 use crate::driver::{CLIErr, DispErr, TermKey};
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::task::TaskLoop;
+use crate::vnix::core::task::{TaskLoop, ThreadAsync};
 use crate::vnix::core::unit::{Unit, FromUnit, SchemaStr, Schema, SchemaMapEntry, SchemaUnit, SchemaOr, SchemaSeq, Or, SchemaPair, SchemaRef, SchemaInt};
 use crate::vnix::core::kern::{Kern, KernErr, Addr};
 use crate::vnix::core::serv::{ServHlrAsync, ServHlr, ServHelpTopic, ServInfo};
@@ -75,7 +75,7 @@ pub struct TermRes {
     pub border_set: BorderSet
 }
 
-pub type TermActAsync<'a> = Box<dyn Generator<Yield = (), Return = Result<Unit, KernErr>> + 'a>;
+pub type TermActAsync<'a> = ThreadAsync<'a, Result<Unit, KernErr>>;
 
 pub trait TermAct {
     fn act<'a>(self, orig: Rc<Msg>, msg: Unit, term: Rc<Term>, kern: &'a Mutex<Kern>) -> TermActAsync<'a>;

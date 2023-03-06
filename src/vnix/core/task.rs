@@ -39,7 +39,22 @@ pub enum TaskSig {
 }
 
 pub type TaskRunAsync<'a> = impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a;
+pub type ThreadAsync<'a, T> = Box<dyn Generator<Yield = (), Return = T> + 'a>;
 
+macro_rules! thread_await {
+    ($t:expr) => {
+        {
+            let mut gen = Box::into_pin($t);
+            let res = loop {
+                if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                    break res;
+                }
+                yield;
+            };
+            res
+        }
+    };
+}
 
 impl Task {
     pub fn new(usr: String, name: String, id: usize, parent_id: usize, task: TaskLoop) -> Self {
@@ -79,16 +94,8 @@ impl Task {
                         let msg = kern.lock().msg(&self.usr, u)?;
 
                         if let Some(gen) = Kern::send(kern, serv, msg)? {
-                            let mut gen = Box::into_pin(gen);
-
-                            loop {
-                                if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                                    if let Some(msg) = res? {
-                                        self.usr = msg.ath;
-                                    }
-                                    break;
-                                }
-                                yield;
+                            if let Some(msg) = thread_await!(gen)? {
+                                self.usr = msg.ath;
                             }
                         }
                     }
@@ -100,19 +107,11 @@ impl Task {
                         let mut _msg = kern.lock().msg(&self.usr, msg.clone())?;
 
                         if let Some(gen) = Kern::send(kern, serv, _msg)? {
-                            let mut gen = Box::into_pin(gen);
-
-                            loop {
-                                if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                                    if let Some(_msg) = res? {
-                                        self.usr = _msg.ath;
-                                        msg = msg.merge(_msg.msg);
-                                    } else {
-                                        return Ok(None)
-                                    }
-                                    break;
-                                }
-                                yield;
+                            if let Some(_msg) = thread_await!(gen)? {
+                                self.usr = _msg.ath;
+                                msg = msg.merge(_msg.msg);
+                            } else {
+                                return Ok(None)
                             }
                         }
                     }
@@ -124,19 +123,11 @@ impl Task {
                             let mut _msg = kern.lock().msg(&self.usr, msg.clone())?;
 
                             if let Some(gen) = Kern::send(kern, serv, _msg)? {
-                                let mut gen = Box::into_pin(gen);
-
-                                loop {
-                                    if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                                        if let Some(_msg) = res? {
-                                            self.usr = _msg.ath;
-                                            msg = msg.merge(_msg.msg);
-                                        } else {
-                                            return Ok(None)
-                                        }
-                                        break;
-                                    }
-                                    yield;
+                                if let Some(_msg) = thread_await!(gen)? {
+                                    self.usr = _msg.ath;
+                                    msg = msg.merge(_msg.msg);
+                                } else {
+                                    return Ok(None)
                                 }
                             }
                         }
