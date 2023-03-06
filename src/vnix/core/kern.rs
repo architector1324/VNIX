@@ -99,11 +99,11 @@ impl KernDrv {
 }
 
 impl Kern {
-    pub fn new(drv: KernDrv) -> Self {
+    pub fn new(drv: KernDrv, term: TermBase) -> Self {
         let kern = Kern {
             drv,
             ram_store: RamStore::default(),
-            term: TermBase::default(),
+            term,
             users: Vec::new(),
             services: Vec::new(),
             last_task_id: 0,
