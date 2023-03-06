@@ -41,6 +41,7 @@ pub enum TaskSig {
 pub type TaskRunAsync<'a> = impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a;
 pub type ThreadAsync<'a, T> = Box<dyn Generator<Yield = (), Return = T> + 'a>;
 
+#[macro_export]
 macro_rules! thread_await {
     ($t:expr) => {
         {

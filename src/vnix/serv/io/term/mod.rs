@@ -15,6 +15,8 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
+use crate::thread_await;
+
 use crate::driver::{CLIErr, DispErr, TermKey};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::{TaskLoop, ThreadAsync};
@@ -795,15 +797,9 @@ impl ServHlr for Term {
                 let msg = Rc::new(msg);
 
                 for act in acts {
-                    let mut gen = Box::into_pin(act.act(msg.clone(), out_u.clone(), term.clone(), kern));
+                    let res = thread_await!(act.act(msg.clone(), out_u.clone(), term.clone(), kern));
+                    out_u = out_u.merge(res?);
 
-                    loop {
-                        if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                            out_u = out_u.merge(res?);
-                            break;
-                        }
-                        yield;
-                    }
                     yield;
                 }
 
