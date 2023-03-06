@@ -1,12 +1,18 @@
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
 
+use alloc::rc::Rc;
 use alloc::{format, vec};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
+use spin::Mutex;
 
-use super::kern::Addr;
+use crate::{thread, thread_await};
+
+use super::kern::{Addr, Kern, KernErr};
+use super::msg::Msg;
+use super::task::{ThreadAsync, TaskLoop};
 
 
 #[derive(Debug)]
@@ -1319,6 +1325,33 @@ impl Unit {
             _ => return u
         }
         u
+    }
+
+    pub fn read_async<'a>(self, ath: String, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Unit>, KernErr>> {
+        thread!({
+            match self {
+                Unit::Ref(path) => {
+                    Ok(Unit::find_ref(path.into_iter(), &orig))
+                },
+                Unit::Stream(msg, (serv, _)) => {
+                    let task = TaskLoop::Chain {
+                        msg: *msg,
+                        chain: vec![serv]
+                    };
+
+                    let id = kern.lock().reg_task(&ath, "unit.read", task)?;
+
+                    loop {
+                        if let Some(res) = kern.lock().get_task_result(id) {
+                            break Ok(res?.and_then(|msg| msg.msg.as_map_find("msg")));
+                        }
+
+                        yield;
+                    }
+                },
+                _ => Ok(Some(self))
+            }
+        })
     }
 }
 
