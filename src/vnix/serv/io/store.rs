@@ -64,12 +64,28 @@ fn get_size(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) 
     })
 }
 
+fn load(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<Unit>, KernErr>> {
+    thread!({
+        let schm = SchemaPair(SchemaUnit, SchemaRef);
+
+        if let Some((s, path)) = schm.find(&orig, &msg) {
+            if let Some(s) = read_async!(Rc::new(s), ath, orig, kern)?.and_then(|s| s.as_str()) {
+                if s == "load" {
+                    let u = kern.lock().ram_store.load(Unit::Ref(path)).ok_or(KernErr::DbLoadFault)?;
+                    return Ok(Some(u))
+                }
+            }
+        }
+        Ok(None)
+    })
+}
+
 pub fn store_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let u = Rc::new(msg.msg.clone());
 
         // get size
-        if let Some(size) = thread_await!(get_size(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
+        if let Some(size) = thread_await!(get_size(Rc::new(msg.ath.clone()), u.clone(), u.clone(), kern))? {
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), Unit::Int(size as i32))]
             );
@@ -77,6 +93,19 @@ pub fn store_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync 
             let _msg = msg.msg.merge(m);
             return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
         }
+
+        // load
+        if let Some(u) = thread_await!(load(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
+            let m = Unit::Map(vec![
+                (Unit::Str("msg".into()), u)]
+            );
+
+            let _msg = msg.msg.merge(m);
+            return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
+        }
+
+        // save
+
         Ok(Some(msg))
     })
 }
