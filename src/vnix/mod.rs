@@ -12,14 +12,14 @@ use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
-use self::serv::{/*io, math, etc,*/gfx, sys, time, test};
+use self::serv::{io, /*math, etc,*/gfx, sys, time, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
         // ("io.term", Box::new(io::term::Term::default()) as Box<dyn ServHlr>),
-        // ("io.store", Box::new(io::store::Store::default()) as Box<dyn ServHlr>),
+        (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
         // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
@@ -45,12 +45,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "test";
+    let s = "(get.size.mb @vid.vnix.logo)";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Chain {
         msg: test_msg,
-        chain: vec!["sys.usr".into(), "test.dump".into()]
+        chain: vec!["io.store".into(), "test.dump".into()]
     };
 
     // run

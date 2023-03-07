@@ -10,7 +10,7 @@ use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 pub const SERV_PATH: &'static str = "test.echo";
 pub const SERV_HELP: &'static str = "Test echo service\nExample: abc@test.echo";
 
-pub fn echo_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+pub fn echo_hlr(msg: Msg, _serv: ServInfo, _kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         yield;
         Ok(Some(msg))

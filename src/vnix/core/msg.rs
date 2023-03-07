@@ -5,6 +5,8 @@ use core::fmt::{Display, Formatter};
 use sha3::{Digest, Sha3_256};
 use base64ct::{Base64, Encoding};
 
+use crate::driver::MemSizeUnits;
+
 use super::kern::KernErr;
 use super::unit::Unit;
 use super::user::Usr;
@@ -32,7 +34,7 @@ impl Msg {
         let hash = Base64::encode_string(&h[..]);
         let sign = usr.sign(&msg)?;
 
-        let size = msg.size();
+        let size = msg.size(MemSizeUnits::Bytes);
 
         Ok(Msg {
             ath: usr.name,

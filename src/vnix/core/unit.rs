@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
+use crate::driver::MemSizeUnits;
 use crate::{thread, thread_await};
 
 use super::kern::{Addr, Kern, KernErr};
@@ -313,15 +314,22 @@ impl<'a> Display for DisplayShort<'a> {
 }
 
 impl Unit {
-    pub fn size(&self) -> usize {
-        match self {
+    pub fn size(&self, units: MemSizeUnits) -> usize {
+        let size = match self {
             Unit::None | Unit::Bool(_) | Unit::Byte(_) | Unit::Int(_) | Unit::Dec(_) => core::mem::size_of::<Unit>(),
             Unit::Str(s) => s.len() + core::mem::size_of::<Unit>(),
             Unit::Ref(path) => path.into_iter().fold(0, |prev, s| prev + s.len()) + core::mem::size_of::<Unit>(),
-            Unit::Stream(msg, _) => msg.size() + core::mem::size_of::<Unit>(),
-            Unit::Pair(u0, u1) => u0.size() + u1.size() + core::mem::size_of::<Unit>(),
-            Unit::Lst(lst) => lst.into_iter().fold(0, |prev, u| prev + u.size()) + core::mem::size_of::<Unit>(),
-            Unit::Map(m) => m.into_iter().fold(0, |prev, (u0, u1)| prev + u0.size() + u1.size()) + core::mem::size_of::<Unit>()
+            Unit::Stream(msg, _) => msg.size(MemSizeUnits::Bytes) + core::mem::size_of::<Unit>(),
+            Unit::Pair(u0, u1) => u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes) + core::mem::size_of::<Unit>(),
+            Unit::Lst(lst) => lst.into_iter().fold(0, |prev, u| prev + u.size(MemSizeUnits::Bytes)) + core::mem::size_of::<Unit>(),
+            Unit::Map(m) => m.into_iter().fold(0, |prev, (u0, u1)| prev + u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes)) + core::mem::size_of::<Unit>()
+        };
+
+        match units {
+            MemSizeUnits::Bytes => size,
+            MemSizeUnits::Kilo => size / 1024,
+            MemSizeUnits::Mega => size / (1024 * 1024),
+            MemSizeUnits::Giga => size / (1024 * 1024 * 1024)
         }
     }
 
