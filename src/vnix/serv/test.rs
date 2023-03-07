@@ -8,8 +8,8 @@ use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 
 
-pub const DUMB_PATH: &'static str = "test.dumb";
-pub const DUMB_HELP: &'static str = "Test echo service\nExample: abc@test.dumb";
+pub const SERV_PATH: &'static str = "test.dumb";
+pub const SERV_HELP: &'static str = "Test echo service\nExample: abc@test.dumb";
 
 pub fn dumb_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({

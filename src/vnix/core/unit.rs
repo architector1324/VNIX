@@ -1,17 +1,17 @@
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
 
+use spin::Mutex;
+
 use alloc::rc::Rc;
 use alloc::{format, vec};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
-use spin::Mutex;
 
 use crate::thread;
 
 use super::kern::{Addr, Kern, KernErr};
-use super::msg::Msg;
 use super::task::{ThreadAsync, TaskLoop};
 
 
@@ -1327,27 +1327,28 @@ impl Unit {
         u
     }
 
-    pub fn read_async<'a>(self, orig: Rc<Msg>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Unit>, KernErr>> {
+    pub fn read_async<'a>(self: Rc<Self>, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Rc<Unit>>, KernErr>> {
         thread!({
-            match self {
+            match self.as_ref() {
                 Unit::Ref(path) => {
-                    Ok(Unit::find_ref(path.into_iter(), &orig.msg))
+                    Ok(Unit::find_ref(path.into_iter().cloned(), &orig).map(|u| Rc::new(u)))
                 },
                 Unit::Stream(msg, (serv, _)) => {
                     let task = TaskLoop::Chain {
-                        msg: *msg,
-                        chain: vec![serv]
+                        msg: *msg.clone(),
+                        chain: vec![serv.clone()]
                     };
 
-                    let id = kern.lock().reg_task(&orig.ath, "unit.read", task)?;
+                    let id = kern.lock().reg_task(&ath, "unit.read", task)?;
 
-                    loop {
+                    let res = loop {
                         if let Some(res) = kern.lock().get_task_result(id) {
-                            break Ok(res?.and_then(|msg| msg.msg.as_map_find("msg")));
+                            break Ok(res?.and_then(|msg| msg.msg.as_map_find("msg")).map(|u| Rc::new(u)));
                         }
 
                         yield;
-                    }
+                    };
+                    res
                 },
                 _ => Ok(Some(self))
             }
