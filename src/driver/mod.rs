@@ -48,7 +48,7 @@ pub enum DrvErr {
     Disp(DispErr),
     Time(TimeErr),
     Rnd(RndErr),
-    Mem(MemErr)
+    Mem(MemErr),
 }
 
 #[derive(Debug, PartialEq)]

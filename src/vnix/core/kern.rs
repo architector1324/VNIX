@@ -10,11 +10,12 @@ use alloc::boxed::Box;
 use super::msg::Msg;
 use super::task::{Task, TaskLoop, TaskSig};
 use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaUnit, Schema, SchemaBool, SchemaMap};
-use super::serv::{Serv, ServErr, ServHelpTopic, ServHlrAsync};
+use super::serv::{Serv, ServErr, ServHlrAsync};
 
 use super::user::Usr;
 
-use crate::driver::{CLIErr, DispErr, TimeErr, RndErr, CLI, Disp, Time, Rnd, Mem, MemErr};
+use crate::thread;
+use crate::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
 use crate::vnix::serv::io::term::TermBase;
 use crate::vnix::utils::RamStore;
 
@@ -52,11 +53,7 @@ pub enum KernErr {
     DbSaveFault,
     HelpTopicNotFound,
     ParseErr(UnitParseErr),
-    CLIErr(CLIErr),
-    DispErr(DispErr),
-    TimeErr(TimeErr),
-    RndErr(RndErr),
-    MemErr(MemErr),
+    DrvErr(DrvErr),
     ServErr(ServErr)
 }
 
@@ -226,7 +223,7 @@ impl Kern {
 
         let tmp = mtx.lock();
         let serv = tmp.get_serv(serv.as_str())?;
-        let inst = serv.hlr.inst(&msg.msg)?;
+        let help_msg = tmp.msg(&msg.ath, Unit::Str(serv.help.clone()))?;
 
         // check help
         let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
@@ -239,8 +236,11 @@ impl Kern {
 
         if let Some(topic) = topic {
             match topic.as_str() {
-                "info" => return Ok(Some(inst.help(msg.ath, ServHelpTopic::Info, mtx))),
-                "serv" => return Ok(Some(Box::new(move || {
+                "info" | "help" => return Ok(Some(thread!({
+                    yield;
+                    Ok(Some(help_msg))
+                }))),
+                "serv" => return Ok(Some(thread!({
                     let out = mtx.lock().help_serv(&msg.ath).map(|m| Some(m));
                     yield;
                     out
@@ -250,7 +250,8 @@ impl Kern {
         }
 
         // send
-        Ok(Some(inst.handle(msg, serv.info.clone(), mtx)))
+        let inst = (serv.hlr)(msg, serv.info.clone(), mtx);
+        Ok(Some(inst))
     }
 
     pub fn run<'a>(self) -> Result<(), KernErr> {
@@ -293,7 +294,7 @@ impl Kern {
                         match &res {
                             Ok(..) => (), //writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
                             Err(e) => {
-                                writeln!(kern_mtx.lock().drv.cli, "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                                writeln!(kern_mtx.lock().drv.cli, "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
                                 // writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?
                             }
                         };

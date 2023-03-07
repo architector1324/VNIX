@@ -4,14 +4,13 @@ use alloc::string::String;
 use super::msg::Msg;
 use super::kern::{KernErr, Kern};
 use super::task::ThreadAsync;
-use super::unit::Unit;
 
 use spin::Mutex;
 
 
-pub enum ServHelpTopic {
-    Info
-}
+pub type ServHlrAsync<'a> = ThreadAsync<'a, Result<Option<Msg>, KernErr>>;
+pub type ServHlr = dyn Fn(Msg, ServInfo, &Mutex<Kern>) -> ServHlrAsync;
+
 
 #[derive(Debug)]
 pub enum ServErr {
@@ -25,25 +24,18 @@ pub struct ServInfo {
 
 pub struct Serv {
     pub info: ServInfo,
-    pub hlr: Box<dyn ServHlr>
-}
-
-pub type ServHlrAsync<'a> = ThreadAsync<'a, Result<Option<Msg>, KernErr>>;
-
-pub trait ServHlr {
-    fn inst(&self, msg: &Unit) -> Result<Box<dyn ServHlr>, KernErr>;
-
-    fn help<'a>(self: Box<Self>, ath: String, topic: ServHelpTopic, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
-    fn handle<'a>(self: Box<Self>, msg: Msg, serv: ServInfo, kern: &'a Mutex<Kern>) -> ServHlrAsync<'a>;
+    pub help: String,
+    pub hlr: Box<ServHlr>
 }
 
 
 impl Serv {
-    pub fn new(name: &str, hlr: Box<dyn ServHlr>) -> Self {
+    pub fn new(name: &str, help: &str, hlr: Box<ServHlr>) -> Self {
         Serv {
             info: ServInfo {
                 name: name.into(),
             },
+            help: help.into(),
             hlr
         }
     }

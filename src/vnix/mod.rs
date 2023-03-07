@@ -5,14 +5,14 @@ pub mod utils;
 use alloc::boxed::Box;
 use alloc::vec;
 
-use crate::driver::CLIErr;
+use crate::driver::{CLIErr, DrvErr};
 
 use self::core::task::TaskLoop;
 use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
-use self::core::serv::{Serv, ServHlr};
-// use self::serv::{io, math, gfx, etc, sys, time, test};
+use self::core::serv::Serv;
+use self::serv::{/*io, math, gfx, etc, sys, time, */test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -27,34 +27,40 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
         // ("sys.usr", Box::new(sys::usr::User::default()) as Box<dyn ServHlr>),
         // ("sys.hw", Box::new(sys::hw::HW::default()) as Box<dyn ServHlr>),
-        // ("test.dumb", Box::new(test::Dumb::default()) as Box<dyn ServHlr>),
+        (test::DUMB_PATH, test::DUMB_HELP, test::dumb_hlr),
     ];
 
-    for (name, hlr) in services {
-        let serv = Serv::new(name, hlr);
+    for (name, help, hlr) in services {
+        let serv = Serv::new(name, help, Box::new(hlr));
         kern.reg_serv(serv)?;
 
-        writeln!(kern.drv.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+        writeln!(kern.drv.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
     }
 
     // register user
     let _super = Usr::new("super", &mut kern)?.0;
     kern.reg_usr(_super.clone())?;
 
-    writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+    writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
-    // // test
-    // let s = "{term:[(load @test)@io.store {wait:1}@time.chrono @act] act:(set.res.gfx (1024 768))}";
-    // let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // test
+    let s0 = "a";
+    let test_msg0 = Unit::parse(s0.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    // let task = TaskLoop::Sim(vec![(test_msg, "io.term".into())]);
+    let s1 = "b";
+    let test_msg1 = Unit::parse(s1.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    // // run
+    let task = TaskLoop::Sim(vec![
+        (test_msg0, "test.dumb".into()),
+        (test_msg1, "test.dumb".into())
+    ]);
+
+    // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
-    // // let task = TaskLoop::Queue(vec![(test_msg, "io.term".into()), (msg, "sys.task".into())]);
-    // kern.reg_task(&_super.name, "init.load", task)?;
+    // let task = TaskLoop::Queue(vec![(test_msg, "io.term".into()), (msg, "sys.task".into())]);
+    kern.reg_task(&_super.name, "init.load", task)?;
 
     kern.run()
 }

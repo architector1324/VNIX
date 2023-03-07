@@ -8,7 +8,7 @@ use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use spin::Mutex;
 
-use crate::{thread, thread_await};
+use crate::thread;
 
 use super::kern::{Addr, Kern, KernErr};
 use super::msg::Msg;
