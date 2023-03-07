@@ -12,7 +12,7 @@ use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
-use self::serv::{/*io, math, gfx, etc, sys,*/ time, test};
+use self::serv::{/*io, math, gfx, etc,*/ sys, time, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -26,7 +26,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("math.calc", Box::new(math::Calc::default()) as Box<dyn ServHlr>),
         // ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
         // ("sys.usr", Box::new(sys::usr::User::default()) as Box<dyn ServHlr>),
-        // ("sys.hw", Box::new(sys::hw::HW::default()) as Box<dyn ServHlr>),
+        (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
         (test::dumb::SERV_PATH, test::dumb::SERV_HELP, Box::new(test::dumb::dumb_hlr) as Box<ServHlr>),
     ];
 
@@ -44,16 +44,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s0 = "{wait.ms:{msg:2000}@test.dumb}";
-    let test_msg0 = Unit::parse(s0.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let s = "get.mem.free.mb";
+    let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let s1 = "a";
-    let test_msg1 = Unit::parse(s1.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    let task = TaskLoop::Queue(vec![
-        (test_msg0, "time.chrono".into()),
-        (test_msg1, "test.dumb".into())
-    ]);
+    let task = TaskLoop::Chain {
+        msg: test_msg,
+        chain: vec!["sys.hw".into(), "test.dumb".into()]
+    };
 
     // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
