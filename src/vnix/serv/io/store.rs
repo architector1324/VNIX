@@ -4,12 +4,11 @@ use core::ops::{Generator, GeneratorState};
 use spin::Mutex;
 
 use alloc::vec;
-use alloc::vec::Vec;
 use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::{MemSizeUnits};
+use crate::driver::MemSizeUnits;
 
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
@@ -80,12 +79,24 @@ fn load(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> T
     })
 }
 
+fn save(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<(), KernErr>> {
+    thread!({
+        if let Some(u) = as_map_find_async!(msg, "save", ath, orig, kern)? {
+            if let Some(path) = msg.as_map_find("out").and_then(|u| u.as_ref()) {
+                kern.lock().ram_store.save(Unit::Ref(path), u);
+            }
+        }
+        Ok(())
+    })
+}
+
 pub fn store_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let u = Rc::new(msg.msg.clone());
+        let ath = Rc::new(msg.ath.clone());
 
         // get size
-        if let Some(size) = thread_await!(get_size(Rc::new(msg.ath.clone()), u.clone(), u.clone(), kern))? {
+        if let Some(size) = thread_await!(get_size(ath.clone(), u.clone(), u.clone(), kern))? {
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), Unit::Int(size as i32))]
             );
@@ -95,7 +106,7 @@ pub fn store_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync 
         }
 
         // load
-        if let Some(u) = thread_await!(load(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
+        if let Some(u) = thread_await!(load(ath.clone(), u.clone(), u.clone(), kern))? {
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), u)]
             );
@@ -105,6 +116,7 @@ pub fn store_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync 
         }
 
         // save
+        thread_await!(save(ath, u.clone(), u, kern))?;
 
         Ok(Some(msg))
     })
