@@ -21,13 +21,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("io.term", Box::new(io::term::Term::default()) as Box<dyn ServHlr>),
         // ("io.store", Box::new(io::store::Store::default()) as Box<dyn ServHlr>),
         // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
-        (time::SERV_PATH, time::SERV_HELP, Box::new(time::chrono_hlr) as Box<ServHlr>),
+        (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         // ("gfx.2d", Box::new(gfx::GFX2D::default()) as Box<dyn ServHlr>),
         // ("math.calc", Box::new(math::Calc::default()) as Box<dyn ServHlr>),
         // ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
         // ("sys.usr", Box::new(sys::usr::User::default()) as Box<dyn ServHlr>),
         // ("sys.hw", Box::new(sys::hw::HW::default()) as Box<dyn ServHlr>),
-        (test::SERV_PATH, test::SERV_HELP, Box::new(test::dumb_hlr) as Box<ServHlr>),
+        (test::dumb::SERV_PATH, test::dumb::SERV_HELP, Box::new(test::dumb::dumb_hlr) as Box<ServHlr>),
     ];
 
     for (name, help, hlr) in services {
@@ -44,7 +44,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s0 = "{wait:{msg:2}@test.dumb}";
+    let s0 = "{wait.ms:{msg:2000}@test.dumb}";
     let test_msg0 = Unit::parse(s0.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let s1 = "a";

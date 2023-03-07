@@ -22,22 +22,20 @@ pub const SERV_HELP: &'static str = "Service for time control\nExample: {wait.ms
 
 fn get_wait(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<Duration>, KernErr>> {
     thread!({
-        if let Some(msg) = thread_await!(msg.read_async(ath.clone(), orig.clone(), kern))? {
-            if let Some(sec) = msg.as_int() {
-                return Ok(Some(Duration::Seconds(sec as usize)))
-            }
+        if let Some(sec) = thread_await!(msg.clone().read_async(ath.clone(), orig.clone(), kern))?.and_then(|u| u.as_int()) {
+            return Ok(Some(Duration::Seconds(sec as usize)))
+        }
 
-            if let Some(msg) = msg.as_map_find("wait") {
-                return thread_await!(get_wait(ath, orig.clone(), Rc::new(msg), kern))
-            }
+        if let Some(sec) = thread_await!(msg.clone().as_map_find_async("wait".into(), ath.clone(), orig.clone(), kern))?.and_then(|u| u.as_int()) {
+            return Ok(Some(Duration::Seconds(sec as usize)))
+        }
 
-            // if let Some(ms) = msg.as_map_find("wait.ms") {
-            //     return Some(Duration::Milli(ms as usize))
-            // }
-        
-            // if let Some(mcs) = msg.as_map_find("wait.mcs") {
-            //     return Some(Duration::Micro(mcs as usize))
-            // }
+        if let Some(ms) = thread_await!(msg.clone().as_map_find_async("wait.ms".into(), ath.clone(), orig.clone(), kern))?.and_then(|u| u.as_int()) {
+            return Ok(Some(Duration::Milli(ms as usize)))
+        }
+
+        if let Some(mcs) = thread_await!(msg.as_map_find_async("wait.mcs".into(), ath, orig, kern))?.and_then(|u| u.as_int()) {
+            return Ok(Some(Duration::Micro(mcs as usize)))
         }
 
         Ok(None)

@@ -1,5 +1,7 @@
+use core::pin::Pin;
 use core::str::Chars;
 use core::fmt::{Display, Formatter};
+use core::ops::{Generator, GeneratorState};
 
 use spin::Mutex;
 
@@ -9,7 +11,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
-use crate::thread;
+use crate::{thread, thread_await};
 
 use super::kern::{Addr, Kern, KernErr};
 use super::task::{ThreadAsync, TaskLoop};
@@ -1274,6 +1276,15 @@ impl Unit {
                 });
         }
         None
+    }
+
+    pub fn as_map_find_async<'a>(self: Rc<Self>, sch: String, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Unit>, KernErr>> {
+        thread!({
+            if let Some(msg) = self.as_map_find(&sch) {
+                return thread_await!(Rc::new(msg).read_async(ath, orig, kern)).map(|msg| msg.map(|msg| Rc::unwrap_or_clone(msg)))
+            }
+            Ok(None)
+        })
     }
 
     pub fn merge(self, u: Unit) -> Unit {
