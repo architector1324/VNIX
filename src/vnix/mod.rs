@@ -25,7 +25,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         // ("math.calc", Box::new(math::Calc::default()) as Box<dyn ServHlr>),
         // ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
-        // ("sys.usr", Box::new(sys::usr::User::default()) as Box<dyn ServHlr>),
+        (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
         (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
         (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
         (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::echo_hlr) as Box<ServHlr>),
@@ -45,12 +45,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "{fill:((@w @h) {msg:#ff0000}@test.echo) w:16 h:16}";
+    let s = "test";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Chain {
         msg: test_msg,
-        chain: vec!["gfx.2d".into(), "test.dump".into()]
+        chain: vec!["sys.usr".into(), "test.dump".into()]
     };
 
     // run
