@@ -8,6 +8,7 @@
 #![feature(generators, generator_trait)]
 #![feature(type_alias_impl_trait)]
 #![feature(arc_unwrap_or_clone)]
+#![feature(result_option_inspect)]
 
 extern crate alloc;
 

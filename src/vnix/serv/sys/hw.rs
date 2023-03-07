@@ -11,7 +11,7 @@ use alloc::string::String;
 use crate::driver::{DrvErr, MemSizeUnits};
 
 use crate::vnix::core::task::ThreadAsync;
-use crate::{thread, thread_await};
+use crate::{thread, thread_await, read_async};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::unit::Unit;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -24,7 +24,7 @@ pub const SERV_HELP: &'static str = "Service for hardware management\nExample: g
 
 fn get_freemem(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<usize>, KernErr>> {
     thread!({
-        if let Some(s) = thread_await!(msg.read_async(ath, orig, kern))?.and_then(|u| u.as_str()) {
+        if let Some(s) = read_async!(msg, ath, orig, kern)?.and_then(|u| u.as_str()) {
             let units = match s.as_str() {
                 "get.mem.free" => MemSizeUnits::Bytes,
                 "get.mem.free.kb" => MemSizeUnits::Kilo,

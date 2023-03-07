@@ -176,6 +176,20 @@ pub trait FromUnit: Sized {
 
 pub struct DisplayShort<'a>(pub &'a Unit, pub usize);
 
+#[macro_export]
+macro_rules! read_async {
+    ($msg:expr, $ath:expr, $orig:expr, $kern:expr) => {
+        thread_await!($msg.clone().read_async($ath.clone(), $orig.clone(), $kern))
+    };
+}
+
+#[macro_export]
+macro_rules! as_map_find_async {
+    ($msg:expr, $sch:expr, $ath:expr, $orig:expr, $kern:expr) => {
+        thread_await!($msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern))
+    };
+}
+
 impl Eq for Unit {}
 
 

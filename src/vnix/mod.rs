@@ -12,7 +12,7 @@ use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
-use self::serv::{/*io, math, gfx, etc,*/ sys, time, test};
+use self::serv::{/*io, math, etc,*/gfx, sys, time, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -22,12 +22,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("io.store", Box::new(io::store::Store::default()) as Box<dyn ServHlr>),
         // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
-        // ("gfx.2d", Box::new(gfx::GFX2D::default()) as Box<dyn ServHlr>),
+        (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         // ("math.calc", Box::new(math::Calc::default()) as Box<dyn ServHlr>),
         // ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
         // ("sys.usr", Box::new(sys::usr::User::default()) as Box<dyn ServHlr>),
         (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
-        (test::dumb::SERV_PATH, test::dumb::SERV_HELP, Box::new(test::dumb::dumb_hlr) as Box<ServHlr>),
+        (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
+        (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::echo_hlr) as Box<ServHlr>),
     ];
 
     for (name, help, hlr) in services {
@@ -44,12 +45,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "get.mem.free.mb";
+    let s = "{fill:((@w @h) {msg:#ff0000}@test.echo) w:16 h:16}";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Chain {
         msg: test_msg,
-        chain: vec!["sys.hw".into(), "test.dumb".into()]
+        chain: vec!["gfx.2d".into(), "test.dump".into()]
     };
 
     // run
