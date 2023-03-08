@@ -144,8 +144,8 @@ impl Kern {
         Ok(())
     }
 
-    pub fn reg_task(&mut self, usr: &str, name: &str, task: TaskRun) -> Result<usize, KernErr> {
-        self.tasks_queue.push(Task::new(usr.into(), name.into(), self.last_task_id, self.curr_task_id, task));
+    pub fn reg_task(&mut self, usr: &str, name: &str, run: TaskRun) -> Result<usize, KernErr> {
+        self.tasks_queue.push(Task::new(usr.into(), name.into(), self.last_task_id, self.curr_task_id, run));
         self.last_task_id += 1;
         Ok(self.last_task_id - 1)
     }

@@ -1258,6 +1258,13 @@ impl Unit {
         None
     }
 
+    pub fn as_stream(&self) -> Option<(Unit, (String, Addr))> {
+        if let Unit::Stream(msg, (serv, addr)) = self {
+            return Some((*msg.clone(), (serv.clone(), addr.clone())))
+        }
+        None
+    }
+
     pub fn as_pair(&self) -> Option<(Box<Unit>, Box<Unit>)> {
         if let Unit::Pair(u0, u1) = self {
             return Some((u0.clone(), u1.clone()))
