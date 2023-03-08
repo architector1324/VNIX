@@ -9,6 +9,8 @@
 #![feature(type_alias_impl_trait)]
 #![feature(arc_unwrap_or_clone)]
 #![feature(result_option_inspect)]
+#![feature(iterator_try_reduce)]
+#![feature(iterator_try_collect)]
 
 extern crate alloc;
 
