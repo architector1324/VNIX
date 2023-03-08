@@ -50,7 +50,22 @@ fn chain(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> 
 
 fn queue(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<(), KernErr>> {
     thread!({
-        yield;
+        if let Some(lst) = as_map_find_async!(msg, "task.que", ath, orig, kern)?.and_then(|u| u.as_vec()) {
+            for p in lst {
+                if let Some((_msg, (serv, _))) = p.as_stream() {
+                    let run = TaskRun(_msg, serv);
+                    let id = kern.lock().reg_task(&ath, "sys.task", run)?;
+
+                    loop {
+                        if let Some(res) = kern.lock().get_task_result(id) {
+                            res?;
+                            break;
+                        }
+                        yield;
+                    };
+                }
+            }
+        }
         Ok(())
     })
 }
@@ -86,6 +101,9 @@ pub fn task_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // sim
         thread_await!(sim(ath.clone(), u.clone(), u.clone(), kern))?;
+
+        // queue
+        thread_await!(queue(ath.clone(), u.clone(), u.clone(), kern))?;
 
         Ok(Some(msg))
     })

@@ -45,7 +45,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "{task.sim:[a@test.dump b@test.dump]}";
+    let s = "{task.que:[a@test.dump b@test.dump]}";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let run = TaskRun(test_msg, "sys.task".into());
