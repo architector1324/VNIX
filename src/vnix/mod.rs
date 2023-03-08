@@ -3,11 +3,10 @@ pub mod serv;
 pub mod utils;
 
 use alloc::boxed::Box;
-use alloc::vec;
 
 use crate::driver::{CLIErr, DrvErr};
 
-use self::core::task::TaskLoop;
+use self::core::task::TaskRun;
 use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
@@ -45,21 +44,17 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    // let s = "(sub ((sum [1 2 3]) 2))";
-    let s = "{sub:({sum:[1 2 3]} 2)}";
+    let s = "a";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let task = TaskLoop::Chain {
-        msg: test_msg,
-        chain: vec!["math.calc".into(), "test.dump".into()]
-    };
+    let run = TaskRun(test_msg, "test.dump".into());
 
     // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
     // let task = TaskLoop::Queue(vec![(test_msg, "io.term".into()), (msg, "sys.task".into())]);
-    kern.reg_task(&_super.name, "init.load", task)?;
+    kern.reg_task(&_super.name, "init.load", run)?;
 
     kern.run()
 }

@@ -15,7 +15,7 @@ use crate::driver::MemSizeUnits;
 use crate::{thread, thread_await};
 
 use super::kern::{Addr, Kern, KernErr};
-use super::task::{ThreadAsync, TaskLoop};
+use super::task::{ThreadAsync, TaskRun};
 
 
 #[derive(Debug)]
@@ -1367,12 +1367,8 @@ impl Unit {
                     Ok(Unit::find_ref(path.into_iter().cloned(), &orig).map(|u| Rc::new(u)))
                 },
                 Unit::Stream(msg, (serv, _)) => {
-                    let task = TaskLoop::Chain {
-                        msg: *msg.clone(),
-                        chain: vec![serv.clone()]
-                    };
-
-                    let id = kern.lock().reg_task(&ath, "unit.read", task)?;
+                    let run = TaskRun(*msg.clone(), serv.clone());
+                    let id = kern.lock().reg_task(&ath, "unit.read", run)?;
 
                     let res = loop {
                         if let Some(res) = kern.lock().get_task_result(id) {

@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 
 use super::msg::Msg;
-use super::task::{Task, TaskLoop, TaskSig};
+use super::task::{Task, TaskRun, TaskSig};
 use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaUnit, Schema, SchemaBool, SchemaMap};
 use super::serv::{Serv, ServErr, ServHlrAsync};
 
@@ -144,7 +144,7 @@ impl Kern {
         Ok(())
     }
 
-    pub fn reg_task(&mut self, usr: &str, name: &str, task: TaskLoop) -> Result<usize, KernErr> {
+    pub fn reg_task(&mut self, usr: &str, name: &str, task: TaskRun) -> Result<usize, KernErr> {
         self.tasks_queue.push(Task::new(usr.into(), name.into(), self.last_task_id, self.curr_task_id, task));
         self.last_task_id += 1;
         Ok(self.last_task_id - 1)
