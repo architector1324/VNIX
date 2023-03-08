@@ -11,7 +11,7 @@ use crate::driver::{Duration, DrvErr};
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, SchemaPair, SchemaUnit, Schema};
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
@@ -23,8 +23,27 @@ pub const SERV_HELP: &'static str = "Service for time control\nExample: {wait.ms
 
 fn get_wait(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<Duration>, KernErr>> {
     thread!({
-        if let Some(sec) = read_async!(msg, ath, orig, kern)?.and_then(|u| u.as_int()) {
-            return Ok(Some(Duration::Seconds(sec as usize)))
+        if let Some(res) = read_async!(msg, ath, orig, kern)? {
+            // sec
+            if let Some(sec) = res.as_int() {
+                return Ok(Some(Duration::Seconds(sec as usize)))
+            }
+
+            // (wait.<units> <time>)
+            let schm = SchemaPair(SchemaUnit, SchemaUnit);
+            if let Some((s, time)) = schm.find(&orig, &res) {
+                let s = read_async!(Rc::new(s), ath, orig, kern)?.and_then(|s| s.as_str());
+                let time = read_async!(Rc::new(time), ath, orig, kern)?.and_then(|v| v.as_int());
+
+                if let Some((s, time)) = s.and_then(|s| Some((s, time? as usize))) {
+                    match s.as_str() {
+                        "wait" => return Ok(Some(Duration::Seconds(time as usize))),
+                        "wait.ms" => return Ok(Some(Duration::Milli(time as usize))),
+                        "wait.mcs" => return Ok(Some(Duration::Micro(time as usize))),
+                        _ => return Ok(None)
+                    }
+                }
+            }
         }
 
         if let Some(sec) = as_map_find_async!(msg, "wait", ath, orig, kern)?.and_then(|u| u.as_int()) {

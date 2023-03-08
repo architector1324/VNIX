@@ -38,7 +38,7 @@ fn fill_act(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) 
                 SchemaUnit
             );
 
-            if let Some(((w, h), col)) = schm.find(&orig, &msg) {
+            if let Some(((w, h), col)) = schm.find(&orig, &res) {
                 let w = read_async!(Rc::new(w), ath, orig, kern)?.and_then(|v| v.as_int());
                 let h = read_async!(Rc::new(h), ath, orig, kern)?.and_then(|v| v.as_int());
                 let col = read_async!(Rc::new(col), ath, orig, kern)?.and_then(|u| u.as_str()).and_then(|s| utils::hex_to_u32(&s));

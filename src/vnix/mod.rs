@@ -12,7 +12,7 @@ use self::core::unit::Unit;
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
-use self::serv::{io, /*math, etc,*/gfx, sys, time, test};
+use self::serv::{io, math, /*etc,*/gfx, sys, time, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -23,7 +23,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
-        // ("math.calc", Box::new(math::Calc::default()) as Box<dyn ServHlr>),
+        (math::calc::SERV_PATH, math::calc::SERV_HELP, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
         // ("sys.task", Box::new(sys::task::Task::default()) as Box<dyn ServHlr>),
         (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
         (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
@@ -45,12 +45,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "{save:abc out:@test}";
+    let s = "(wait.ms 2000)";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Chain {
         msg: test_msg,
-        chain: vec!["io.store".into()]
+        chain: vec!["time.chrono".into(), "test.dump".into()]
     };
 
     // run
