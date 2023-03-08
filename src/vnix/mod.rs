@@ -45,12 +45,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "(wait.ms 2000)";
+    let s = "{neg:(log @v) v:1024}";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let task = TaskLoop::Chain {
         msg: test_msg,
-        chain: vec!["time.chrono".into(), "test.dump".into()]
+        chain: vec!["math.calc".into(), "test.dump".into()]
     };
 
     // run
