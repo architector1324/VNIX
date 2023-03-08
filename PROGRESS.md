@@ -25,30 +25,33 @@
 8. [ ] Console and graphical user interface (**ui** on `io.term`)
 9. [x] System-wide unit-based database (`io.store`)
 10. [ ] Powerful parsing system (with `etc.parser` and `etc.ast`)
-11. [x] State machines (with `etc.fsm`)
+11. [ ] State machines (with `etc.fsm`)
 12. [x] Time control (with `time.chrono`)
 
 ## Services
 
 1. [ ] I/O:
-    - [x] `io.term` - interacting user with terminal
+    - [ ] `io.term` - interacting user with terminal
     - [x] `io.store` - store messages on disk/ram database
 2. [ ] Math:
     - [x] `math.calc` - numbers calculation
-3. [ ] System:
+3. [x] System:
     - [x] `sys.usr` - users management
     - [x] `sys.task` - run task from message
-    - [ ] `sys.hw` - hardware management
+    - [x] `sys.hw` - hardware management
 4. [ ] Graphics:
     - [x] `gfx.2d` - generate 2d image
     - [ ] `gfx.3d` - generate image with shading
     - [ ] `gfx.rt` - generate image with raytracer
-5. [ ] Time:
+5. [x] Time:
     - [x] `time.chrono` - time control
+6. [x] Test:
+    - [x] `test.echo` - echo service
+    - [x] `test.dump` - simple test printing service
 5. [ ] Other:
     - [ ] `etc.parser` - parser generator
     - [ ] `etc.ast` - tree transformer
-    - [x] `etc.fsm` - finite state machine
+    - [ ] `etc.fsm` - finite state machine
 
 ## Applications
 
