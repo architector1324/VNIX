@@ -5,16 +5,15 @@ use spin::Mutex;
 
 use alloc::vec;
 use alloc::rc::Rc;
-use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
+use crate::vnix::core::unit::Unit;
 use crate::vnix::core::task::{ThreadAsync, TaskRun};
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::unit::{Unit, SchemaPair, SchemaUnit, Schema, SchemaSeq};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 
 
@@ -22,13 +21,35 @@ pub const SERV_PATH: &'static str = "sys.task";
 pub const SERV_HELP: &'static str = "Service for run task from message\nExample: (load @txt.hello)@io.store@sys.task";
 
 
-fn chain(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<Unit>, KernErr>> {
+fn chain(mut ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Unit, Rc<String>)>, KernErr>> {
     thread!({
         if let Some(lst) = as_map_find_async!(msg, "task", ath, orig, kern)?.and_then(|u| u.as_vec()) {
-            // let _msg = 
-            for p in lst {
+            let mut _msg = Rc::unwrap_or_clone(msg.clone());
 
+            for p in lst {
+                if let Some(serv) = read_async!(Rc::new(p), ath, orig, kern)?.and_then(|u| u.as_str()) {
+                    let prev = _msg.clone();
+
+                    let run = TaskRun(_msg, serv);
+                    let id = kern.lock().reg_task(&ath, "sys,task", run)?;
+
+                    loop {
+                        if let Some(res) = kern.lock().get_task_result(id) {
+                            if let Some(__msg) = res? {
+                                _msg = prev.merge(__msg.msg);
+                                ath = Rc::new(__msg.ath);
+                                break;
+                            }
+                            return Ok(None)
+                        }
+                        yield;
+                    }
+                } else {
+                    return Ok(None)
+                }
             }
+
+            return Ok(Some((_msg, ath)))
         }
         Ok(None)
     })
@@ -66,13 +87,13 @@ pub fn task_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         if let Some(u) = read_async!(u.clone(), ath, u, kern)? {
             // chain
-            if let Some(u) = thread_await!(chain(ath.clone(), u.clone(), u.clone(), kern))? {
+            if let Some((u, ath)) = thread_await!(chain(ath.clone(), u.clone(), u.clone(), kern))? {
                 let m = Unit::Map(vec![
                     (Unit::Str("msg".into()), u)]
                 );
     
                 let _msg = msg.msg.merge(m);
-                return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
+                return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
             }
     
             // sim
