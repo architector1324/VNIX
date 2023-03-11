@@ -77,6 +77,7 @@ pub trait UnitAs {
     fn as_pair(self) -> Option<(Unit, Unit)>;
     fn as_list(self) -> Option<Rc<Vec<Unit>>>;
     fn as_map(self) -> Option<Rc<Vec<(Unit, Unit)>>>;
+    fn as_map_find(self, sch: &str) -> Option<Unit>;
 }
 
 
@@ -250,11 +251,31 @@ impl UnitAs for Unit {
         }
         None
     }
+
+    fn as_map_find(self, sch: &str) -> Option<Unit> {
+        if let UnitType::Map(map) = self.0.as_ref() {
+            return map.iter()
+                .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
+                .find_map(|(s, u)| {
+                    if Rc::unwrap_or_clone(s) == sch {
+                        return Some(u)
+                    }
+                    None
+                })
+        }
+        None
+    }
 }
 
 impl Unit {
     fn new(t: UnitType) -> Unit {
         Unit(Rc::new(t))
+    }
+
+    pub fn ptr(&self) -> *const UnitType {
+        unsafe {
+            Rc::as_ptr(&self.0)
+        }
     }
 
     pub fn size(&self, units: MemSizeUnits) -> usize {
