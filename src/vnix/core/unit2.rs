@@ -5,13 +5,14 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use core::pin::Pin;
+use core::fmt::Display;
 use core::ops::{Generator, GeneratorState};
 
 use num::bigint::BigInt;
 use num::rational::BigRational;
 use spin::Mutex;
 
-use crate::driver::MemSizeUnits;
+use crate::driver::{MemSizeUnits, Mem};
 use crate::{thread, thread_await};
 
 use super::kern::{Addr, KernErr, Kern};
@@ -306,6 +307,23 @@ impl UnitReadAsyncI for Unit {
     }
 }
 
+impl Display for Unit {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.0.as_ref() {
+            UnitType::None => write!(f, "-"),
+            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitType::Int(v) =>
+                match v {
+                    Int::Small(v) => write!(f, "{v}"),
+                    Int::Nat(v) => write!(f, "{v}"),
+                    Int::Big(v) => write!(f, "{v}")
+                }
+            _ => todo!()
+        }
+    }
+}
+
 impl Unit {
     fn new(t: UnitType) -> Unit {
         Unit(Rc::new(t))
@@ -318,9 +336,31 @@ impl Unit {
     }
 
     pub fn size(&self, units: MemSizeUnits) -> usize {
-        match self.0.as_ref() {
-            UnitType::None | UnitType::Bool(..) | UnitType::Byte(..) => core::mem::size_of::<UnitType>(),
-            _ => todo!()
+        let size = core::mem::size_of::<UnitType>() + match self.0.as_ref() {
+            UnitType::None | UnitType::Bool(..) | UnitType::Byte(..) => 0,
+            UnitType::Int(v) =>
+                match v {
+                    Int::Small(..) | Int::Nat(..) => 0,
+                    Int::Big(v) => v.to_bytes_le().1.len(),
+                },
+            UnitType::Dec(v) =>
+                match v {
+                    Dec::Small(..) => 0,
+                    Dec::Big(v) => v.numer().to_bytes_le().1.len() + v.denom().to_bytes_le().1.len()
+                },
+            UnitType::Str(s) => s.len(),
+            UnitType::Ref(path) => path.iter().fold(0, |prev, s| prev + s.len()),
+            UnitType::Stream(msg, serv, addr) => msg.size(MemSizeUnits::Bytes) + serv.len(),
+            UnitType::Pair(u0, u1) => u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes),
+            UnitType::List(lst) => lst.iter().fold(0, |prev, u| prev + u.size(MemSizeUnits::Bytes)),
+            UnitType::Map(map) => map.iter().fold(0, |prev, (u0, u1)| prev + u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes))
+        };
+
+        match units {
+            MemSizeUnits::Bytes => size,
+            MemSizeUnits::Kilo => size / 1024,
+            MemSizeUnits::Mega => size / (1024 * 1024),
+            MemSizeUnits::Giga => size / (1024 * 1024 * 1024)
         }
     }
 }
