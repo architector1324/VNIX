@@ -319,7 +319,23 @@ impl Display for Unit {
                     Int::Nat(v) => write!(f, "{v}"),
                     Int::Big(v) => write!(f, "{v}")
                 }
-            _ => todo!()
+            UnitType::Dec(v) =>
+                match v {
+                    Dec::Small(v) => write!(f, "{v}"),
+                    Dec::Big(v) => write!(f, "{v}") // FIXME: use `<i>.<i>` format
+                }
+            UnitType::Str(s) => {
+                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
+                    write!(f, "{s}")
+                } else {
+                    write!(f, "`{s}`")
+                }
+            },
+            UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
+            UnitType::Stream(msg, serv, addr) => write!(f, "{msg}@{serv}:{addr}"),
+            UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
+            UnitType::List(lst) => write!(f, "[{}]", lst.iter().map(|u| format!("{u}")).collect::<Vec<_>>().join(" ")),
+            UnitType::Map(map) => write!(f, "{{{}}}", map.iter().map(|(u0, u1)| format!("{u0}:{u1}")).collect::<Vec<_>>().join(" ")),
         }
     }
 }

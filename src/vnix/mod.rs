@@ -3,6 +3,7 @@ pub mod serv;
 pub mod utils;
 
 use alloc::boxed::Box;
+use num::BigInt;
 
 use crate::driver::{CLIErr, DrvErr, MemSizeUnits};
 use crate::vnix::core::unit2::UnitType;
@@ -68,15 +69,16 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // {a:- b:@a}
     let u = Unit::map(&[
         (Unit::str("a"), Unit::none()),
-        (Unit::str("b"), Unit::path(&["a"]))
+        (Unit::str("b"), Unit::path(&["a"])),
+        (Unit::str("c"), Unit::int_big(BigInt::parse_bytes(b"12345678910111213141516", 10).unwrap())),
     ]);
 
-    writeln!(kern.drv.cli, "UNIT: {}", Unit::uint(1234)).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-
+    
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();
-    writeln!(kern.drv.cli, "MEM: {mem}bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-
-    writeln!(kern.drv.cli, "SIZE: {}bytes", u.size(MemSizeUnits::Bytes)).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    writeln!(kern.drv.cli, "MEM: {mem} bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    
+    writeln!(kern.drv.cli, "UNIT: {u}").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    writeln!(kern.drv.cli, "SIZE: {} bytes", u.size(MemSizeUnits::Bytes)).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     Ok(())
 }
