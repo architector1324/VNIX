@@ -11,6 +11,7 @@
 #![feature(result_option_inspect)]
 #![feature(iterator_try_reduce)]
 #![feature(iterator_try_collect)]
+#![feature(associated_type_defaults)]
 
 extern crate alloc;
 
