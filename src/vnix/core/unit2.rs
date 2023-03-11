@@ -15,13 +15,13 @@ use super::kern::Addr;
 pub enum Int {
     Small(i32),
     Nat(u32),
-    Big(BigInt)
+    Big(Rc<BigInt>)
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Dec {
     Small(f32),
-    Big(BigRational)
+    Big(Rc<BigRational>)
 }
 
 pub type Path = Vec<String>;
@@ -33,12 +33,12 @@ pub enum UnitType {
     Byte(u8),
     Int(Int),
     Dec(Dec),
-    Str(String),
-    Ref(Path),
+    Str(Rc<String>),
+    Ref(Rc<Path>),
     Stream(Unit, String, Addr),
     Pair(Unit, Unit),
-    List(Vec<Unit>),
-    Map(Vec<(Unit, Unit)>)
+    List(Rc<Vec<Unit>>),
+    Map(Rc<Vec<(Unit, Unit)>>)
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -62,6 +62,24 @@ pub trait UnitNew {
     fn map(map: &[(Unit, Unit)]) -> Unit;
 }
 
+pub trait UnitAs {
+    fn as_none(self) -> Option<()>;
+    fn as_bool(self) -> Option<bool>;
+    fn as_byte(self) -> Option<u8>;
+    fn as_int(self) -> Option<i32>;
+    fn as_uint(self) -> Option<u32>;
+    fn as_int_big(self) -> Option<Rc<BigInt>>;
+    fn as_dec(self) -> Option<f32>;
+    fn as_dec_big(self) -> Option<Rc<BigRational>>;
+    fn as_str(self) -> Option<Rc<String>>;
+    fn as_path(self) -> Option<Rc<Path>>;
+    fn as_stream(self) -> Option<(Unit, String, Addr)>;
+    fn as_pair(self) -> Option<(Unit, Unit)>;
+    fn as_list(self) -> Option<Rc<Vec<Unit>>>;
+    fn as_map(self) -> Option<Rc<Vec<(Unit, Unit)>>>;
+}
+
+
 impl UnitNew for Unit {
     fn none() -> Unit {
         Unit::new(UnitType::None)
@@ -84,7 +102,7 @@ impl UnitNew for Unit {
     }
 
     fn int_big(v: BigInt) -> Unit {
-        Unit::new(UnitType::Int(Int::Big(v)))
+        Unit::new(UnitType::Int(Int::Big(Rc::new(v))))
     }
 
     fn dec(v: f32) -> Unit {
@@ -92,15 +110,15 @@ impl UnitNew for Unit {
     }
 
     fn dec_big(v: BigRational) -> Unit {
-        Unit::new(UnitType::Dec(Dec::Big(v)))
+        Unit::new(UnitType::Dec(Dec::Big(Rc::new(v))))
     }
 
     fn str(s: &str) -> Unit {
-        Unit::new(UnitType::Str(s.into()))
+        Unit::new(UnitType::Str(Rc::new(s.into())))
     }
 
     fn path(path: &[&str]) -> Unit {
-        Unit::new(UnitType::Ref(path.into_iter().cloned().map(|s| format!("{s}")).collect()))
+        Unit::new(UnitType::Ref(Rc::new(path.into_iter().cloned().map(|s| format!("{s}")).collect())))
     }
 
     fn stream_loc(u: Unit, serv: &str) -> Unit {
@@ -116,11 +134,121 @@ impl UnitNew for Unit {
     }
 
     fn list(lst: &[Unit]) -> Unit {
-        Unit::new(UnitType::List(lst.to_vec()))
+        Unit::new(UnitType::List(Rc::new(lst.to_vec())))
     }
 
     fn map(map: &[(Unit, Unit)]) -> Unit {
-        Unit::new(UnitType::Map(map.to_vec()))
+        Unit::new(UnitType::Map(Rc::new(map.to_vec())))
+    }
+}
+
+impl UnitAs for Unit {
+    fn as_none(self) -> Option<()> {
+        if let UnitType::None = self.0.as_ref() {
+            return Some(())
+        }
+        None
+    }
+
+    fn as_bool(self) -> Option<bool> {
+        if let UnitType::Bool(v) = self.0.as_ref() {
+            return Some(*v)
+        }
+        None
+    }
+
+    fn as_byte(self) -> Option<u8> {
+        if let UnitType::Byte(v) = self.0.as_ref() {
+            return Some(*v)
+        }
+        None
+    }
+
+    fn as_int(self) -> Option<i32> {
+        if let UnitType::Int(v) = self.0.as_ref() {
+            if let Int::Small(v) = v {
+                return Some(*v)
+            }
+        }
+        None
+    }
+
+    fn as_uint(self) -> Option<u32> {
+        if let UnitType::Int(v) = self.0.as_ref() {
+            if let Int::Nat(v) = v {
+                return Some(*v)
+            }
+        }
+        None
+    }
+
+    fn as_int_big(self) -> Option<Rc<BigInt>> {
+        if let UnitType::Int(v) = self.0.as_ref() {
+            if let Int::Big(v) = v {
+                return Some(v.clone())
+            }
+        }
+        None
+    }
+
+    fn as_dec(self) -> Option<f32> {
+        if let UnitType::Dec(v) = self.0.as_ref() {
+            if let Dec::Small(v) = v {
+                return Some(*v)
+            }
+        }
+        None
+    }
+
+    fn as_dec_big(self) -> Option<Rc<BigRational>> {
+        if let UnitType::Dec(v) = self.0.as_ref() {
+            if let Dec::Big(v) = v {
+                return Some(v.clone())
+            }
+        }
+        None
+    }
+
+    fn as_str(self) -> Option<Rc<String>> {
+        if let UnitType::Str(s) = self.0.as_ref() {
+            return Some(s.clone())
+        }
+        None
+    }
+
+    fn as_path(self) -> Option<Rc<Path>> {
+        if let UnitType::Ref(path) = self.0.as_ref() {
+            return Some(path.clone())
+        }
+        None
+    }
+
+    fn as_stream(self) -> Option<(Unit, String, Addr)> {
+        if let UnitType::Stream(u, serv, addr) = self.0.as_ref() {
+            return Some((u.clone(), serv.clone(), addr.clone()))
+        }
+        None
+    }
+
+    fn as_pair(self) -> Option<(Unit, Unit)> {
+        if let UnitType::Pair(u0, u1) = self.0.as_ref() {
+            return Some((u0.clone(), u1.clone()))
+        }
+        None
+    }
+
+    fn as_list(self) -> Option<Rc<Vec<Unit>>> {
+        if let UnitType::List(lst) = self.0.as_ref() {
+            return Some(lst.clone())
+        }
+        None
+    }
+
+    fn as_map(self) -> Option<Rc<Vec<(Unit, Unit)>>> {
+        if let UnitType::Map(map) = self.0.as_ref() {
+            return Some(map.clone())
+        }
+        None
     }
 }
 

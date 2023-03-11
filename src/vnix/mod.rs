@@ -8,7 +8,7 @@ use crate::driver::{CLIErr, DrvErr, MemSizeUnits};
 use crate::vnix::core::unit2::UnitType;
 
 use self::core::task::TaskRun;
-use self::core::unit2::{Unit, UnitNew};
+use self::core::unit2::{Unit, UnitNew, UnitAs};
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
@@ -70,6 +70,10 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (Unit::str("a"), Unit::none()),
         (Unit::str("b"), Unit::path(&["a"]))
     ]);
+
+    let tmp2 = tmp.clone().as_none();
+
+    writeln!(kern.drv.cli, "UNIT: {:?} -> {:?}", tmp, tmp2).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();
     writeln!(kern.drv.cli, "MEM: {mem}bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
