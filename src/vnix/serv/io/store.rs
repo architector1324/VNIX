@@ -23,9 +23,9 @@ pub const SERV_PATH: &'static str = "io.store";
 pub const SERV_HELP: &'static str = "Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store";
 
 
-fn get_size(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<usize>, KernErr>> {
+fn get_size(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(usize, Rc<String>)>, KernErr>> {
     thread!({
-        if let Some(res) = read_async!(msg, ath, orig, kern)? {
+        if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // database size
             if let Some(s) = res.as_str() {
                 let units = match s.as_str() {
@@ -37,14 +37,14 @@ fn get_size(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) 
                 };
     
                 let size = kern.lock().ram_store.data.size(units);
-                return Ok(Some(size))
+                return Ok(Some((size, ath)))
             }
 
             // unit size
             let schm = SchemaPair(SchemaUnit, SchemaRef);
 
             if let Some((s, path)) = schm.find(&orig, &msg) {
-                if let Some(s) = read_async!(Rc::new(s), ath, orig, kern)?.and_then(|s| s.as_str()) {
+                if let Some((s, ath)) = read_async!(Rc::new(s), ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
                     let units = match s.as_str() {
                         "get.size" => MemSizeUnits::Bytes,
                         "get.size.kb" => MemSizeUnits::Kilo,
@@ -54,7 +54,7 @@ fn get_size(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) 
                     };
 
                     let size = kern.lock().ram_store.load(Unit::Ref(path)).ok_or(KernErr::DbLoadFault)?.size(units);
-                    return Ok(Some(size))
+                    return Ok(Some((size, ath)))
                 }
             }
         }
@@ -63,15 +63,15 @@ fn get_size(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) 
     })
 }
 
-fn load(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<Unit>, KernErr>> {
+fn load(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Unit, Rc<String>)>, KernErr>> {
     thread!({
         let schm = SchemaPair(SchemaUnit, SchemaRef);
 
         if let Some((s, path)) = schm.find(&orig, &msg) {
-            if let Some(s) = read_async!(Rc::new(s), ath, orig, kern)?.and_then(|s| s.as_str()) {
+            if let Some((s, ath)) = read_async!(Rc::new(s), ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
                 if s == "load" {
                     let u = kern.lock().ram_store.load(Unit::Ref(path)).ok_or(KernErr::DbLoadFault)?;
-                    return Ok(Some(u))
+                    return Ok(Some((u, ath)))
                 }
             }
         }
@@ -79,44 +79,49 @@ fn load(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> T
     })
 }
 
-fn save(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<(), KernErr>> {
+fn save(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Rc<String>, KernErr>> {
     thread!({
-        if let Some(u) = as_map_find_async!(msg, "save", ath, orig, kern)? {
+        if let Some((u, ath)) = as_map_find_async!(msg, "save", ath, orig, kern)? {
             if let Some(path) = msg.as_map_find("out").and_then(|u| u.as_ref()) {
                 kern.lock().ram_store.save(Unit::Ref(path), u);
+                return Ok(ath)
             }
         }
-        Ok(())
+        Ok(ath)
     })
 }
 
-pub fn store_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let u = Rc::new(msg.msg.clone());
         let ath = Rc::new(msg.ath.clone());
 
         // get size
-        if let Some(size) = thread_await!(get_size(ath.clone(), u.clone(), u.clone(), kern))? {
+        if let Some((size, ath)) = thread_await!(get_size(ath.clone(), u.clone(), u.clone(), kern))? {
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), Unit::Int(size as i32))]
             );
 
             let _msg = msg.msg.merge(m);
-            return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
         }
 
         // load
-        if let Some(u) = thread_await!(load(ath.clone(), u.clone(), u.clone(), kern))? {
+        if let Some((u, ath)) = thread_await!(load(ath.clone(), u.clone(), u.clone(), kern))? {
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), u)]
             );
 
             let _msg = msg.msg.merge(m);
-            return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
         }
 
         // save
-        thread_await!(save(ath, u.clone(), u, kern))?;
+        let _ath = thread_await!(save(ath.clone(), u.clone(), u, kern))?;
+
+        if ath != _ath {
+            msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
+        }
 
         Ok(Some(msg))
     })

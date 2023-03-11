@@ -22,9 +22,9 @@ pub const SERV_PATH: &'static str = "sys.hw";
 pub const SERV_HELP: &'static str = "Service for hardware management\nExample: get.mem.free.mb@sys.hw";
 
 
-fn get_freemem(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<usize>, KernErr>> {
+fn get_freemem(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(usize, Rc<String>)>, KernErr>> {
     thread!({
-        if let Some(s) = read_async!(msg, ath, orig, kern)?.and_then(|u| u.as_str()) {
+        if let Some((s, ath)) = read_async!(msg, ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_str()?, ath))) {
             let units = match s.as_str() {
                 "get.mem.free" => MemSizeUnits::Bytes,
                 "get.mem.free.kb" => MemSizeUnits::Kilo,
@@ -33,7 +33,7 @@ fn get_freemem(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern
                 _ => return Ok(None)
             };
 
-            return kern.lock().drv.mem.free(units).map_err(|e| KernErr::DrvErr(DrvErr::Mem(e))).map(|res| Some(res))
+            return kern.lock().drv.mem.free(units).map_err(|e| KernErr::DrvErr(DrvErr::Mem(e))).map(|res| Some((res, ath)))
         }
         Ok(None)
     })
@@ -43,13 +43,13 @@ pub fn hw_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let u = Rc::new(msg.msg.clone());
 
-        if let Some(free_mem) = thread_await!(get_freemem(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
+        if let Some((free_mem, ath)) = thread_await!(get_freemem(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
             let m = Unit::Map(vec![
                 (Unit::Str("msg".into()), Unit::Int(free_mem as i32))]
             );
 
             let _msg = msg.msg.merge(m);
-            return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
         }
 
         Ok(Some(msg))

@@ -27,13 +27,13 @@ pub const SERV_HELP: &'static str = "Users management service\nExample: {ath:tes
 fn auth(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Usr, Option<String>)>, KernErr>> {
     thread!({
         // test
-        if let Some(_ath) = read_async!(msg, ath, orig, kern)?.and_then(|u| u.as_str()) {
+        if let Some(_ath) = read_async!(msg, ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
             return Usr::new(&_ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
         }
 
-        if let Some(_ath) = as_map_find_async!(msg, "ath", ath, orig, kern)?.and_then(|u| u.as_str()) {
-            if let Some(pub_key) = as_map_find_async!(msg, "pub", ath, orig, kern)?.and_then(|u| u.as_str()) {
-                if let Some(priv_key) = as_map_find_async!(msg, "priv", ath, orig, kern)?.and_then(|u| u.as_str()) {
+        if let Some(_ath) = as_map_find_async!(msg, "ath", ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
+            if let Some(pub_key) = as_map_find_async!(msg, "pub", ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
+                if let Some(priv_key) = as_map_find_async!(msg, "priv", ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
                     // {ath:test pub:.. priv:..}
                     return Ok(Some((Usr::login(&_ath, &priv_key, &pub_key)?, None)))
                 } else {
@@ -66,7 +66,6 @@ pub fn usr_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
                 let m = Unit::Map(vec![
                     (Unit::Str("msg".into()), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
                 ]);
-    
                 return kern.lock().msg(&usr.name, m).map(|msg| Some(msg));
             }
 

@@ -1307,10 +1307,10 @@ impl Unit {
         None
     }
 
-    pub fn as_map_find_async<'a>(self: Rc<Self>, sch: String, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Unit>, KernErr>> {
+    pub fn as_map_find_async<'a>(self: Rc<Self>, sch: String, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, KernErr>> {
         thread!({
             if let Some(msg) = self.as_map_find(&sch) {
-                return thread_await!(Rc::new(msg).read_async(ath, orig, kern)).map(|msg| msg.map(|msg| Rc::unwrap_or_clone(msg)))
+                return thread_await!(Rc::new(msg).read_async(ath, orig, kern)).map(|msg| msg.map(|(msg, ath)|( Rc::unwrap_or_clone(msg), ath)))
             }
             Ok(None)
         })
@@ -1367,11 +1367,11 @@ impl Unit {
         u
     }
 
-    pub fn read_async<'a>(self: Rc<Self>, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<Rc<Unit>>, KernErr>> {
+    pub fn read_async<'a>(self: Rc<Self>, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<(Rc<Unit>, Rc<String>)>, KernErr>> {
         thread!({
             match self.as_ref() {
                 Unit::Ref(path) => {
-                    Ok(Unit::find_ref(path.into_iter().cloned(), &orig).map(|u| Rc::new(u)))
+                    Ok(Unit::find_ref(path.into_iter().cloned(), &orig).map(|u| (Rc::new(u), ath)))
                 },
                 Unit::Stream(msg, (serv, _)) => {
                     let run = TaskRun(*msg.clone(), serv.clone());
@@ -1379,14 +1379,14 @@ impl Unit {
 
                     let res = loop {
                         if let Some(res) = kern.lock().get_task_result(id) {
-                            break Ok(res?.and_then(|msg| msg.msg.as_map_find("msg")).map(|u| Rc::new(u)));
+                            break Ok(res?.and_then(|msg| Some((msg.msg.as_map_find("msg")?, Rc::new(msg.ath)))).map(|(u, ath)| (Rc::new(u), ath)));
                         }
 
                         yield;
                     };
                     res
                 },
-                _ => Ok(Some(self))
+                _ => Ok(Some((self, ath)))
             }
         })
     }

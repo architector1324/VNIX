@@ -23,13 +23,13 @@ pub const SERV_PATH: &'static str = "gfx.2d";
 pub const SERV_HELP: &'static str = "Service for rendering 2d graphics\nExample: #ff0000@gfx.2d # fill screen with red color";
 
 
-fn fill_act(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<((usize, usize), u32)>, KernErr>> {
+fn fill_act(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<((usize, usize), u32, Rc<String>)>, KernErr>> {
     thread!({
-        if let Some(res) = read_async!(msg, ath, orig, kern)? {
+        if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // #ff0000
             if let Some(col) = res.as_str().and_then(|s| utils::hex_to_u32(&s)) {
                 let res = kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
-                return Ok(Some((res, col)))
+                return Ok(Some((res, col, ath)))
             }
 
             // ((320 240) #ff0000)
@@ -39,17 +39,17 @@ fn fill_act(ath: Rc<String>, orig: Rc<Unit>, msg: Rc<Unit>, kern: &Mutex<Kern>) 
             );
 
             if let Some(((w, h), col)) = schm.find(&orig, &res) {
-                let w = read_async!(Rc::new(w), ath, orig, kern)?.and_then(|v| v.as_int());
-                let h = read_async!(Rc::new(h), ath, orig, kern)?.and_then(|v| v.as_int());
-                let col = read_async!(Rc::new(col), ath, orig, kern)?.and_then(|u| u.as_str()).and_then(|s| utils::hex_to_u32(&s));
-
-                if let Some((res, col)) = w.and_then(|w| Some(((w as usize, h? as usize), col?))) {
-                    return Ok(Some((res, col)))
+                if let Some((w, ath)) = read_async!(Rc::new(w), ath, orig, kern)?.and_then(|(v, ath)| Some((v.as_int()?, ath))) {
+                    if let Some((h, ath)) = read_async!(Rc::new(h), ath, orig, kern)?.and_then(|(v, ath)| Some((v.as_int()?, ath))) {
+                        if let Some((col, ath)) = read_async!(Rc::new(col), ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_str()?, ath))).and_then(|(s, ath)| Some((utils::hex_to_u32(&s)?, ath))) {
+                            return Ok(Some(((w as usize, h as usize), col, ath)))
+                        }
+                    }
                 }
             }
         }
 
-        if let Some(msg) = as_map_find_async!(msg, "fill", ath, orig, kern)? {
+        if let Some((msg, ath)) = as_map_find_async!(msg, "fill", ath, orig, kern)? {
             // {fill:#ff0000} | {fill:((320 240) #ff0000)}
             return thread_await!(fill_act(ath, orig, Rc::new(msg), kern));
         }
@@ -61,7 +61,7 @@ pub fn gfx2d_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync 
     thread!({
         let u = Rc::new(msg.msg.clone());
 
-        if let Some(((w, h), col)) = thread_await!(fill_act(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
+        if let Some(((w, h), col, ath)) = thread_await!(fill_act(Rc::new(msg.ath.clone()), u.clone(), u, kern))? {
             let m = Unit::Map(vec![
                 (
                     Unit::Str("msg".into()),
@@ -90,7 +90,7 @@ pub fn gfx2d_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync 
                 ),
             ]);
 
-            return kern.lock().msg(&msg.ath, m).map(|msg| Some(msg));
+            return kern.lock().msg(&ath, m).map(|msg| Some(msg));
         }
         Ok(Some(msg))
     })
