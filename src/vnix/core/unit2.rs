@@ -1,14 +1,21 @@
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use alloc::boxed::Box;
 use alloc::string::String;
+
+use core::pin::Pin;
+use core::ops::{Generator, GeneratorState};
 
 use num::bigint::BigInt;
 use num::rational::BigRational;
+use spin::Mutex;
 
 use crate::driver::MemSizeUnits;
+use crate::{thread, thread_await};
 
-use super::kern::Addr;
+use super::kern::{Addr, KernErr, Kern};
+use super::task::ThreadAsync;
 
 
 #[derive(Debug, PartialEq, Clone)]
@@ -80,6 +87,12 @@ pub trait UnitAs {
     fn as_map_find(self, sch: &str) -> Option<Unit>;
 }
 
+pub type UnitReadAsync<'a> = ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, KernErr>>;
+
+pub trait UnitReadAsyncI {
+    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+}
 
 impl UnitNew for Unit {
     fn none() -> Unit {
@@ -264,6 +277,32 @@ impl UnitAs for Unit {
                 })
         }
         None
+    }
+}
+
+impl UnitReadAsyncI for Unit {
+    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
+        thread!({
+            match self.0.as_ref() {
+                UnitType::Ref(path) => {
+                    yield;
+                    todo!()
+                },
+                UnitType::Stream(msg, serv, _addr) => {
+                    todo!()
+                },
+                _ => Ok(Some((self.clone(), ath)))
+            }
+        })
+    }
+
+    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
+        thread!({
+            if let Some(msg) = self.as_map_find(&sch) {
+                return thread_await!(msg.read_async(ath, orig, kern))
+            }
+            Ok(None)
+        })
     }
 }
 
