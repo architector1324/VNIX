@@ -9,7 +9,7 @@ use crate::driver::{CLIErr, DrvErr, MemSizeUnits};
 use crate::vnix::core::unit2::UnitType;
 
 use self::core::task::TaskRun;
-use self::core::unit2::{Unit, UnitNew, UnitAs, UnitAsBytes};
+use self::core::unit2::{Unit, UnitNew, UnitAs, UnitAsBytes, UnitParse};
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
@@ -64,7 +64,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // kern.run()
 
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();
-    writeln!(kern.drv.cli, "MEM: {mem}bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    writeln!(kern.drv.cli, "MEM: {mem} bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // {a:- b:@a}
     let u = Unit::map(&[
@@ -73,13 +73,15 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (Unit::str("c"), Unit::int_big(BigInt::parse_bytes(b"12345678910111213141516", 10).unwrap())),
     ]);
 
+    let b = u.as_bytes();
+    let (u, _) = Unit::parse(b.iter()).unwrap();
+
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();
     writeln!(kern.drv.cli, "MEM: {mem} bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
     
     writeln!(kern.drv.cli, "UNIT: {u}").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
     writeln!(kern.drv.cli, "SIZE: {} bytes", u.size(MemSizeUnits::Bytes)).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-
-    writeln!(kern.drv.cli, "BYTES: {:?}", u.as_bytes()).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    writeln!(kern.drv.cli, "BYTES: {:?}", b).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     Ok(())
 }
