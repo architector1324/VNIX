@@ -18,7 +18,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
         // // ("io.term", Box::new(io::term::Term::default()) as Box<dyn ServHlr>),
-        // (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
+        (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
         // // // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
@@ -44,11 +44,10 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    // let s = "(load @task.test)@io.store";
+    let s = "(load @task.test)@io.store";
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
     // let s = "{sum:[1 2 3] ath:test task:[sys.usr math.calc test.dump]}";
-    let s = "{pow:(123 456) task:[math.calc test.dump]}";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let run = TaskRun(test_msg, "sys.task".into());

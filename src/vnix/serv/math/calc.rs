@@ -89,7 +89,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
     thread!({
         if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // (op (v0 v1))
-            if let Some((op, (v0, v1))) = res.clone().as_pair().into_iter().filter_map(|(u0, u1)| Some((u0, u1.as_pair()?))).next() {
+            if let Some((op, (v0, v1))) = res.clone().as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_pair()?))){
                 if let Some((op, ath)) = read_async!(op, ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
                     if let Some((v0, ath)) = thread_await!(op_int(ath.clone(), orig.clone(), v0, kern))? {
                         if let Some((v1, ath)) = thread_await!(op_int(ath.clone(), orig.clone(), v1, kern))? {
@@ -100,7 +100,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
             }
 
             // (op [v ..])
-            if let Some((op, lst)) = res.as_pair().into_iter().filter_map(|(u0, u1)| Some((u0, u1.as_list()?))).next() {
+            if let Some((op, lst)) = res.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_list()?))){
                 if let Some((op, mut ath)) = read_async!(op, ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
                     let mut vals = Vec::new();
                     for v in Rc::unwrap_or_clone(lst) {

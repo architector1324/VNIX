@@ -33,7 +33,7 @@ fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Threa
             }
 
             // ((320 240) #ff0000)
-            if let Some(((w, h), col)) = msg.clone().as_pair().into_iter().filter_map(|(u0, u1)| Some((u0.as_pair()?, u1))).next() {
+            if let Some(((w, h), col)) = msg.clone().as_pair().into_iter().find_map(|(u0, u1)| Some((u0.as_pair()?, u1))) {
                 if let Some((w, ath)) = read_async!(w, ath, orig, kern)?.and_then(|(v, ath)| Some((v.as_int()?, ath))) {
                     if let Some((h, ath)) = read_async!(h, ath, orig, kern)?.and_then(|(v, ath)| Some((v.as_int()?, ath))) {
                         if let Some((col, ath)) = read_async!(col, ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_str()?, ath))).and_then(|(s, ath)| Some((utils::hex_to_u32(&s)?, ath))) {

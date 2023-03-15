@@ -107,6 +107,7 @@ pub trait UnitNew {
     fn str(s: &str) -> Unit;
     fn str_share(s: Rc<String>) -> Unit;
     fn path(path: &[&str]) -> Unit;
+    fn path_share(path: Rc<Vec<String>>) -> Unit;
     fn stream_loc(u: Unit, serv: &str) -> Unit;
     fn stream(u: Unit, serv: &str, addr: Addr) -> Unit;
     fn pair(u0: Unit, u1: Unit) -> Unit;
@@ -240,6 +241,10 @@ impl UnitNew for Unit {
 
     fn path(path: &[&str]) -> Unit {
         Unit::new(UnitType::Ref(Rc::new(path.into_iter().cloned().map(|s| format!("{s}")).collect())))
+    }
+
+    fn path_share(path: Rc<Vec<String>>) -> Unit {
+        Unit::new(UnitType::Ref(path))
     }
 
     fn stream_loc(u: Unit, serv: &str) -> Unit {
