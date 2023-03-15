@@ -20,6 +20,7 @@ use super::kern::{Addr, KernErr, Kern};
 use super::task::ThreadAsync;
 
 
+// FIXME: remove small and natural, use cast instead
 #[derive(Debug, PartialEq, Clone)]
 pub enum Int {
     Small(i32),
@@ -27,6 +28,7 @@ pub enum Int {
     Big(Rc<BigInt>)
 }
 
+// FIXME: remove small, use cast instead
 #[derive(Debug, PartialEq, Clone)]
 pub enum Dec {
     Small(f32),
@@ -88,9 +90,12 @@ pub enum UnitParseErr {
     NotPair,
     NotList,
     NotMap,
+    UnexpectedChar,
     RefInvalidPath,
+    DevideByZero,
     InvalidSign,
     InvalidAddr,
+    StreamInvalidServ,
 }
 
 pub trait UnitNew {
@@ -147,6 +152,13 @@ pub trait UnitParse<'a, T: 'a, I> where I: Iterator<Item = &'a T> + Clone {
     fn parse_list(it: I) -> Result<(Unit, I), UnitParseErr>;
     fn parse_map(it: I) -> Result<(Unit, I), UnitParseErr>;
 
+    fn parse_ch(_expect: char, _it: I) -> Result<I, UnitParseErr> {
+        unimplemented!()
+    }
+
+    fn parse_ws(_it: I) -> Result<(usize, I), UnitParseErr> {
+        unimplemented!()
+    }
 }
 
 pub type UnitReadAsync<'a> = ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, KernErr>>;
@@ -368,6 +380,10 @@ impl UnitReadAsyncI for Unit {
     }
 }
 
+fn char_no_quoted(c: char) -> bool {
+    c.is_alphanumeric() || c == '.' || c == '#' || c == '_' || c == '.'
+}
+
 impl Display for Unit {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.0.as_ref() {
@@ -386,7 +402,7 @@ impl Display for Unit {
                     Dec::Big(v) => write!(f, "{v}") // FIXME: use `<i>.<i>` format
                 }
             UnitType::Str(s) => {
-                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
+                if s.as_str().chars().all(char_no_quoted) {
                     write!(f, "{s}")
                 } else {
                     write!(f, "`{s}`")
@@ -664,7 +680,7 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
         let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
         let s = String::from_utf8(bytes).map_err(|_| UnitParseErr::NotStr)?;
         
-        if !s.chars().all(|c| c.is_alphanumeric() || c == '#' || c == '_' || c == '.') {
+        if !s.chars().all(char_no_quoted) {
             return Err(UnitParseErr::RefInvalidPath);
         }
 
@@ -776,55 +792,274 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
     }
 }
 
-// impl<'a> UnitParse<'a, char, Iter<'a, char>> for Unit {
-//     fn parse(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+impl<'a> UnitParse<'a, char, Iter<'a, char>> for Unit {
+    fn parse(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        if let Ok((u, it)) = Self::parse_stream(it.clone()) {
+            return Ok((u, it))
+        }
 
-//     fn parse_none(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+        Err(UnitParseErr::NotUnit)
+    }
 
-//     fn parse_bool(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+    fn parse_ch(expect: char, mut it: Iter<'a, char>) -> Result<Iter<'a, char>, UnitParseErr> {
+        let ch = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if ch != expect {
+            return Err(UnitParseErr::UnexpectedChar);
+        }
+        Ok(it)
+    }
 
-//     fn parse_byte(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+    fn parse_ws(mut it: Iter<'a, char>) -> Result<(usize, Iter<'a, char>), UnitParseErr> {
+        let mut tmp = it.clone();
+        let cnt = (0..).map_while(|_| {
+            if tmp.next()?.is_whitespace() {
+                it = tmp.clone();
+                return Some(())
+            }
+            None
+        }).count();
 
-//     fn parse_int(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+        Ok((cnt, it))
+    }
 
-//     fn parse_dec(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+    fn parse_none(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let it = Unit::parse_ch('-', it)?;
+        Ok((Unit::none(), it))
+    }
 
-//     fn parse_str(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+    fn parse_bool(mut it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let ch = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        let v = match ch {
+            't' => true,
+            'f' => false,
+            _ => return Err(UnitParseErr::NotBool)
+        };
 
-//     fn parse_ref(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+        if let Some(ch) = it.clone().next() {
+            if !ch.is_whitespace() {
+                return Err(UnitParseErr::UnexpectedChar)
+            }
+        }
+        Ok((Unit::bool(v), it))
+    }
 
-//     fn parse_stream(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+    fn parse_byte(mut it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        if let Some(s) = (0..4).map(|_| it.next()).try_collect::<String>() {
+            let v = u8::from_str_radix(s.trim_start_matches("0x"), 16).map_err(|_| UnitParseErr::NotByte)?;
+            return Ok((Unit::byte(v), it))
+        }
+        Err(UnitParseErr::UnexpectedEnd)
+    }
 
-//     fn parse_pair(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+    fn parse_int(mut it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let mut tmp = it.clone();
+        let s = (0..).map_while(|_| {
+            let c = *tmp.next()?;
+            if c.is_numeric() || c == '-' {
+                it = tmp.clone();
+                return Some(c)
+            }
+            None
+        }).collect::<String>();
 
-//     fn parse_list(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
+        if s.is_empty() {
+            return Err(UnitParseErr::UnexpectedEnd);
+        }
 
-//     fn parse_map(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
-//         todo!()
-//     }
-// }
+        let big = BigInt::parse_bytes(s.as_bytes(), 10).ok_or(UnitParseErr::NotInt)?;
+
+        // FIXME: remove it
+        // try small or natural
+        let (sign, tmp) = big.to_u32_digits();
+
+        if tmp.len() == 1 {
+            return match sign {
+                Sign::Minus => Ok((Unit::int(-(tmp[0] as i32)), it)),
+                Sign::NoSign | Sign::Plus => Ok((Unit::uint(tmp[0]), it))
+            }
+        }
+
+        Ok((Unit::int_big(big), it))
+    }
+
+    fn parse_dec(mut it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> { 
+        let mut tmp = it.clone();
+        let s = (0..).map_while(|_| {
+            let c = *tmp.next()?;
+            if c.is_numeric() || c == '-' || c == '.' {
+                it = tmp.clone();
+                return Some(c)
+            }
+            None
+        }).collect::<String>();
+
+        if s.is_empty() {
+            return Err(UnitParseErr::UnexpectedEnd);
+        }
+
+        // get ratio
+        let (fst, scd) = s.split_once(".").ok_or(UnitParseErr::NotDec)?;
+
+        let fst = BigInt::parse_bytes(fst.as_bytes(), 10).ok_or(UnitParseErr::NotDec)?;
+        let scd = BigInt::parse_bytes(scd.as_bytes(), 10).ok_or(UnitParseErr::NotDec)?;
+
+        let len = format!("{scd}").len(); 
+
+        let denom = BigInt::from(10).pow(len as u32);
+        let numer = fst * &denom + scd;
+
+        let big = BigRational::new(numer, denom);
+        Ok((Unit::dec_big(big), it))
+    }
+
+    fn parse_str(mut it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let sep = *it.clone().next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if !(sep == '`' || sep == '\'' || sep == '"' || char_no_quoted(sep)) {
+            return Err(UnitParseErr::NotStr);
+        }
+
+        // #ab_c.123
+        let mut tmp = it.clone();
+        let mut tmp2 = tmp.clone();
+        let mut s = String::new();
+
+        while let Some(c) = tmp.next() {
+            if !char_no_quoted(*c) {
+                break;
+            }
+            tmp2 = tmp.clone();
+            s.push(*c);
+        }
+
+        if !s.is_empty() {
+            return Ok((Unit::str(&s), tmp2))
+        }
+
+        it = tmp2;
+
+        // <sep>..<sep>
+        it.next();
+        let s = (0..).map_while(|_| {
+            let c = *it.next()?;
+            if c != sep {
+                return Some(c)
+            }
+            None
+        }).collect::<String>();
+
+        if !s.is_empty() {
+            return Ok((Unit::str(&s), it))
+        }
+
+        return Err(UnitParseErr::NotStr);
+    }
+
+    fn parse_ref(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let it = Unit::parse_ch('@', it)?;
+        let (path, it) = Unit::parse_str(it)?;
+
+        let path = path.as_str().ok_or(UnitParseErr::RefInvalidPath)?;
+        let path = path.split(".").map(|s| s).collect::<Vec<_>>();
+
+        if !path.iter().all(|s| s.chars().all(char_no_quoted)) {
+            return Err(UnitParseErr::RefInvalidPath)
+        }
+
+        Ok((Unit::path(&path), it))
+    }
+
+    fn parse_stream(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let (mut u, mut it) = if let Ok((u, it)) = Self::parse_bool(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_byte(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_dec(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_int(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_none(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_str(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_ref(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_pair(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_list(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_map(it.clone()) {
+            (u, it)
+        } else {
+            return Err(UnitParseErr::NotStream)
+        };
+
+        while let Ok(tmp) = Unit::parse_ch('@', it.clone()) {
+            let (serv, tmp) = Unit::parse_str(tmp)?;
+            let serv = serv.as_str().ok_or(UnitParseErr::StreamInvalidServ)?;
+
+            // FIXME: add `addr`
+            (u, it) = (Unit::stream_loc(u, &serv), tmp);
+        }
+        Ok((u, it))
+    }
+
+    fn parse_pair(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let it = Unit::parse_ch('(', it)?;
+        let (u0, it) = Unit::parse(it)?;
+
+        let (cnt, it) = Unit::parse_ws(it)?;
+        if cnt < 1 {
+            return Err(UnitParseErr::UnexpectedChar);
+        }
+
+        let (u1, it) = Unit::parse(it)?;
+        let it = Unit::parse_ch(')', it)?;
+
+        Ok((Unit::pair(u0, u1), it))
+    }
+
+    fn parse_list(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let mut it = Unit::parse_ch('[', it)?;
+        let mut lst = Vec::new();
+
+        loop {
+            if let Ok(it) = Unit::parse_ch(']', it.clone()) {
+                return Ok((Unit::list(&lst), it));
+            }
+
+            let (_, tmp) = Unit::parse_ws(it)?;
+            let (u, tmp) = Unit::parse(tmp)?;
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+
+            lst.push(u);            
+            it = tmp;
+        }
+    }
+
+    fn parse_map(it: Iter<'a, char>) -> Result<(Unit, Iter<'a, char>), UnitParseErr> {
+        let mut it = Unit::parse_ch('{', it)?;
+        let mut map = Vec::new();
+
+        loop {
+            if let Ok(it) = Unit::parse_ch('}', it.clone()) {
+                return Ok((Unit::map(&map), it))
+            }
+
+            let (_, tmp) = Unit::parse_ws(it)?;
+            let (u0, tmp) = Unit::parse(tmp)?;
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+
+            let tmp = Unit::parse_ch(':', tmp)?;
+
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+            let (u1, tmp) = Unit::parse(tmp)?;
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+
+            map.push((u0, u1));
+            it = tmp;
+        }
+    }
+}
 
 impl Unit {
     fn new(t: UnitType) -> Unit {
