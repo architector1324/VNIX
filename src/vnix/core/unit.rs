@@ -25,10 +25,10 @@ use super::kern::{Addr, KernErr, Kern};
 
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Int(Rc<BigInt>);
+pub struct Int(pub Rc<BigInt>);
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Dec(Rc<BigRational>);
+pub struct Dec(pub Rc<BigRational>);
 
 pub type Path = Vec<String>;
 
@@ -100,9 +100,12 @@ pub trait UnitNew {
     fn int(v: i32) -> Unit;
     fn uint(v: u32) -> Unit;
     fn int_big(v: BigInt) -> Unit;
+    fn int_share(v: Rc<BigInt>) -> Unit;
     fn dec(v: f32) -> Unit;
     fn dec_big(v: BigRational) -> Unit;
+    fn dec_share(v: Rc<BigRational>) -> Unit;
     fn str(s: &str) -> Unit;
+    fn str_share(s: Rc<String>) -> Unit;
     fn path(path: &[&str]) -> Unit;
     fn stream_loc(u: Unit, serv: &str) -> Unit;
     fn stream(u: Unit, serv: &str, addr: Addr) -> Unit;
@@ -207,7 +210,11 @@ impl UnitNew for Unit {
     }
 
     fn int_big(v: BigInt) -> Unit {
-        Unit::new(UnitType::Int(Int(Rc::new(v))))
+        Unit::int_share(Rc::new(v))
+    }
+
+    fn int_share(v: Rc<BigInt>) -> Unit {
+        Unit::new(UnitType::Int(Int(v)))
     }
 
     fn dec(v: f32) -> Unit {
@@ -216,11 +223,19 @@ impl UnitNew for Unit {
     }
 
     fn dec_big(v: BigRational) -> Unit {
-        Unit::new(UnitType::Dec(Dec(Rc::new(v))))
+        Unit::dec_share(Rc::new(v))
+    }
+
+    fn dec_share(v: Rc<BigRational>) -> Unit {
+        Unit::new(UnitType::Dec(Dec(v)))
     }
 
     fn str(s: &str) -> Unit {
         Unit::new(UnitType::Str(Rc::new(s.into())))
+    }
+
+    fn str_share(s: Rc<String>) -> Unit {
+        Unit::new(UnitType::Str(s))
     }
 
     fn path(path: &[&str]) -> Unit {
