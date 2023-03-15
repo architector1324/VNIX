@@ -44,19 +44,18 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
-    let s = "(load @task.test)@io.store";
+    // let s = "(load @task.test)@io.store";
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
-    // let s = "{sum:[1 2 3] ath:test task:[sys.usr math.calc test.dump]}";
+    let s = "{sum:[1 2 3] ath:test task:[sys.usr math.calc test.dump]}";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-
-    let run = TaskRun(test_msg, "sys.task".into());
 
     // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    
+    let run = TaskRun(test_msg, "sys.task".into());
 
-    // let task = TaskLoop::Queue(vec![(test_msg, "io.term".into()), (msg, "sys.task".into())]);
     kern.reg_task(&_super.name, "init.load", run)?;
 
     kern.run()

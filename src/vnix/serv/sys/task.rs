@@ -30,7 +30,7 @@ fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
                     let prev = _msg.clone();
 
                     let run = TaskRun(_msg, Rc::unwrap_or_clone(serv));
-                    let id = kern.lock().reg_task(&_ath, "sys,task", run)?;
+                    let id = kern.lock().reg_task(&_ath, "sys.task", run)?;
 
                     loop {
                         if let Some(res) = kern.lock().get_task_result(id) {
@@ -72,7 +72,7 @@ fn queue(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
 fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<(), KernErr>> {
     thread!({
         if let Some((lst, _)) = as_map_find_async!(msg, "task.sim", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_list()?, ath))) {
-            for p in Rc::unwrap_or_clone(lst) {
+            for p in lst.iter() {
                 if let Some((_msg, serv, _)) = p.clone().as_stream() {
                     let run = TaskRun(_msg, serv);
                     kern.lock().reg_task(&ath, "sys.task", run)?;

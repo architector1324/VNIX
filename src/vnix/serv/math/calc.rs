@@ -108,6 +108,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
                             ath = _ath;
                             vals.push(v);
                         }
+                        yield;
                     }
 
                     return Ok(calc_multi_op_int(&op, vals).map(|v| (v, ath)))
@@ -135,6 +136,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
                             ath = _ath;
                             vals.push(v);
                         }
+                        yield;
                     }
 
                     return Ok(calc_multi_op_int(&op, vals).map(|v| (v, ath)))
