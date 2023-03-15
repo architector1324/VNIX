@@ -12,7 +12,7 @@ use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
 use self::core::unit::{Unit, UnitParse};
 
-use self::serv::{io, /*sys, math, gfx, time,*/ test};
+use self::serv::{io, /*sys, math, gfx, */time, test};
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
@@ -20,7 +20,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // // ("io.term", Box::new(io::term::Term::default()) as Box<dyn ServHlr>),
         // (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
         // // // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
-        // (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
+        (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         // (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         // (math::calc::SERV_PATH, math::calc::SERV_HELP, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
         // (sys::task::SERV_PATH, sys::task::SERV_HELP, Box::new(sys::task::task_hlr) as Box<ServHlr>),
@@ -48,11 +48,11 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
     // let s = "{sum:[1 2 3] ath:test task:[sys.usr math.calc test.dump]}";
-    let s = "a";
+    let s = "{msg:2}@test.echo";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // let run = TaskRun(test_msg, "sys.task".into());
-    let run = TaskRun(test_msg, "test.dump".into());
+    let run = TaskRun(test_msg, "time.chrono".into());
 
     // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
