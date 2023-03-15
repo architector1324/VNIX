@@ -4,8 +4,8 @@ use alloc::string::String;
 use compression::prelude::{GZipEncoder, GZipDecoder, Action, EncodeExt, DecodeExt};
 use base64ct::{Base64, Encoding};
 
-use super::core::{kern::KernErr, unit::Unit};
-
+use super::core::kern::KernErr;
+use super::core::unit::{Unit, UnitAs, UnitModify, UnitNew};
 
 pub fn compress(s: &str) -> Result<String, KernErr> {
     let mut enc = GZipEncoder::new();
@@ -56,22 +56,22 @@ pub struct RamStore {
 impl Default for RamStore {
     fn default() -> Self {
         RamStore {
-            data: Unit::Map(Vec::new())
+            data: Unit::map(&[])
         }
     }
 }
 
 impl RamStore {
     pub fn load(&self, key: Unit) -> Option<Unit> {
-        if let Unit::Ref(path) = key {
-            return Unit::find_ref(path.into_iter(), &self.data);
+        if let Some(path) = key.as_path() {
+            return self.data.find(path.iter().map(|s| s.as_str()));
         }
         None
     }
 
     pub fn save(&mut self, key: Unit, val: Unit) {
-        if let Unit::Ref(path) = key {
-            if let Some(data) = Unit::merge_ref(path.into_iter(), val, self.data.clone()) {
+        if let Some(path) = key.as_path() {
+            if let Some(data) = self.data.clone().merge(path.iter().map(|s| s.as_str()), val) {
                 self.data = data;
             }
         }

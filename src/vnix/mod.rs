@@ -2,15 +2,11 @@ pub mod core;
 pub mod serv;
 pub mod utils;
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use num::BigInt;
-
 use crate::driver::{CLIErr, DrvErr, MemSizeUnits};
-use crate::vnix::core::unit2::UnitType;
+use crate::vnix::core::unit::UnitType;
 
 use self::core::task::TaskRun;
-use self::core::unit2::{Unit, UnitNew, UnitAs, UnitAsBytes, UnitParse, UnitModify};
+use self::core::unit::{Unit, UnitNew, UnitAs, UnitAsBytes, UnitParse, UnitModify};
 use self::core::user::Usr;
 use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
@@ -68,7 +64,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     writeln!(kern.drv.cli, "MEM: {mem} bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     let s = "{a:- b:(123 -) c:{d:e}}";
-    let (u0, _) = Unit::parse(s.chars().collect::<Vec<char>>().iter()).unwrap();
+    let (u0, _) = Unit::parse(s.chars()).unwrap();
 
     let u = u0.merge(["c", "d"].into_iter(), Unit::int(456)).unwrap();
 

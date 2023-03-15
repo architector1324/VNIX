@@ -1,25 +1,78 @@
-use core::pin::Pin;
-use core::str::Chars;
-use core::fmt::{Display, Formatter};
-use core::ops::{Generator, GeneratorState};
-
-use spin::Mutex;
-
-use alloc::rc::Rc;
 use alloc::{format, vec};
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
-use alloc::string::{String, ToString};
+use alloc::string::String;
+
+use core::pin::Pin;
+use core::slice::Iter;
+use core::fmt::Display;
+use core::ops::{Generator, GeneratorState};
+
+use num::cast::ToPrimitive;
+use num::bigint::{BigInt, Sign};
+use num::rational::BigRational;
+use spin::Mutex;
+
+use crate::vnix::core::task::TaskRun;
 
 use crate::driver::MemSizeUnits;
 use crate::{thread, thread_await};
 
-use super::kern::{Addr, Kern, KernErr};
-use super::task::{ThreadAsync, TaskRun};
+use super::kern::{Addr, KernErr, Kern};
+use super::task::ThreadAsync;
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct Int(Rc<BigInt>);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Dec(Rc<BigRational>);
+
+pub type Path = Vec<String>;
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum UnitType {
+    None,
+    Bool(bool),
+    Byte(u8),
+    Int(Int),
+    Dec(Dec),
+    Str(Rc<String>),
+    Ref(Rc<Path>),
+    Stream(Unit, String, Addr),
+    Pair(Unit, Unit),
+    List(Rc<Vec<Unit>>),
+    Map(Rc<Vec<(Unit, Unit)>>)
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Unit(Rc<UnitType>);
+
+#[derive(Debug, Clone)]
+pub enum UnitBin {
+    None = 0,
+    Bool,
+    Byte,
+    Int,
+    IntNat,
+    IntBig,
+    Dec,
+    DecBig,
+    Str,
+    Ref,
+    Stream,
+    AddrLoc,
+    AddrRemote,
+    Pair,
+    List,
+    Map,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum UnitParseErr {
+    NotUnit,
+    UnexpectedEnd,
     NotNone,
     NotBool,
     NotByte,
@@ -31,298 +84,1145 @@ pub enum UnitParseErr {
     NotPair,
     NotList,
     NotMap,
-    NotUnit,
-    NotClosedBrackets,
-    NotClosedQuotes,
-    MissedSeparator,
-    MissedWhitespace,
-    UnexpectedEnd,
     UnexpectedChar,
-    MissedDot,
-    MissedPartAfterDot,
-    RefNotString,
     RefInvalidPath,
+    DevideByZero,
+    InvalidSign,
+    InvalidAddr,
     StreamInvalidServ,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Unit {
-    None,
-    Bool(bool),
-    Byte(u8),
-    Int(i32),
-    Dec(f32),
-    Str(String),
-    Ref(Vec<String>),
-    Stream(Box<Unit>, (String, Addr)),
-    Pair(Box<Unit>, Box<Unit>),
-    Lst(Vec<Unit>),
-    Map(Vec<(Unit, Unit)>)
+pub trait UnitNew {
+    fn none() -> Unit;
+    fn bool(v: bool) -> Unit;
+    fn byte(v: u8) -> Unit;
+    fn int(v: i32) -> Unit;
+    fn uint(v: u32) -> Unit;
+    fn int_big(v: BigInt) -> Unit;
+    fn dec(v: f32) -> Unit;
+    fn dec_big(v: BigRational) -> Unit;
+    fn str(s: &str) -> Unit;
+    fn path(path: &[&str]) -> Unit;
+    fn stream_loc(u: Unit, serv: &str) -> Unit;
+    fn stream(u: Unit, serv: &str, addr: Addr) -> Unit;
+    fn pair(u0: Unit, u1: Unit) -> Unit;
+    fn list(lst: &[Unit]) -> Unit;
+    fn map(map: &[(Unit, Unit)]) -> Unit;
 }
 
-#[derive(Debug, Clone)]
-pub enum UnitBin {
-    None = 0,
-    Bool,
-    Byte,
-    Int,
-    Dec,
-    Str,
-    Ref,
-    Stream,
-    AddrLoc,
-    AddrRemote,
-    Pair,
-    Lst,
-    Map,
-
-    // optimization
-    Zero,
-    Int8,
-    Int16,
-    Size8,
-    Size16,
-    Size32
+pub trait UnitAs {
+    fn as_none(self) -> Option<()>;
+    fn as_bool(self) -> Option<bool>;
+    fn as_byte(self) -> Option<u8>;
+    fn as_int(self) -> Option<i32>;
+    fn as_uint(self) -> Option<u32>;
+    fn as_int_big(self) -> Option<Rc<BigInt>>;
+    fn as_dec(self) -> Option<f32>;
+    fn as_dec_big(self) -> Option<Rc<BigRational>>;
+    fn as_str(self) -> Option<Rc<String>>;
+    fn as_path(self) -> Option<Rc<Path>>;
+    fn as_stream(self) -> Option<(Unit, String, Addr)>;
+    fn as_pair(self) -> Option<(Unit, Unit)>;
+    fn as_list(self) -> Option<Rc<Vec<Unit>>>;
+    fn as_map(self) -> Option<Rc<Vec<(Unit, Unit)>>>;
+    fn as_map_find(self, sch: &str) -> Option<Unit>;
 }
 
-pub trait Schema: Clone {
-    type Out;
+pub trait UnitAsBytes {
+    fn as_bytes(self) -> Vec<u8>;
+}
 
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out>;
+pub trait UnitParse<'a, T: 'a, I> {
+    fn parse(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_none(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_bool(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_byte(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_int(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_dec(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_str(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_ref(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_stream(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_pair(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_list(it: I) -> Result<(Unit, I), UnitParseErr>;
+    fn parse_map(it: I) -> Result<(Unit, I), UnitParseErr>;
 
-    fn find_deep(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        match u {
-            Unit::Ref(path) => {
-                if let Some(u) = Unit::find_ref(path.into_iter().cloned(), glob) {
-                    return self.find_deep(glob, &u);
-                }
-            },
-            _ => return self.find(glob, u)
+    fn parse_ch(_expect: char, _it: I) -> Result<I, UnitParseErr> {
+        unimplemented!()
+    }
+
+    fn parse_ws(_it: I) -> Result<(usize, I), UnitParseErr> {
+        unimplemented!()
+    }
+}
+
+pub type UnitReadAsync<'a> = ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, KernErr>>;
+
+pub trait UnitReadAsyncI {
+    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+}
+
+pub trait UnitModify {
+    fn find<'a, I>(&self, path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
+    fn replace<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
+
+    fn merge_with(self, what: Unit) -> Unit;
+    fn merge<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
+}
+
+impl UnitNew for Unit {
+    fn none() -> Unit {
+        Unit::new(UnitType::None)
+    }
+
+    fn bool(v: bool) -> Unit {
+        Unit::new(UnitType::Bool(v))
+    }
+
+    fn byte(v: u8) -> Unit {
+        Unit::new(UnitType::Byte(v))
+    }
+
+    fn int(v: i32) -> Unit {
+        Unit::int_big(BigInt::from(v))
+    }
+
+    fn uint(v: u32) -> Unit {
+        Unit::int_big(BigInt::from(v))
+    }
+
+    fn int_big(v: BigInt) -> Unit {
+        Unit::new(UnitType::Int(Int(Rc::new(v))))
+    }
+
+    fn dec(v: f32) -> Unit {
+        let v = BigRational::from_float(v).unwrap_or_default();
+        Unit::dec_big(v)
+    }
+
+    fn dec_big(v: BigRational) -> Unit {
+        Unit::new(UnitType::Dec(Dec(Rc::new(v))))
+    }
+
+    fn str(s: &str) -> Unit {
+        Unit::new(UnitType::Str(Rc::new(s.into())))
+    }
+
+    fn path(path: &[&str]) -> Unit {
+        Unit::new(UnitType::Ref(Rc::new(path.into_iter().cloned().map(|s| format!("{s}")).collect())))
+    }
+
+    fn stream_loc(u: Unit, serv: &str) -> Unit {
+        Unit::new(UnitType::Stream(u, serv.into(), Addr::Local))
+    }
+
+    fn stream(u: Unit, serv: &str, addr: Addr) -> Unit {
+        Unit::new(UnitType::Stream(u, serv.into(), addr))
+    }
+
+    fn pair(u0: Unit, u1: Unit) -> Unit {
+        Unit::new(UnitType::Pair(u0, u1))
+    }
+
+    fn list(lst: &[Unit]) -> Unit {
+        Unit::new(UnitType::List(Rc::new(lst.to_vec())))
+    }
+
+    fn map(map: &[(Unit, Unit)]) -> Unit {
+        Unit::new(UnitType::Map(Rc::new(map.to_vec())))
+    }
+}
+
+impl UnitAs for Unit {
+    fn as_none(self) -> Option<()> {
+        if let UnitType::None = self.0.as_ref() {
+            return Some(())
         }
         None
     }
 
-    fn find_loc(&self, u: &Unit) -> Option<Self::Out> {
-        self.find_deep(u, u)
+    fn as_bool(self) -> Option<bool> {
+        if let UnitType::Bool(v) = self.0.as_ref() {
+            return Some(*v)
+        }
+        None
+    }
+
+    fn as_byte(self) -> Option<u8> {
+        if let UnitType::Byte(v) = self.0.as_ref() {
+            return Some(*v)
+        }
+        None
+    }
+
+    fn as_int(self) -> Option<i32> {
+        if let UnitType::Int(v) = self.0.as_ref() {
+            if let Some(v) = v.to_small() {
+                return Some(v)
+            }
+        }
+        None
+    }
+
+    fn as_uint(self) -> Option<u32> {
+        if let UnitType::Int(v) = self.0.as_ref() {
+            if let Some(v) = v.to_nat() {
+                return Some(v)
+            }
+        }
+        None
+    }
+
+    fn as_int_big(self) -> Option<Rc<BigInt>> {
+        if let UnitType::Int(v) = self.0.as_ref() {
+            return Some(v.0.clone())
+        }
+        None
+    }
+
+    fn as_dec(self) -> Option<f32> {
+        if let UnitType::Dec(v) = self.0.as_ref() {
+            if let Some(v) = v.to_small() {
+                return Some(v)
+            }
+        }
+        None
+    }
+
+    fn as_dec_big(self) -> Option<Rc<BigRational>> {
+        if let UnitType::Dec(v) = self.0.as_ref() {
+            return Some(v.0.clone())
+        }
+        None
+    }
+
+    fn as_str(self) -> Option<Rc<String>> {
+        if let UnitType::Str(s) = self.0.as_ref() {
+            return Some(s.clone())
+        }
+        None
+    }
+
+    fn as_path(self) -> Option<Rc<Path>> {
+        if let UnitType::Ref(path) = self.0.as_ref() {
+            return Some(path.clone())
+        }
+        None
+    }
+
+    fn as_stream(self) -> Option<(Unit, String, Addr)> {
+        if let UnitType::Stream(u, serv, addr) = self.0.as_ref() {
+            return Some((u.clone(), serv.clone(), addr.clone()))
+        }
+        None
+    }
+
+    fn as_pair(self) -> Option<(Unit, Unit)> {
+        if let UnitType::Pair(u0, u1) = self.0.as_ref() {
+            return Some((u0.clone(), u1.clone()))
+        }
+        None
+    }
+
+    fn as_list(self) -> Option<Rc<Vec<Unit>>> {
+        if let UnitType::List(lst) = self.0.as_ref() {
+            return Some(lst.clone())
+        }
+        None
+    }
+
+    fn as_map(self) -> Option<Rc<Vec<(Unit, Unit)>>> {
+        if let UnitType::Map(map) = self.0.as_ref() {
+            return Some(map.clone())
+        }
+        None
+    }
+
+    fn as_map_find(self, sch: &str) -> Option<Unit> {
+        if let UnitType::Map(map) = self.0.as_ref() {
+            return map.iter()
+                .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
+                .find_map(|(s, u)| {
+                    if Rc::unwrap_or_clone(s) == sch {
+                        return Some(u)
+                    }
+                    None
+                })
+        }
+        None
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SchemaNone;
+impl UnitReadAsyncI for Unit {
+    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
+        thread!({
+            match self.0.as_ref() {
+                UnitType::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
+                UnitType::Stream(msg, serv, _addr) => {
+                    let run = TaskRun(msg.clone(), serv.clone());
+                    let id = kern.lock().reg_task(&ath, "unit.read", run)?;
 
-#[derive(Debug, Clone)]
-pub struct SchemaBool;
+                    let res = loop {
+                        if let Some(res) = kern.lock().get_task_result(id) {
+                            break Ok(res?.and_then(|msg| Some((msg.msg.as_map_find("msg")?, Rc::new(msg.ath)))).map(|(u, ath)| (u, ath)));
+                        }
+                        yield;
+                    };
+                    res
+                },
+                _ => Ok(Some((self.clone(), ath)))
+            }
+        })
+    }
 
-#[derive(Debug, Clone)]
-pub struct SchemaByte;
-
-#[derive(Debug, Clone)]
-pub struct SchemaInt;
-
-#[derive(Debug, Clone)]
-pub struct SchemaDec;
-
-#[derive(Debug, Clone)]
-pub struct SchemaStr;
-
-#[derive(Debug, Clone)]
-pub struct SchemaRef;
-
-#[derive(Debug, Clone)]
-pub struct SchemaStream;
-
-#[derive(Debug, Clone)]
-pub struct  SchemaUnit;
-
-#[derive(Debug, Clone)]
-pub struct SchemaPair<A, B>(pub A, pub B) where A: Schema, B: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaSeq<A>(pub A) where A: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaMapSeq<A, B>(pub A, pub B) where A: Schema, B: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaMapEntry<A>(pub Unit, pub A) where A: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaMap<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaMapFirstRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaMapSecondRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
-
-#[derive(Debug, Clone)]
-pub struct SchemaMapRequire<A, B>(pub SchemaMapEntry<A>, pub B) where A: Schema, B: Schema;
-
-#[derive(Debug, Clone)]
-pub enum Or<A, B> {
-    First(A),
-    Second(B)
-}
-
-#[derive(Debug, Clone)]
-pub struct SchemaOr<A, B>(pub A, pub B) where A: Schema, B: Schema;
-
-pub trait FromUnit: Sized {
-    fn from_unit_loc(u: &Unit) -> Option<Self>;
-
-    fn from_unit(_glob: &Unit, u: &Unit) -> Option<Self> {
-        Self::from_unit_loc(u)
+    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
+        thread!({
+            if let Some(msg) = self.as_map_find(&sch) {
+                return thread_await!(msg.read_async(ath, orig, kern))
+            }
+            Ok(None)
+        })
     }
 }
 
-pub struct DisplayShort<'a>(pub &'a Unit, pub usize);
-
-#[macro_export]
-macro_rules! read_async {
-    ($msg:expr, $ath:expr, $orig:expr, $kern:expr) => {
-        thread_await!($msg.clone().read_async($ath.clone(), $orig.clone(), $kern))
-    };
+fn char_no_quoted(c: char) -> bool {
+    c.is_alphanumeric() || c == '.' || c == '#' || c == '_' || c == '.'
 }
-
-#[macro_export]
-macro_rules! as_map_find_async {
-    ($msg:expr, $sch:expr, $ath:expr, $orig:expr, $kern:expr) => {
-        thread_await!($msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern))
-    };
-}
-
-impl Eq for Unit {}
-
 
 impl Display for Unit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Unit::None => write!(f, "-"),
-            Unit::Bool(b) => {
-                if *b {
-                    write!(f, "t")
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.0.as_ref() {
+            UnitType::None => write!(f, "-"),
+            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitType::Int(v) => write!(f, "{}", v.0),
+            UnitType::Dec(v) =>
+                match v.to_small() {
+                    Some(v) => write!(f, "{v}"),
+                    None => write!(f, "{}", v.0) // FIXME: use `<i>.<i>` format
+                }
+            UnitType::Str(s) => {
+                if s.as_str().chars().all(char_no_quoted) {
+                    write!(f, "{s}")
                 } else {
-                    write!(f, "f")
+                    write!(f, "`{s}`")
                 }
             },
-            Unit::Byte(b) => write!(f, "{:#02x}", b),
-            Unit::Int(i) => write!(f, "{}", i),
-            Unit::Dec(d) => write!(f, "{}", d),
-            Unit::Str(s) => {
-                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
-                    write!(f, "{}", s)
-                } else {
-                    write!(f, "`{}`", s.replace("\\r", "\r").replace("\\n", "\n"))
-                }
-            },
-            Unit::Ref(path) => write!(f, "@{}", path.join(".")),
-            Unit::Stream(msg, (serv, addr)) => write!(f, "{msg}@{serv}:{addr}"),
-            Unit::Pair(u0, u1) => write!(f, "({} {})", u0, u1),
-            Unit::Lst(lst) => {
-                write!(f, "[")?;
-
-                for (i, u) in lst.iter().enumerate() {
-                    if i == lst.len() - 1 {
-                        write!(f, "{}", u)?;
-                    } else {
-                        write!(f, "{} ", u)?;
-                    }
-                }
-
-                write!(f, "]")
-            },
-            Unit::Map(map) => {
-                write!(f, "{{")?;
-
-                for (i, (u0, u1)) in map.iter().enumerate() {
-                    if i == map.len() - 1 {
-                        write!(f, "{}:{}", u0, u1)?;
-                    } else {
-                        write!(f, "{}:{} ", u0, u1)?;
-                    }
-                }
-
-                write!(f, "}}")
-            }
+            UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
+            UnitType::Stream(msg, serv, addr) => write!(f, "{msg}@{serv}:{addr}"),
+            UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
+            UnitType::List(lst) => write!(f, "[{}]", lst.iter().map(|u| format!("{u}")).collect::<Vec<_>>().join(" ")),
+            UnitType::Map(map) => write!(f, "{{{}}}", map.iter().map(|(u0, u1)| format!("{u0}:{u1}")).collect::<Vec<_>>().join(" ")),
         }
     }
 }
 
-impl<'a> Display for DisplayShort<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self.0 {
-            Unit::None => write!(f, "-"),
-            Unit::Bool(b) => {
-                if *b {
-                    write!(f, "t")
-                } else {
-                    write!(f, "f")
+impl UnitAsBytes for Unit {
+    fn as_bytes(self) -> Vec<u8> {
+        match self.0.as_ref() {
+            UnitType::None => vec![UnitBin::None as u8],
+            UnitType::Bool(v) => vec![UnitBin::Bool as u8, if *v {1} else {0}],
+            UnitType::Byte(v) => vec![UnitBin::Byte as u8, *v],
+            UnitType::Int(v) => {
+                if let Some(v) = v.to_small() {
+                    return [UnitBin::Int as u8].into_iter().chain(v.to_le_bytes()).collect();
                 }
+                
+                if let Some(v) = v.to_nat() {
+                    return [UnitBin::IntNat as u8].into_iter().chain(v.to_le_bytes()).collect();
+                }
+
+                let (s, b) = v.0.to_bytes_le();
+                let len = (b.len() as u32).to_le_bytes();
+                [UnitBin::IntBig as u8].into_iter()
+                    .chain([if let Sign::Minus = s {1} else {0}])
+                    .chain(len)
+                    .chain(b)
+                    .collect()
             },
-            Unit::Byte(b) => write!(f, "{:#02x}", b),
-            Unit::Int(i) => write!(f, "{}", i),
-            Unit::Dec(d) => write!(f, "{}", d),
-            Unit::Str(s) => {
-                let mut s = s.clone();
-                s.truncate(self.1);
+            UnitType::Dec(v) =>
+                match v.to_small() {
+                    Some(v) => [UnitBin::Dec as u8].into_iter().chain(v.to_le_bytes()).collect(),
+                    None => {
+                        let (s, b0) = v.0.numer().to_bytes_le();
+                        let len0 = (b0.len() as u32).to_le_bytes();
 
-                if s.len() >= self.1 {
-                    s = format!("{}..", s);
-                }
+                        let (_, b1) = v.0.denom().to_bytes_le();
+                        let len1 = (b1.len() as u32).to_le_bytes();
 
-                if s.as_str().chars().all(|c| c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
-                    write!(f, "{}", s)
-                } else {
-                    write!(f, "`{}`", s)
-                }
-            },
-            Unit::Ref(path) => write!(f, "@{}", path.join(".")),
-            Unit::Stream(msg, (serv, addr)) => write!(f, "{}@{serv}:{addr}", DisplayShort(msg, self.1)),
-            Unit::Pair(u0, u1) => write!(f, "({} {})", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1)),
-            Unit::Lst(lst) => {
-                write!(f, "[")?;
-
-                for (i, u) in lst.iter().take(self.1).enumerate() {
-                    if i == lst.len().min(self.1) - 1 && lst.len() > self.1 {
-                        write!(f, "{}..", DisplayShort(&u, self.1))?;
-                    } else if i == lst.len().min(self.1) - 1 {
-                        write!(f, "{}", DisplayShort(&u, self.1))?;
-                    } else {
-                        write!(f, "{} ", DisplayShort(&u, self.1))?;
+                        [UnitBin::DecBig as u8].into_iter()
+                            .chain([if let Sign::Minus = s {1} else {0}])
+                            .chain(len0)
+                            .chain(b0)
+                            .chain(len1)
+                            .chain(b1)
+                            .collect()
                     }
-                }
+                },
+            UnitType::Str(s) => [UnitBin::Str as u8].into_iter()
+                .chain((s.len() as u32).to_le_bytes())
+                .chain(s.as_bytes().into_iter().cloned())
+                .collect(),
+            UnitType::Ref(path) => {
+                let s = path.join(".");
 
-                write!(f, "]")
+                [UnitBin::Ref as u8].into_iter()
+                .chain((s.len() as u32).to_le_bytes())
+                .chain(s.as_bytes().into_iter().cloned())
+                .collect()
             },
-            Unit::Map(map) => {
-                write!(f, "{{")?;
+            UnitType::Stream(msg, serv, addr) => [UnitBin::Stream as u8].into_iter()
+                .chain(msg.clone().as_bytes())
+                .chain((serv.len() as u32).to_le_bytes())
+                .chain(serv.as_bytes().into_iter().cloned())
+                .chain(match addr {
+                    Addr::Local => vec![UnitBin::AddrLoc as u8],
+                    Addr::Remote(addr) => [UnitBin::AddrRemote as u8].into_iter().chain(addr.into_iter().flat_map(|e| e.to_le_bytes())).collect::<Vec<u8>>()
+                }).collect(),
+            UnitType::Pair(u0, u1) => [UnitBin::Pair as u8].into_iter()
+                .chain(u0.clone().as_bytes())
+                .chain(u1.clone().as_bytes())
+                .collect(),
+            UnitType::List(lst) => [UnitBin::List as u8].into_iter()
+                .chain((lst.len() as u32).to_le_bytes())
+                .chain(lst.iter().flat_map(|u| u.clone().as_bytes()))
+                .collect(),
+            UnitType::Map(map) => [UnitBin::Map as u8].into_iter()
+                .chain((map.len() as u32).to_le_bytes())
+                .chain(
+                    map.iter().flat_map(|(u0, u1)| u0.clone().as_bytes().into_iter().chain(u1.clone().as_bytes()).collect::<Vec<u8>>())
+                )
+                .collect()
+        }
+    }
+}
 
-                for (i, (u0, u1)) in map.iter().take(self.1).enumerate() {
-                    if i == map.len().min(self.1) - 1 && map.len() > self.1 {
-                        write!(f, "{}:{}..", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1))?;
-                    } else if  i == map.len().min(self.1) - 1 {
-                        write!(f, "{}:{}", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1))?;
-                    } else {
-                        write!(f, "{}:{} ", DisplayShort(&u0, self.1), DisplayShort(&u1, self.1))?;
-                    }
-                }
+impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
+    fn parse(it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        match *it.clone().next().ok_or(UnitParseErr::UnexpectedEnd)? {
+            _b if _b == UnitBin::None as u8 => Self::parse_none(it),
+            _b if _b == UnitBin::Bool as u8 => Self::parse_bool(it),
+            _b if _b == UnitBin::Byte as u8 => Self::parse_byte(it),
+            _b if _b == UnitBin::Int as u8 => Self::parse_int(it),
+            _b if _b == UnitBin::IntNat as u8 => Self::parse_int(it),
+            _b if _b == UnitBin::IntBig as u8 => Self::parse_int(it),
+            _b if _b == UnitBin::Dec as u8 => Self::parse_dec(it),
+            _b if _b == UnitBin::DecBig as u8 => Self::parse_dec(it),
+            _b if _b == UnitBin::Str as u8 => Self::parse_str(it),
+            _b if _b == UnitBin::Ref as u8 => Self::parse_ref(it),
+            _b if _b == UnitBin::Pair as u8 => Self::parse_pair(it),
+            _b if _b == UnitBin::List as u8 => Self::parse_list(it),
+            _b if _b == UnitBin::Map as u8 => Self::parse_map(it),
+            _b if _b == UnitBin::Stream as u8 => Self::parse_stream(it),
+            _ => Err(UnitParseErr::NotUnit)
+        }
+    }
 
-                write!(f, "}}")
+    fn parse_none(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::None as u8 {
+            return Err(UnitParseErr::NotNone)
+        }
+        Ok((Unit::none(), it))
+    }
+
+    fn parse_bool(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Bool as u8 {
+            return Err(UnitParseErr::NotBool)
+        }
+
+        match *it.next().ok_or(UnitParseErr::UnexpectedEnd)? {
+            0 => Ok((Unit::bool(false), it)),
+            1 => Ok((Unit::bool(true), it)),
+            _ => Err(UnitParseErr::NotBool)
+        }
+    }
+
+    fn parse_byte(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Byte as u8 {
+            return Err(UnitParseErr::NotByte)
+        }
+
+        let v = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        Ok((Unit::byte(v), it))
+    }
+
+    fn parse_int(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        match *it.next().ok_or(UnitParseErr::UnexpectedEnd)? {
+            _b if _b == UnitBin::Int as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+                ];
+                let v = <i32>::from_le_bytes(bytes);
+                Ok((Unit::int(v), it))
+            },
+            _b if _b == UnitBin::IntNat as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+                ];
+                let v = <u32>::from_le_bytes(bytes);
+                Ok((Unit::uint(v), it))
+            },
+            _b if _b == UnitBin::IntBig as u8 => {
+                let sign = match *it.next().ok_or(UnitParseErr::UnexpectedEnd)? {
+                    0 => Sign::Plus,
+                    1 => Sign::Minus,
+                    _ => return Err(UnitParseErr::InvalidSign)
+                };
+
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+                ];
+                let len = <u32>::from_le_bytes(bytes);
+
+                let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
+                let big = BigInt::from_bytes_le(sign, &bytes);
+
+                Ok((Unit::int_big(big), it))
+
+            },
+            _ => Err(UnitParseErr::NotInt)
+        }
+    }
+
+    fn parse_dec(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        match *it.next().ok_or(UnitParseErr::UnexpectedEnd)? {
+            _b if _b == UnitBin::Dec as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+                ];
+                let v = <f32>::from_le_bytes(bytes);
+                Ok((Unit::dec(v), it))
+            },
+            _b if _b == UnitBin::DecBig as u8 => {
+                let sign = match *it.next().ok_or(UnitParseErr::UnexpectedEnd)? {
+                    0 => Sign::Plus,
+                    1 => Sign::Minus,
+                    _ => return Err(UnitParseErr::InvalidSign)
+                };
+
+                // numer
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+                ];
+                let len = <u32>::from_le_bytes(bytes);
+
+                let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
+                let numer = BigInt::from_bytes_le(sign, &bytes);
+
+                // denom
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+                ];
+                let len = <u32>::from_le_bytes(bytes);
+
+                let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
+                let denom = BigInt::from_bytes_le(sign, &bytes);
+
+                let big = BigRational::new(numer, denom);
+                Ok((Unit::dec_big(big), it))
+            },
+            _ => Err(UnitParseErr::NotDec)
+        }
+    }
+
+    fn parse_str(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Str as u8 {
+            return Err(UnitParseErr::NotStr)
+        }
+
+        let bytes = [
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+        ];
+        let len = <u32>::from_le_bytes(bytes);
+
+        let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
+        let s = String::from_utf8(bytes).map_err(|_| UnitParseErr::NotStr)?;
+    
+        Ok((Unit::str(&s), it))
+    }
+
+    fn parse_ref(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Ref as u8 {
+            return Err(UnitParseErr::NotRef)
+        }
+
+        let bytes = [
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+        ];
+        let len = <u32>::from_le_bytes(bytes);
+
+        let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
+        let s = String::from_utf8(bytes).map_err(|_| UnitParseErr::NotStr)?;
+        
+        if !s.chars().all(char_no_quoted) {
+            return Err(UnitParseErr::RefInvalidPath);
+        }
+
+        let path = s.split(".").collect::<Vec<_>>();
+        Ok((Unit::path(&path), it))
+    }
+
+    fn parse_stream(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Stream as u8 {
+            return Err(UnitParseErr::NotStream)
+        }
+
+        // msg
+        let (msg, mut it) = Unit::parse(it)?;
+
+        // serv
+        let bytes = [
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+        ];
+        let len = <u32>::from_le_bytes(bytes);
+
+        let bytes = (0..len).map(|_| it.next().map(|v| *v)).try_collect::<Vec<_>>().ok_or(UnitParseErr::UnexpectedEnd)?;
+        let serv = String::from_utf8(bytes).map_err(|_| UnitParseErr::NotStr)?;
+
+        // addr
+        let addr = match *it.next().ok_or(UnitParseErr::UnexpectedEnd)? {
+            _b if _b == UnitBin::AddrLoc as u8 => Addr::Local,
+            _b if _b == UnitBin::AddrRemote as u8 => {
+                let addr = (0..8).map(|_| {
+                    let bytes = [
+                        *it.next()?,
+                        *it.next()?
+                    ];
+                    Some(<u16>::from_le_bytes(bytes))
+                }).try_collect::<Vec<_>>()
+                    .ok_or(UnitParseErr::UnexpectedEnd)?
+                    .try_into()
+                    .map_err(|_| UnitParseErr::UnexpectedEnd)?;
+
+                Addr::Remote(addr)
+            },
+            _ => return Err(UnitParseErr::InvalidAddr)
+        };
+
+        Ok((Unit::stream(msg, &serv, addr), it))
+    }
+
+    fn parse_pair(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Pair as u8 {
+            return Err(UnitParseErr::NotPair)
+        }
+
+        let (u0, it) = Unit::parse(it)?;
+        let (u1, it) = Unit::parse(it)?;
+
+        Ok((Unit::pair(u0, u1), it))
+    }
+
+    fn parse_list(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::List as u8 {
+            return Err(UnitParseErr::NotList);
+        }
+
+        let bytes = [
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+        ];
+        let len = <u32>::from_le_bytes(bytes);
+
+        let mut lst = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            let (u, next) = Unit::parse(it)?;
+            lst.push(u);
+            it = next;
+        }
+        Ok((Unit::list(&lst), it))
+    }
+
+    fn parse_map(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if b != UnitBin::Map as u8 {
+            return Err(UnitParseErr::NotMap);
+        }
+
+        let bytes = [
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+            *it.next().ok_or(UnitParseErr::UnexpectedEnd)?
+        ];
+        let len = <u32>::from_le_bytes(bytes);
+
+        let mut map = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            let (u0, next) = Unit::parse(it)?;
+            let (u1, next) = Unit::parse(next)?;
+            map.push((u0, u1));
+            it = next;
+        }
+        Ok((Unit::map(&map), it))
+    }
+}
+
+impl<I> UnitParse<'_, char, I> for Unit where I: Iterator<Item = char> + Clone {
+    fn parse(it: I) -> Result<(Unit, I), UnitParseErr> {
+        if let Ok((u, it)) = Self::parse_stream(it.clone()) {
+            return Ok((u, it))
+        }
+
+        Err(UnitParseErr::NotUnit)
+    }
+
+    fn parse_ch(expect: char, mut it: I) -> Result<I, UnitParseErr> {
+        let ch = it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if ch != expect {
+            return Err(UnitParseErr::UnexpectedChar);
+        }
+        Ok(it)
+    }
+
+    fn parse_ws(mut it: I) -> Result<(usize, I), UnitParseErr> {
+        let mut tmp = it.clone();
+        let cnt = (0..).map_while(|_| {
+            if tmp.next()?.is_whitespace() {
+                it = tmp.clone();
+                return Some(())
+            }
+            None
+        }).count();
+
+        Ok((cnt, it))
+    }
+
+    fn parse_none(it: I) -> Result<(Unit, I), UnitParseErr> {
+        let it = Unit::parse_ch('-', it)?;
+        Ok((Unit::none(), it))
+    }
+
+    fn parse_bool(mut it: I) -> Result<(Unit, I), UnitParseErr> {
+        let ch = it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        let v = match ch {
+            't' => true,
+            'f' => false,
+            _ => return Err(UnitParseErr::NotBool)
+        };
+
+        if let Some(ch) = it.clone().next() {
+            if !ch.is_whitespace() {
+                return Err(UnitParseErr::UnexpectedChar)
             }
         }
+        Ok((Unit::bool(v), it))
+    }
+
+    fn parse_byte(mut it: I) -> Result<(Unit, I), UnitParseErr> {
+        if let Some(s) = (0..4).map(|_| it.next()).try_collect::<String>() {
+            let v = u8::from_str_radix(s.trim_start_matches("0x"), 16).map_err(|_| UnitParseErr::NotByte)?;
+            return Ok((Unit::byte(v), it))
+        }
+        Err(UnitParseErr::UnexpectedEnd)
+    }
+
+    fn parse_int(mut it: I) -> Result<(Unit, I), UnitParseErr> {
+        let mut tmp = it.clone();
+        let s = (0..).map_while(|_| {
+            let c = tmp.next()?;
+            if c.is_numeric() || c == '-' {
+                it = tmp.clone();
+                return Some(c)
+            }
+            None
+        }).collect::<String>();
+
+        if s.is_empty() {
+            return Err(UnitParseErr::UnexpectedEnd);
+        }
+
+        let big = BigInt::parse_bytes(s.as_bytes(), 10).ok_or(UnitParseErr::NotInt)?;
+        Ok((Unit::int_big(big), it))
+    }
+
+    fn parse_dec(mut it: I) -> Result<(Unit, I), UnitParseErr> { 
+        let mut tmp = it.clone();
+        let s = (0..).map_while(|_| {
+            let c = tmp.next()?;
+            if c.is_numeric() || c == '-' || c == '.' {
+                it = tmp.clone();
+                return Some(c)
+            }
+            None
+        }).collect::<String>();
+
+        if s.is_empty() {
+            return Err(UnitParseErr::UnexpectedEnd);
+        }
+
+        // get ratio
+        let (fst, scd) = s.split_once(".").ok_or(UnitParseErr::NotDec)?;
+
+        let fst = BigInt::parse_bytes(fst.as_bytes(), 10).ok_or(UnitParseErr::NotDec)?;
+        let scd = BigInt::parse_bytes(scd.as_bytes(), 10).ok_or(UnitParseErr::NotDec)?;
+
+        let len = format!("{scd}").len(); 
+
+        let denom = BigInt::from(10).pow(len as u32);
+        let numer = fst * &denom + scd;
+
+        let big = BigRational::new(numer, denom);
+        Ok((Unit::dec_big(big), it))
+    }
+
+    fn parse_str(mut it: I) -> Result<(Unit, I), UnitParseErr> {
+        let sep = it.clone().next().ok_or(UnitParseErr::UnexpectedEnd)?;
+        if !(sep == '`' || sep == '\'' || sep == '"' || char_no_quoted(sep)) {
+            return Err(UnitParseErr::NotStr);
+        }
+
+        // #ab_c.123
+        let mut tmp = it.clone();
+        let mut tmp2 = tmp.clone();
+        let mut s = String::new();
+
+        while let Some(c) = tmp.next() {
+            if !char_no_quoted(c) {
+                break;
+            }
+            tmp2 = tmp.clone();
+            s.push(c);
+        }
+
+        if !s.is_empty() {
+            return Ok((Unit::str(&s), tmp2))
+        }
+
+        it = tmp2;
+
+        // <sep>..<sep>
+        it.next();
+        let s = (0..).map_while(|_| {
+            let c = it.next()?;
+            if c != sep {
+                return Some(c)
+            }
+            None
+        }).collect::<String>();
+
+        if !s.is_empty() {
+            return Ok((Unit::str(&s), it))
+        }
+
+        return Err(UnitParseErr::NotStr);
+    }
+
+    fn parse_ref(it: I) -> Result<(Unit, I), UnitParseErr> {
+        let it = Unit::parse_ch('@', it)?;
+        let (path, it) = Unit::parse_str(it)?;
+
+        let path = path.as_str().ok_or(UnitParseErr::RefInvalidPath)?;
+        let path = path.split(".").map(|s| s).collect::<Vec<_>>();
+
+        if !path.iter().all(|s| s.chars().all(char_no_quoted)) {
+            return Err(UnitParseErr::RefInvalidPath)
+        }
+
+        Ok((Unit::path(&path), it))
+    }
+
+    fn parse_stream(it: I) -> Result<(Unit, I), UnitParseErr> {
+        let (mut u, mut it) = if let Ok((u, it)) = Self::parse_bool(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_byte(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_dec(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_int(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_none(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_str(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_ref(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_pair(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_list(it.clone()) {
+            (u, it)
+        } else if let Ok((u, it)) = Self::parse_map(it.clone()) {
+            (u, it)
+        } else {
+            return Err(UnitParseErr::NotStream)
+        };
+
+        while let Ok(tmp) = Unit::parse_ch('@', it.clone()) {
+            let (serv, tmp) = Unit::parse_str(tmp)?;
+            let serv = serv.as_str().ok_or(UnitParseErr::StreamInvalidServ)?;
+
+            // FIXME: add `addr`
+            (u, it) = (Unit::stream_loc(u, &serv), tmp);
+        }
+        Ok((u, it))
+    }
+
+    fn parse_pair(it: I) -> Result<(Unit, I), UnitParseErr> {
+        let it = Unit::parse_ch('(', it)?;
+        let (u0, it) = Unit::parse(it)?;
+
+        let (cnt, it) = Unit::parse_ws(it)?;
+        if cnt < 1 {
+            return Err(UnitParseErr::UnexpectedChar);
+        }
+
+        let (u1, it) = Unit::parse(it)?;
+        let it = Unit::parse_ch(')', it)?;
+
+        Ok((Unit::pair(u0, u1), it))
+    }
+
+    fn parse_list(it: I) -> Result<(Unit, I), UnitParseErr> {
+        let mut it = Unit::parse_ch('[', it)?;
+        let mut lst = Vec::new();
+
+        loop {
+            if let Ok(it) = Unit::parse_ch(']', it.clone()) {
+                return Ok((Unit::list(&lst), it));
+            }
+
+            let (_, tmp) = Unit::parse_ws(it)?;
+            let (u, tmp) = Unit::parse(tmp)?;
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+
+            lst.push(u);            
+            it = tmp;
+        }
+    }
+
+    fn parse_map(it: I) -> Result<(Unit, I), UnitParseErr> {
+        let mut it = Unit::parse_ch('{', it)?;
+        let mut map = Vec::new();
+
+        loop {
+            if let Ok(it) = Unit::parse_ch('}', it.clone()) {
+                return Ok((Unit::map(&map), it))
+            }
+
+            let (_, tmp) = Unit::parse_ws(it)?;
+            let (u0, tmp) = Unit::parse(tmp)?;
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+
+            let tmp = Unit::parse_ch(':', tmp)?;
+
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+            let (u1, tmp) = Unit::parse(tmp)?;
+            let (_, tmp) = Unit::parse_ws(tmp)?;
+
+            map.push((u0, u1));
+            it = tmp;
+        }
+    }
+}
+
+impl UnitModify for Unit {
+    fn find<'a, I>(&self, mut path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
+        let step = if let Some(step) = path.next() {
+            step
+        } else {
+            return Some(self.clone());
+        };
+
+        match self.0.as_ref() {
+            UnitType::Pair(u0, u1) =>
+                match step.parse::<usize>().ok()? {
+                    0 => u0.find(path),
+                    1 => u1.find(path),
+                    _ => None
+                },
+            UnitType::List(lst) => {
+                let idx = step.parse::<usize>().ok()?;
+                lst.get(idx).map(|u| u.find(path)).flatten()
+            },
+            UnitType::Map(map) => map.iter()
+                .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
+                .find_map(|(s, u)| {
+                    if Rc::unwrap_or_clone(s) == *step {
+                        return u.find(path.clone())
+                    }
+                    None
+                }),
+            _ => None
+        }
+    }
+
+    fn replace<'a, I>(self, mut path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
+        let step = if let Some(step) = path.next() {
+            step
+        } else {
+            return Some(what);
+        };
+
+        match self.0.as_ref() {
+            UnitType::Pair(u0, u1) =>
+                match step.parse::<usize>().ok()? {
+                    0 => Some(Unit::pair(u0.clone().replace(path, what)?, u1.clone())),
+                    1 => Some(Unit::pair(u0.clone(), u1.clone().replace(path, what)?)),
+                    _ => None
+                },
+            UnitType::List(lst) => {
+                let idx = step.parse::<usize>().ok()?;
+                if idx >= lst.len() {
+                    return None;
+                }
+
+                let lst = lst.iter().cloned().enumerate().map(|(i, u)| {
+                    if i == idx {
+                        return u.clone().replace(path.clone(), what.clone())
+                    }
+                    Some(u)
+                }).collect::<Option<Vec<_>>>()?;
+                Some(Unit::list(&lst))
+            },
+            UnitType::Map(map) => {
+                if let None = map.iter().filter_map(|(u0, _)| u0.clone().as_str()).find(|s| Rc::unwrap_or_clone(s.clone()) == step) {
+                    return None
+                }
+
+                let map = map.iter().cloned().map(|(u0, u1)| {
+                    if let Some(_) = u0.clone().as_str().filter(|s| Rc::unwrap_or_clone(s.clone()) == step) {
+                        return Some((
+                            u0.clone(),
+                            u1.clone().replace(path.clone(), what.clone())?
+                        ))
+                    }
+                    Some((u0, u1))
+                }).collect::<Option<Vec<_>>>()?;
+                Some(Unit::map(&map))
+            }
+            _ => None
+        }
+    }
+
+    fn merge<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
+        let u = self.find(path.clone())?;
+        let what = u.merge_with(what);
+        self.replace(path, what)
+    }
+
+    fn merge_with(self, what: Unit) -> Unit {
+        if self == what {
+            return self;
+        }
+
+        match self.0.as_ref() {
+            UnitType::List(lst) => {
+                let lst = match what.0.as_ref() {
+                    UnitType::List(w_lst) => {
+                        let mut lst = Rc::unwrap_or_clone(lst.clone());
+                        lst.extend(Rc::unwrap_or_clone(w_lst.clone()));
+                        lst
+                    },
+                    _ => {
+                        let mut lst = Rc::unwrap_or_clone(lst.clone());
+                        lst.push(what);
+                        lst
+                    }
+                };
+                Unit::list(&lst)
+            },
+            UnitType::Map(map) => {
+                let map = match what.0.as_ref() {
+                    UnitType::Pair(u0, u1) => {
+                        let mut map = Rc::unwrap_or_clone(map.clone());
+                        map.push((u0.clone(), u1.clone()));
+                        map
+                    },
+                    UnitType::Map(w_map) => {
+                        let mut w_map = Rc::unwrap_or_clone(w_map.clone());
+                        let mut map = Rc::unwrap_or_clone(map.clone()).into_iter()
+                            .map(|(u0, u1)| {
+                                if let Some((_, u)) = w_map.drain_filter(|(u00, _)| u00.clone() == u0.clone()).next() {
+                                    return (u0.clone(), u1.merge_with(u))
+                                }
+                                (u0, u1)
+                            }).collect::<Vec<_>>();
+
+                        map.append(&mut w_map);
+                        map
+                    },
+                    _ => return what
+                };
+                Unit::map(&map)
+            },
+            _ => what
+        }
+    }
+}
+
+impl Int {
+    pub fn to_small(&self) -> Option<i32> {
+        self.0.to_i32()
+    }
+
+    pub fn to_nat(&self) -> Option<u32> {
+        self.0.to_u32()
+    }
+}
+
+impl Dec {
+    pub fn to_small(&self) -> Option<f32> {
+        self.0.to_f32()
     }
 }
 
 impl Unit {
+    fn new(t: UnitType) -> Unit {
+        Unit(Rc::new(t))
+    }
+
+    pub fn as_ptr(&self) -> *const UnitType {
+        Rc::as_ptr(&self.0)
+    }
+
     pub fn size(&self, units: MemSizeUnits) -> usize {
-        let size = match self {
-            Unit::None | Unit::Bool(_) | Unit::Byte(_) | Unit::Int(_) | Unit::Dec(_) => core::mem::size_of::<Unit>(),
-            Unit::Str(s) => s.len() + core::mem::size_of::<Unit>(),
-            Unit::Ref(path) => path.into_iter().fold(0, |prev, s| prev + s.len()) + core::mem::size_of::<Unit>(),
-            Unit::Stream(msg, _) => msg.size(MemSizeUnits::Bytes) + core::mem::size_of::<Unit>(),
-            Unit::Pair(u0, u1) => u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes) + core::mem::size_of::<Unit>(),
-            Unit::Lst(lst) => lst.into_iter().fold(0, |prev, u| prev + u.size(MemSizeUnits::Bytes)) + core::mem::size_of::<Unit>(),
-            Unit::Map(m) => m.into_iter().fold(0, |prev, (u0, u1)| prev + u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes)) + core::mem::size_of::<Unit>()
+        let size = core::mem::size_of::<UnitType>() + match self.0.as_ref() {
+            UnitType::None | UnitType::Bool(..) | UnitType::Byte(..) => 0,
+            UnitType::Int(v) => v.0.to_bytes_le().1.len(),
+            UnitType::Dec(v) => v.0.numer().to_bytes_le().1.len() + v.0.denom().to_bytes_le().1.len(),
+            UnitType::Str(s) => s.len(),
+            UnitType::Ref(path) => path.iter().fold(0, |prev, s| prev + s.len()),
+            UnitType::Stream(msg, serv, _addr) => msg.size(MemSizeUnits::Bytes) + serv.len(),
+            UnitType::Pair(u0, u1) => u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes),
+            UnitType::List(lst) => lst.iter().fold(0, |prev, u| prev + u.size(MemSizeUnits::Bytes)),
+            UnitType::Map(map) => map.iter().fold(0, |prev, (u0, u1)| prev + u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes))
         };
 
         match units {
@@ -331,1272 +1231,5 @@ impl Unit {
             MemSizeUnits::Mega => size / (1024 * 1024),
             MemSizeUnits::Giga => size / (1024 * 1024 * 1024)
         }
-    }
-
-    pub fn as_bytes(&self) -> Vec<u8> {
-        match self {
-            Unit::None => vec![UnitBin::None as u8],
-            Unit::Bool(v) => vec![UnitBin::Bool as u8, if *v {1} else {0}],
-            Unit::Byte(v) => vec![UnitBin::Byte as u8, *v],
-            Unit::Int(v) => {
-                match *v {
-                    0 => vec![UnitBin::Zero as u8],
-                    -128..=127 => vec![UnitBin::Int8 as u8, (*v as i8) as u8],
-                    0..=255 => vec![UnitBin::Size8 as u8, *v as u8],
-                    -32768..=32767 => {
-                        let mut tmp = vec![UnitBin::Int16 as u8];
-                        tmp.extend((*v as i16).to_le_bytes());
-                        tmp
-                    },
-                    0..=65535 => {
-                        let mut tmp = vec![UnitBin::Size16 as u8];
-                        tmp.extend((*v as u16).to_le_bytes());
-                        tmp
-                    },
-                    _ => {
-                        let mut tmp = vec![UnitBin::Int as u8];
-                        tmp.extend(v.to_le_bytes());
-                        tmp
-                    }
-                }
-            },
-            Unit::Dec(v) => {
-                let mut tmp = vec![UnitBin::Dec as u8];
-                tmp.extend(v.to_le_bytes());
-                tmp
-            },
-            Unit::Str(s) => {
-                let mut tmp = vec![UnitBin::Str as u8];
-                tmp.extend((s.len() as u32).to_le_bytes());
-                tmp.extend(s.as_bytes());
-                tmp
-            },
-            Unit::Ref(path) => {
-                let mut tmp = vec![UnitBin::Ref as u8];
-                let s = path.join(".");
-
-                tmp.extend((s.len() as u32).to_le_bytes());
-                tmp.extend(s.as_bytes());
-                tmp
-            },
-            Unit::Stream(msg, (serv, addr)) => {
-                let mut tmp = vec![UnitBin::Stream as u8];
-                tmp.extend(msg.as_bytes());
-
-                tmp.extend((serv.len() as u32).to_le_bytes());
-                tmp.extend(serv.as_bytes());
-
-                match addr {
-                    Addr::Local => tmp.push(UnitBin::AddrLoc as u8),
-                    Addr::Remote(addr) => {
-                        tmp.push(UnitBin::AddrRemote as u8);
-                        tmp.extend(addr.iter().flat_map(|e| e.to_le_bytes()));
-                    }
-                }
-                tmp
-            }
-            Unit::Pair(u0, u1) => {
-                let mut tmp = vec![UnitBin::Pair as u8];
-                tmp.extend(u0.as_bytes());
-                tmp.extend(u1.as_bytes());
-                tmp
-            },
-            Unit::Lst(lst) => {
-                let mut tmp = vec![UnitBin::Lst as u8];
-                tmp.extend((lst.len() as u32).to_le_bytes());
-                tmp.extend(lst.iter().flat_map(|u| u.as_bytes()));
-                tmp
-            },
-            Unit::Map(m) => {
-                let mut tmp = vec![UnitBin::Map as u8];
-                tmp.extend((m.len() as u32).to_le_bytes());
-                tmp.extend(m.iter().flat_map(|(u0, u1)| {
-                    let mut tmp = u0.as_bytes();
-                    tmp.extend(u1.as_bytes());
-                    tmp
-                }));
-                tmp
-            }
-        }
-    }
-
-    fn parse_bytes_none<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotNone)?;
-
-        if *b != UnitBin::None as u8 {
-            return Err(UnitParseErr::NotNone)
-        }
-        Ok((Unit::None, it))
-    }
-
-    fn parse_bytes_bool<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotByte)?;
-
-        if *b != UnitBin::Bool as u8 {
-            return Err(UnitParseErr::NotByte);
-        }
-
-        let b = it.next().ok_or(UnitParseErr::NotByte)?;
-
-        match *b {
-            0 => return Ok((Unit::Bool(false), it)),
-            1 => return Ok((Unit::Bool(true), it)),
-            _ => return Err(UnitParseErr::NotByte)
-        }
-    }
-
-    fn parse_bytes_byte<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotByte)?;
-
-        if *b != UnitBin::Byte as u8 {
-            return Err(UnitParseErr::NotByte);
-        }
-
-        let b = it.next().ok_or(UnitParseErr::NotByte)?;
-        Ok((Unit::Byte(*b), it))
-    }
-
-    fn parse_bytes_int_zero<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotInt)?;
-
-        if *b != UnitBin::Zero as u8 {
-            return Err(UnitParseErr::NotInt);
-        }
-
-        Ok((Unit::Int(0), it))
-    }
-
-    fn parse_bytes_int_u8<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotInt)?;
-
-        if *b != UnitBin::Size8 as u8 {
-            return Err(UnitParseErr::NotInt);
-        }
-
-        let b = *it.next().ok_or(UnitParseErr::NotInt)?;
-        Ok((Unit::Int(b as i32), it))
-    }
-
-    fn parse_bytes_int_i8<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotInt)?;
-
-        if *b != UnitBin::Int8 as u8 {
-            return Err(UnitParseErr::NotInt);
-        }
-
-        let b = *it.next().ok_or(UnitParseErr::NotInt)?;
-        Ok((Unit::Int((b as i8) as i32), it))
-    }
-
-    fn parse_bytes_int_i16<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotInt)?;
-
-        if *b != UnitBin::Int16 as u8 {
-            return Err(UnitParseErr::NotInt);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-        ];
-
-        let v = i16::from_le_bytes(bytes);
-        Ok((Unit::Int(v as i32), it))
-    }
-
-    fn parse_bytes_int_u16<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotInt)?;
-
-        if *b != UnitBin::Size16 as u8 {
-            return Err(UnitParseErr::NotInt);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-        ];
-
-        let v = u16::from_le_bytes(bytes);
-        Ok((Unit::Int(v as i32), it))
-    }
-
-    fn parse_bytes_int<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotInt)?;
-
-        if *b != UnitBin::Int as u8 {
-            return Err(UnitParseErr::NotInt);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-            *it.next().ok_or(UnitParseErr::NotInt)?,
-            *it.next().ok_or(UnitParseErr::NotInt)?
-        ];
-
-        let v = i32::from_le_bytes(bytes);
-        Ok((Unit::Int(v), it))
-    }
-
-    fn parse_bytes_dec<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotDec)?;
-
-        if *b != UnitBin::Dec as u8 {
-            return Err(UnitParseErr::NotDec);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotDec)?,
-            *it.next().ok_or(UnitParseErr::NotDec)?,
-            *it.next().ok_or(UnitParseErr::NotDec)?,
-            *it.next().ok_or(UnitParseErr::NotDec)?
-        ];
-
-        let v = f32::from_le_bytes(bytes);
-        Ok((Unit::Dec(v), it))
-    }
-
-    fn parse_bytes_str<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotStr)?;
-
-        if *b != UnitBin::Str as u8 {
-            return Err(UnitParseErr::NotStr);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotStr)?,
-            *it.next().ok_or(UnitParseErr::NotStr)?,
-            *it.next().ok_or(UnitParseErr::NotStr)?,
-            *it.next().ok_or(UnitParseErr::NotStr)?
-        ];
-
-        let len = u32::from_le_bytes(bytes);
-        let tmp = (0..len).into_iter().filter_map(|_| it.next()).cloned().collect::<Vec<u8>>();
-        let s = String::from_utf8(tmp).map_err(|_| UnitParseErr::NotStr)?;
-
-        Ok((Unit::Str(s), it))
-    }
-
-    fn parse_bytes_ref<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> {
-        let b = it.next().ok_or(UnitParseErr::NotRef)?;
-
-        if *b != UnitBin::Ref as u8 {
-            return Err(UnitParseErr::NotRef);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotRef)?,
-            *it.next().ok_or(UnitParseErr::NotRef)?,
-            *it.next().ok_or(UnitParseErr::NotRef)?,
-            *it.next().ok_or(UnitParseErr::NotRef)?
-        ];
-
-        let len = u32::from_le_bytes(bytes);
-        let tmp = (0..len).into_iter().filter_map(|_| it.next()).cloned().collect::<Vec<u8>>();
-        let s = String::from_utf8(tmp).map_err(|_| UnitParseErr::NotRef)?;
-
-        let path = s.split(".").map(|s| s.to_string()).collect::<Vec<_>>();
-
-        for p in &path {
-            if !p.chars().all(|c| c.is_alphanumeric() || c == '#' || c == '_') {
-                return Err(UnitParseErr::RefInvalidPath);
-            }
-        }
-
-        Ok((Unit::Ref(path), it))
-    }
-
-    fn parse_bytes_pair<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
-        let b = it.next().ok_or(UnitParseErr::NotPair)?;
-
-        if *b != UnitBin::Pair as u8 {
-            return Err(UnitParseErr::NotPair);
-        }
-
-        let (u0, it) = Unit::parse_bytes(it)?;
-        let (u1, it) = Unit::parse_bytes(it)?;
-
-        Ok((Unit::Pair(Box::new(u0), Box::new(u1)), it))
-    }
-
-    fn parse_bytes_lst<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
-        let b = it.next().ok_or(UnitParseErr::NotList)?;
-
-        if *b != UnitBin::Lst as u8 {
-            return Err(UnitParseErr::NotList);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotList)?,
-            *it.next().ok_or(UnitParseErr::NotList)?,
-            *it.next().ok_or(UnitParseErr::NotList)?,
-            *it.next().ok_or(UnitParseErr::NotList)?
-        ];
-
-        let len = u32::from_le_bytes(bytes);
-        let mut tmp = Vec::with_capacity(len as usize);
-
-        for _ in 0..len {
-            let (u, next) = Unit::parse_bytes(it)?;
-            tmp.push(u);
-            it = next;
-        }
-        Ok((Unit::Lst(tmp), it))
-    }
-
-    fn parse_bytes_map<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
-        let b = it.next().ok_or(UnitParseErr::NotMap)?;
-
-        if *b != UnitBin::Map as u8 {
-            return Err(UnitParseErr::NotMap);
-        }
-
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotMap)?,
-            *it.next().ok_or(UnitParseErr::NotMap)?,
-            *it.next().ok_or(UnitParseErr::NotMap)?,
-            *it.next().ok_or(UnitParseErr::NotMap)?
-        ];
-
-        let len = u32::from_le_bytes(bytes);
-        let mut tmp = Vec::new();
-
-        for _ in 0..len {
-            let (u0, next) = Unit::parse_bytes(it)?;
-            let (u1, next) = Unit::parse_bytes(next)?;
-            tmp.push((u0, u1));
-            it = next;
-        }
-        Ok((Unit::Map(tmp), it))
-    }
-
-    fn parse_bytes_stream<'a, I>(mut it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
-        if *it.next().ok_or(UnitParseErr::NotStream)? != UnitBin::Stream as u8 {
-            return Err(UnitParseErr::NotStream);
-        }
-
-        // msg
-        let (msg, mut it) = Unit::parse_bytes(it)?;
-
-        // serv
-        let bytes = [
-            *it.next().ok_or(UnitParseErr::NotStream)?,
-            *it.next().ok_or(UnitParseErr::NotStream)?,
-            *it.next().ok_or(UnitParseErr::NotStream)?,
-            *it.next().ok_or(UnitParseErr::NotStream)?
-        ];
-
-        let len = u32::from_le_bytes(bytes);
-        let tmp = (0..len).into_iter().filter_map(|_| it.next()).cloned().collect::<Vec<u8>>();
-        let serv = String::from_utf8(tmp).map_err(|_| UnitParseErr::NotStream)?;
-
-        // addr
-        let addr = match *it.next().ok_or(UnitParseErr::NotStream)? {
-            _b if _b == UnitBin::AddrLoc as u8 => Addr::Local,
-            _b if _b == UnitBin::AddrRemote as u8 => {
-                let addr = (0..8).map(|_| {
-                    let bytes = [
-                        *it.next()?,
-                        *it.next()?,
-                    ];
-
-                    Some(u16::from_le_bytes(bytes))
-                }).collect::<Option<Vec<_>>>().ok_or(UnitParseErr::NotStream)?.try_into().map_err(|_| UnitParseErr::NotStream)?;
-
-                Addr::Remote(addr)
-            },
-            _ => return Err(UnitParseErr::NotStream)
-        };
-
-        Ok((Unit::Stream(Box::new(msg), (serv, addr)), it))
-    }
-
-    pub fn parse_bytes<'a, I>(it: I) -> Result<(Unit, I), UnitParseErr> where I: Iterator<Item = &'a u8> + Clone {
-        match *it.clone().next().ok_or(UnitParseErr::NotUnit)? {
-            _b if _b == UnitBin::None as u8 => Unit::parse_bytes_none(it),
-            _b if _b == UnitBin::Bool as u8 => Unit::parse_bytes_bool(it),
-            _b if _b == UnitBin::Byte as u8 => Unit::parse_bytes_byte(it),
-            _b if _b == UnitBin::Int as u8 => Unit::parse_bytes_int(it),
-            _b if _b == UnitBin::Zero as u8 => Unit::parse_bytes_int_zero(it),
-            _b if _b == UnitBin::Size8 as u8 => Unit::parse_bytes_int_u8(it),
-            _b if _b == UnitBin::Size16 as u8 => Unit::parse_bytes_int_u16(it),
-            _b if _b == UnitBin::Int8 as u8 => Unit::parse_bytes_int_i8(it),
-            _b if _b == UnitBin::Int16 as u8 => Unit::parse_bytes_int_i16(it),
-            _b if _b == UnitBin::Dec as u8 => Unit::parse_bytes_dec(it),
-            _b if _b == UnitBin::Str as u8 => Unit::parse_bytes_str(it),
-            _b if _b == UnitBin::Ref as u8 => Unit::parse_bytes_ref(it),
-            _b if _b == UnitBin::Pair as u8 => Unit::parse_bytes_pair(it),
-            _b if _b == UnitBin::Lst as u8 => Unit::parse_bytes_lst(it),
-            _b if _b == UnitBin::Map as u8 => Unit::parse_bytes_map(it),
-            _b if _b == UnitBin::Stream as u8 => Unit::parse_bytes_stream(it),
-            _ => Err(UnitParseErr::NotUnit)
-        }
-    }
-
-    fn parse_ch<'a>(ch: char, mut it: Chars<'a>) -> Result<Chars<'a>, UnitParseErr> {
-        if ch == it.next().ok_or(UnitParseErr::UnexpectedChar)? {
-            return Ok(it)
-        }
-
-        Err(UnitParseErr::UnexpectedChar)
-    }
-
-    fn parse_ws<'a>(mut it: Chars<'a>) -> Result<Chars<'a>, UnitParseErr> {
-        if it.next().ok_or(UnitParseErr::MissedWhitespace)?.is_ascii_whitespace() {
-            let mut tmp = it.clone();
-
-            while let Some(c) = it.next() {
-                if !c.is_ascii_whitespace() {
-                    break;
-                }
-                tmp = it.clone();
-            }
-            return Ok(tmp)
-        }
-
-        Err(UnitParseErr::MissedWhitespace)
-    }
-
-    fn parse_none<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let it = Unit::parse_ch('-', it)?;
-        Ok((Unit::None, it))
-    }
-
-    fn parse_bool<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let (val, it) = if let Ok(it) = Unit::parse_ch('t', it.clone()) {
-            (true, it)
-        } else if let Ok(it) = Unit::parse_ch('f', it) {
-            (false, it)
-        } else {
-            return Err(UnitParseErr::NotBool);
-        };
-
-        if let Some(ch) = it.clone().next() {
-            if ch.is_alphanumeric() {
-                return Err(UnitParseErr::NotBool);
-            }
-        }
-
-        Ok((Unit::Bool(val), it))
-    }
-
-    fn parse_byte<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        if let Some(s) = it.as_str().get(0..4) {
-            it.next().ok_or(UnitParseErr::NotByte)?;
-            it.next().ok_or(UnitParseErr::NotByte)?;
-            it.next().ok_or(UnitParseErr::NotByte)?;
-            it.next().ok_or(UnitParseErr::NotByte)?;
-
-            if let Ok(v) = u8::from_str_radix(s.trim_start_matches("0x"), 16) {
-                return Ok((Unit::Byte(v), it))
-            }
-        }
-
-        Err(UnitParseErr::NotByte)
-    }
-
-    fn parse_int<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let mut s = String::new();
-        let mut tmp = it.clone();
-
-        while let Some(c) = it.next() {
-            if !(c.is_numeric() || c == '-') {
-                break;
-            }
-
-            s.push(c);
-            tmp = it.clone();
-        }
-
-        if let Ok(v) = s.parse::<i32>() {
-            return Ok((Unit::Int(v), tmp));
-        }
-
-        Err(UnitParseErr::NotInt)
-    }
-
-    fn parse_dec<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let (fst, it) = Unit::parse_int(it)?;
-        let it = Unit::parse_ch('.', it)?;
-        let (scd, it) = Unit::parse_int(it)?;
-
-        let s = format!("{}.{}", fst, scd);
-        let out = s.parse::<f32>().map_err(|_| UnitParseErr::NotDec)?;
-
-        return Ok((Unit::Dec(out), it));
-    }
-
-    fn parse_str<'a>(mut it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        if let Some(c) = it.next() {
-            // `complex string`
-            if c == '`' {
-                let mut s = String::new();
-                let mut tmp = it.clone();
-
-                while let Some(c) = it.next() {
-                    if c == '`' {
-                        break;
-                    }
-
-                    s.push(c);
-                    tmp = it.clone();
-                }
-
-                if let Some(c) = tmp.next() {
-                    if c == '`' {
-                        return Ok((Unit::Str(s), tmp));
-                    } else {
-                        return Err(UnitParseErr::NotClosedQuotes);
-                    }
-                } else {
-                    return Err(UnitParseErr::NotClosedQuotes);
-                }
-            }
-
-            // 'complex string'
-            if c == '\'' {
-                let mut s = String::new();
-                let mut tmp = it.clone();
-
-                while let Some(c) = it.next() {
-                    if c == '\'' {
-                        break;
-                    }
-
-                    s.push(c);
-                    tmp = it.clone();
-                }
-
-                if let Some(c) = tmp.next() {
-                    if c == '\'' {
-                        return Ok((Unit::Str(s), tmp));
-                    } else {
-                        return Err(UnitParseErr::NotClosedQuotes);
-                    }
-                } else {
-                    return Err(UnitParseErr::NotClosedQuotes);
-                }
-            }
-
-            // "complex string"
-            if c == '"' {
-                let mut s = String::new();
-                let mut tmp = it.clone();
-
-                while let Some(c) = it.next() {
-                    if c == '"' {
-                        break;
-                    }
-
-                    s.push(c);
-                    tmp = it.clone();
-                }
-
-                if let Some(c) = tmp.next() {
-                    if c == '"' {
-                        return Ok((Unit::Str(s), tmp));
-                    } else {
-                        return Err(UnitParseErr::NotClosedQuotes);
-                    }
-                } else {
-                    return Err(UnitParseErr::NotClosedQuotes);
-                }
-            }
-
-            // abc.123#
-            if c.is_alphanumeric() || c == '.' || c == '#' || c == '_' {
-                let mut s = String::new();
-                let mut tmp = it.clone();
-
-                s.push(c);
-
-                while let Some(c) = it.next() {
-                    if !(c.is_alphanumeric() || c == '.' || c == '#' || c == '_') {
-                        break;
-                    }
-
-                    s.push(c);
-                    tmp = it.clone();
-                }
-
-                return Ok((Unit::Str(s), tmp));
-            }
-        }
-        Err(UnitParseErr::NotStr)
-    }
-
-    fn parse_ref<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let it = Unit::parse_ch('@', it)?;
-
-        let (path, it) = Unit::parse_str(it)?;
-
-        let path = path.as_str().ok_or(UnitParseErr::RefNotString)?;
-        let path = path.split(".").map(|s| s.to_string()).collect::<Vec<_>>();
-
-        for p in &path {
-            if !p.chars().all(|c| c.is_alphanumeric() || c == '#' || c == '_') {
-                return Err(UnitParseErr::RefInvalidPath);
-            }
-        }
-
-        return Ok((Unit::Ref(path), it));
-    }
-
-    fn parse_pair<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let it = Unit::parse_ch('(', it)?;
-
-        let (u0, it) = Unit::parse(it)?;
-
-        let it = Unit::parse_ws(it)?;
-
-        let (u1, it) = Unit::parse(it)?;
-
-        let it = Unit::parse_ch(')', it)?;
-
-        return Ok((
-            Unit::Pair(
-                Box::new(u0),
-                Box::new(u1)
-            ),
-            it
-        ));
-    }
-
-    fn parse_list<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let mut it = Unit::parse_ch('[', it)?;
-
-        let mut lst = Vec::new();
-
-        loop {
-            if let Ok(tmp) = Unit::parse_ws(it.clone()) {
-                it = tmp;
-            }
-
-            let (u, tmp) = Unit::parse(it)?;
-            lst.push(u);
-
-            it = tmp;
-
-            if let Ok(tmp) = Unit::parse_ws(it.clone()) {
-                it = tmp;
-            }
-
-            if let Ok(it) = Unit::parse_ch(']', it.clone()) {
-                return Ok((Unit::Lst(lst), it))
-            }
-        }
-    }
-
-    fn parse_map<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let mut it = Unit::parse_ch('{', it)?;
-
-        let mut map = Vec::new();
-
-        loop {
-            if let Ok(tmp) = Unit::parse_ws(it.clone()) {
-                it = tmp;
-            }
-
-            let (u0, tmp) = Unit::parse(it)?;
-            it = tmp;
-
-            if let Ok(tmp) = Unit::parse_ws(it.clone()) {
-                it = tmp;
-            }
-
-            it = Unit::parse_ch(':', it)?;
-
-            if let Ok(tmp) = Unit::parse_ws(it.clone()) {
-                it = tmp;
-            }
-
-            let (u1, tmp) = Unit::parse(it)?;
-            it = tmp;
-
-            map.push((u0, u1));
-
-            if let Ok(tmp) = Unit::parse_ws(it.clone()) {
-                it = tmp;
-            }
-
-            if let Ok(it) = Unit::parse_ch('}', it.clone()) {
-                return Ok((Unit::Map(map), it))
-            }
-        }
-    }
-
-    fn parse_stream<'a>(u: Unit, it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let mut tmp = it.clone();
-
-        if let Some(ch) = tmp.next() {
-            if ch == '@' {
-                let (serv, tmp) = Unit::parse_str(tmp)?;
-                let serv = serv.as_str().ok_or(UnitParseErr::StreamInvalidServ)?;
-
-                let new_u = Unit::Stream(Box::new(u), (serv, Addr::Local));
-
-                if let Some(..) = tmp.clone().next() {
-                    return Unit::parse_stream(new_u, tmp);
-                }
-
-                return Ok((new_u, tmp))
-            }
-        }
-
-        Ok((u, it))
-    }
-
-    fn parse_loc<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        // bool
-        if let Ok((u, it)) = Unit::parse_bool(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // byte
-        if let Ok((u, it)) = Unit::parse_byte(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // dec
-        if let Ok((u, it)) = Unit::parse_dec(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // int
-        if let Ok((u, it)) = Unit::parse_int(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // none
-        if let Ok((u, it)) = Unit::parse_none(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // str
-        if let Ok((u, it)) = Unit::parse_str(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // pair
-        if let Ok((u, it)) = Unit::parse_pair(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // ref
-        if let Ok((u, it)) = Unit::parse_ref(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // list
-        if let Ok((u, it)) = Unit::parse_list(it.clone()) {
-            return Ok((u, it));
-        }
-
-        // map
-        if let Ok((u, it)) = Unit::parse_map(it.clone()) {
-            return Ok((u, it));
-        }
-
-        Err(UnitParseErr::NotUnit)
-    }
-
-    pub fn parse<'a>(it: Chars<'a>) -> Result<(Self, Chars<'a>), UnitParseErr> {
-        let (u, it) = Unit::parse_loc(it)?;
-        // stream
-        Unit::parse_stream(u, it)
-    }
-
-    pub fn find_ref<I>(mut path: I, u: &Unit) -> Option<Unit> where I: Iterator<Item = String> {
-        match u {
-            Unit::Map(m) => {
-                if let Some(path_s) = path.next() {
-                    if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
-                        return Unit::find_ref(path, next);
-                    } else if path_s == "all" {
-                        return Some(u.clone());
-                    }
-                } else {
-                    return Some(u.clone());
-                }
-            },
-            Unit::Lst(lst) => {
-                if let Some(path_s) = path.next() {
-                    if let Some(idx) = path_s.parse::<usize>().ok() {
-                        if let Some(next) = lst.get(idx) {
-                            return Unit::find_ref(path, next);
-                        }
-                    }
-                } else {
-                    return Some(u.clone())
-                }
-            },
-            Unit::Pair(u0, u1) => {
-                if let Some(path_s) = path.next() {
-                    if let Some(idx) = path_s.parse::<usize>().ok() {
-                        match idx {
-                            0 => return Unit::find_ref(path, u0),
-                            1 => return Unit::find_ref(path, u1),
-                            _ => ()
-                        }
-                    }
-                } else {
-                    return Some(u.clone())
-                }
-            }
-            _ => return Some(u.clone())
-        }
-        None
-    }
-
-    pub fn merge_ref<I>(mut path: I, val: Unit, u: Unit) -> Option<Unit> where I: Iterator<Item = String> {
-        if let Some(path_s) = path.next() {
-            match u {
-                Unit::Map(m) => {
-                    if let Some((_, next)) = m.iter().filter_map(|(u0, u1)| Some((u0.as_str()?, u1))).find(|(s, _)| *s == path_s) {
-                        if let Some(val) = Unit::merge_ref(path, val, next.clone()) {
-                            let val = next.clone().merge(val);
-                            let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
-
-                            return Some(Unit::Map(m).merge(u))
-                        }
-                    } else {
-                        if let Some(val) = Unit::merge_ref(path, val, Unit::Map(Vec::new())) {
-                            let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
-                            return Some(Unit::Map(m).merge(u))
-                        }
-                    }
-                },
-                Unit::Lst(mut lst) => {
-                    if let Some(idx) = path_s.parse::<usize>().ok() {
-                        if let Some(u) = lst.get_mut(idx) {
-                            let val = Unit::merge_ref(path, val, u.clone());
-                            if let Some(val) = val {
-                               *u = val;
-                            }
-                        }
-                    }
-                    return Some(Unit::Lst(lst));
-                },
-                Unit::Pair(u0, u1) => {
-                    if let Some(idx) = path_s.parse::<usize>().ok() {
-                        match idx {
-                            0 => {
-                                let val = Unit::merge_ref(path, val, *u0);
-                                if let Some(val) = val {
-                                    return Some(Unit::Pair(Box::new(val), u1))
-                                }
-                            },
-                            1 => {
-                                let val = Unit::merge_ref(path, val, *u1);
-                                if let Some(val) = val {
-                                    return Some(Unit::Pair(u0, Box::new(val)))
-                                }
-                            },
-                            _ => return Some(Unit::Pair(u0, u1))
-                        };
-                    }
-                },
-                _ => {
-                    if let Some(val) = Unit::merge_ref(path, val, Unit::Map(Vec::new())) {
-                        let u = Unit::Map(vec![(Unit::Str(path_s), val)]);
-                        return Some(u)
-                    }
-                }
-            }
-        } else {
-            return Some(val);
-        }
-        None
-    }
-
-    pub fn as_none(&self) -> Option<()> {
-        if let Unit::None = self {
-            return Some(())
-        }
-        None
-    }
-
-    pub fn as_bool(&self) -> Option<bool> {
-        if let Unit::Bool(v) = self {
-            return Some(*v)
-        }
-        None
-    }
-
-    pub fn as_byte(&self) -> Option<u8> {
-        if let Unit::Byte(v) = self {
-            return Some(*v)
-        }
-        None
-    }
-
-    pub fn as_int(&self) -> Option<i32> {
-        if let Unit::Int(v) = self {
-            return Some(*v)
-        }
-        None
-    }
-
-    pub fn as_dec(&self) -> Option<f32> {
-        if let Unit::Dec(v) = self {
-            return Some(*v)
-        }
-        None
-    }
-
-    pub fn as_str(&self) -> Option<String> {
-        if let Unit::Str(s) = self {
-            return Some(s.clone())
-        }
-        None
-    }
-
-    pub fn as_ref(&self) -> Option<Vec<String>> {
-        if let Unit::Ref(path) = self {
-            return Some(path.clone());
-        }
-        None
-    }
-
-    pub fn as_stream(&self) -> Option<(Unit, (String, Addr))> {
-        if let Unit::Stream(msg, (serv, addr)) = self {
-            return Some((*msg.clone(), (serv.clone(), addr.clone())))
-        }
-        None
-    }
-
-    pub fn as_pair(&self) -> Option<(Box<Unit>, Box<Unit>)> {
-        if let Unit::Pair(u0, u1) = self {
-            return Some((u0.clone(), u1.clone()))
-        }
-        None
-    }
-
-    pub fn as_vec(&self) -> Option<Vec<Unit>> {
-        if let Unit::Lst(lst) = self {
-            return Some(lst.clone());
-        }
-        None
-    }
-
-    pub fn as_vec_typed<A, B>(&self, f: B) -> Option<Vec<A>> where A: Clone, B: Fn(&Self) -> Option<A> {
-        if let Unit::Lst(lst) = self {
-            return Some(lst.iter().filter_map(|u| f(u)).collect());
-        }
-        None
-    }
-
-    pub fn as_map(&self) -> Option<Vec<(Unit, Unit)>> {
-        if let Unit::Map(m) = self {
-            return Some(m.clone());
-        }
-        None
-    }
-
-    pub fn as_map_find(&self, sch: &str) -> Option<Unit> {
-        if let Unit::Map(m) = self {
-            return m.iter()
-                .filter_map(|(u0, u1)| Some((u0.as_str()?, u1)))
-                .find_map(|(s, u)| {
-                    if s == sch {
-                        return Some(u.clone());
-                    }
-                    None
-                });
-        }
-        None
-    }
-
-    pub fn as_map_find_async<'a>(self: Rc<Self>, sch: String, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, KernErr>> {
-        thread!({
-            if let Some(msg) = self.as_map_find(&sch) {
-                return thread_await!(Rc::new(msg).read_async(ath, orig, kern)).map(|msg| msg.map(|(msg, ath)|( Rc::unwrap_or_clone(msg), ath)))
-            }
-            Ok(None)
-        })
-    }
-
-    pub fn merge(self, u: Unit) -> Unit {
-        match u.clone() {
-            Unit::Map(m) => {
-                if let Some(tmp) = self.as_map() {
-                    let it = m.into_iter().map(|(u0, u1)| {
-                        if let Some((_, next)) = tmp.iter().find(|(n, _)| n.clone() == u0) {
-                            let u1 = next.clone().merge(u1);
-                            return (u0, u1);
-                        }
-                        (u0, u1)
-                    });
-
-                    let res = tmp.iter().cloned().filter(|(n, _)| it.clone().find(|(prev, _)| n.clone() == prev.clone()).is_none()).chain(it.clone()).collect();
-                    return Unit::Map(res);
-                }
-            },
-            Unit::Pair(u0, u1) => {
-                if self.as_pair().is_some() {
-                    return Unit::Pair(u0, u1);
-                }
-
-                if let Some(mut tmp) = self.as_map() {
-                    tmp.retain(|(u, _)| u.clone() == *u0);
-                    tmp.push((*u0, *u1));
-                    return Unit::Map(tmp);
-                }
-
-                if let Some(mut tmp) = self.as_vec() {
-                    tmp.retain(|u| u.clone() == Unit::Pair(u0.clone(), u1.clone()));
-                    tmp.push(Unit::Pair(u0.clone(), u1.clone()));
-                    return Unit::Lst(tmp);
-                }
-            }
-            Unit::Lst(lst) => {
-                // if let Some(mut tmp) = self.as_vec() {
-                //     tmp.retain(|u| {
-                //         lst.iter().find(|n| *u == **n).is_none()
-                //     });
-
-                //     tmp.extend(lst);
-                //     return Unit::Lst(tmp);
-                // }
-                if self.as_vec().is_some() {
-                    return Unit::Lst(lst);
-                }
-            },
-            _ => return u
-        }
-        u
-    }
-
-    pub fn read_async<'a>(self: Rc<Self>, ath: Rc<String>, orig: Rc<Unit>, kern: &'a Mutex<Kern>) -> ThreadAsync<'a, Result<Option<(Rc<Unit>, Rc<String>)>, KernErr>> {
-        thread!({
-            match self.as_ref() {
-                Unit::Ref(path) => {
-                    Ok(Unit::find_ref(path.into_iter().cloned(), &orig).map(|u| (Rc::new(u), ath)))
-                },
-                Unit::Stream(msg, (serv, _)) => {
-                    let run = TaskRun(*msg.clone(), serv.clone());
-                    let id = kern.lock().reg_task(&ath, "unit.read", run)?;
-
-                    let res = loop {
-                        if let Some(res) = kern.lock().get_task_result(id) {
-                            break Ok(res?.and_then(|msg| Some((msg.msg.as_map_find("msg")?, Rc::new(msg.ath)))).map(|(u, ath)| (Rc::new(u), ath)));
-                        }
-
-                        yield;
-                    };
-                    res
-                },
-                _ => Ok(Some((self, ath)))
-            }
-        })
-    }
-}
-
-impl Schema for SchemaNone {
-    type Out = ();
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::None = u {
-            return Some(());
-        }
-        None
-    }
-}
-
-impl Schema for SchemaBool {
-    type Out = bool;
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Bool(b) = u {
-            return Some(*b);
-        }
-        None
-    }
-}
-
-impl Schema for SchemaByte {
-    type Out = u8;
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Byte(b) = u {
-            return Some(*b);
-        }
-        None
-    }
-}
-
-impl Schema for SchemaInt {
-    type Out = i32;
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Int(v) = u {
-            return Some(*v);
-        }
-        None
-    }
-}
-
-impl Schema for SchemaDec {
-    type Out = f32;
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Dec(v) = u {
-            return Some(*v);
-        }
-        None
-    }
-}
-
-impl Schema for SchemaStr {
-    type Out = String;
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Str(s) = u {
-            return Some(s.clone());
-        }
-        None
-    }
-}
-
-impl Schema for SchemaStream {
-    type Out = (Unit, (String, Addr));
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Stream(msg, (serv, addr)) = u {
-            return Some((*msg.clone(), (serv.clone(), addr.clone())));
-        }
-        None
-    }
-}
-
-impl Schema for SchemaUnit {
-    type Out = Unit;
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        Some(u.clone())
-    }
-}
-
-impl Schema for SchemaRef {
-    type Out = Vec<String>;
-
-    fn find_deep(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        self.find(glob, u)
-    }
-
-    fn find(&self, _glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Ref(path) = u {
-            return Some(path.clone())
-        }
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaPair<A, B> where A: Schema, B: Schema {
-    type Out = (A::Out, B::Out);
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Pair(u0, u1) = u {
-            return Some((self.0.find_deep(glob, u0)?, self.1.find_deep(glob, u1)?));
-        }
-        None
-    }
-}
-
-impl<A> Schema for SchemaSeq<A> where A: Schema {
-    type Out = Vec<A::Out>;
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Lst(lst) = u {
-            let tmp = lst.iter().filter_map(|u| self.0.find_deep(glob, u)).collect::<Vec<_>>();
-            if tmp.is_empty() {
-                return None;
-            }
-            return Some(tmp);
-        }
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaMapSeq<A, B> where A: Schema, B: Schema {
-    type Out = Vec<(A::Out, B::Out)>;
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Map(m) = u {
-            return Some(m.iter().filter_map(|(u0, u1)| Some((self.0.find_deep(glob, u0)?, self.1.find_deep(glob, u1)?))).collect());
-        }
-        None
-    }
-}
-
-impl<A> Schema for SchemaMapEntry<A> where A: Schema {
-    type Out = A::Out;
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Unit::Map(m) = u {
-            if let Some(u) = m.iter().find(|(u, _)| self.0 == u.clone()).map(|(_, u)| u) {
-                return self.1.find_deep(glob, u);
-            }
-        }
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaMap<A, B> where A: Schema, B: Schema {
-    type Out = (Option<A::Out>, Option<B::Out>);
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if u.as_map().is_some() {
-            return Some((self.0.find_deep(glob, u), self.1.find_deep(glob, u)));
-        }
-
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaMapFirstRequire<A, B> where A: Schema, B: Schema {
-    type Out = (A::Out, Option<B::Out>);
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if u.as_map().is_some() {
-            return Some((self.0.find_deep(glob, u)?, self.1.find_deep(glob, u)));
-        }
-
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaMapSecondRequire<A, B> where A: Schema, B: Schema {
-    type Out = (Option<A::Out>, B::Out);
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if u.as_map().is_some() {
-            return Some((self.0.find_deep(glob, u), self.1.find_deep(glob, u)?));
-        }
-
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaMapRequire<A, B> where A: Schema, B: Schema {
-    type Out = (A::Out, B::Out);
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if u.as_map().is_some() {
-            return Some((self.0.find_deep(glob, u)?, self.1.find_deep(glob, u)?));
-        }
-
-        None
-    }
-}
-
-impl<A, B> Schema for SchemaOr<A, B> where A: Schema, B: Schema {
-    type Out = Or<A::Out, B::Out>;
-
-    fn find(&self, glob: &Unit, u: &Unit) -> Option<Self::Out> {
-        if let Some(v) = self.0.find_deep(glob, u) {
-            return Some(Or::First(v));
-        }
-        Some(Or::Second(self.1.find_deep(glob, u)?))
     }
 }

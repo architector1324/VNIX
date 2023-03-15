@@ -8,7 +8,7 @@ use base64ct::{Base64, Encoding};
 use crate::driver::MemSizeUnits;
 
 use super::kern::KernErr;
-use super::unit::Unit;
+use super::unit::{Unit, UnitAsBytes};
 use super::user::Usr;
 
 
@@ -29,10 +29,10 @@ impl Display for Msg {
 
 impl Msg {
     pub fn new(usr: Usr, msg: Unit) -> Result<Self, KernErr> {
-        let h = Sha3_256::digest(msg.as_bytes());
+        let h = Sha3_256::digest(msg.clone().as_bytes());
 
         let hash = Base64::encode_string(&h[..]);
-        let sign = usr.sign(&msg)?;
+        let sign = usr.sign(msg.clone())?;
 
         let size = msg.size(MemSizeUnits::Bytes);
 

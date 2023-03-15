@@ -36,7 +36,7 @@ use vnix::serv::io::term::TermBase;
 use vnix::vnix_entry;
 use vnix::core::kern::Kern;
 
-use crate::vnix::core::unit::Unit;
+use crate::vnix::core::unit::{Unit, UnitParse};
 
 
 fn load_store(image: Handle, st: SystemTable<Boot>) -> Option<Unit> {

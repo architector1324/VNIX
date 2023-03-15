@@ -2,14 +2,13 @@ use core::pin::Pin;
 use core::fmt::Display;
 use core::ops::{Generator, GeneratorState};
 
-use alloc::string::String;
-use alloc::vec;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
+use alloc::string::String;
 
 use super::msg::Msg;
 use super::task::{Task, TaskRun, TaskSig};
-use super::unit::{Unit, UnitParseErr, SchemaMapEntry, SchemaUnit, Schema, SchemaBool, SchemaMap};
+use super::unit::{Unit, UnitParseErr, UnitAs, UnitNew};
 use super::serv::{Serv, ServErr, ServHlrAsync};
 
 use super::user::Usr;
@@ -176,59 +175,30 @@ impl Kern {
         Msg::new(usr, u)
     }
 
-    fn msg_hlr(&self, msg: Msg, usr: Usr) -> Result<Option<Msg>, KernErr> {
-        let schm = SchemaMap(
-            SchemaMapEntry(Unit::Str("mrg".into()), SchemaUnit),
-            SchemaMapEntry(Unit::Str("abt".into()), SchemaBool)
-        );
-
-        let u = msg.msg.clone();
-
-        if let Some((msg, b)) = schm.find_loc(&u) {
-            if let Some(msg) = msg {
-                return Ok(Some(self.msg(&usr.name, u.merge(msg))?));
-            }
-
-            if let Some(b) = b {
-                if b {
-                    return Ok(None)
-                }
-            }
-        };
-
-        Ok(Some(msg))
-    }
-
     fn help_serv(&self, ath: &str) -> Result<Msg, KernErr> {
-        let serv = self.services.iter().map(|serv| Unit::Str(serv.info.name.clone())).collect();
-        let u = Unit::Map(vec![(
-            Unit::Str("msg".into()),
-            Unit::Lst(serv)
+        let serv = self.services.iter().map(|serv| Unit::str(&serv.info.name)).collect::<Vec<_>>();
+        let u = Unit::map(&[(
+            Unit::str("msg"),
+            Unit::list(&serv)
         )]);
 
         self.msg(ath, u)
     }
 
-    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: String, mut msg: Msg) -> Result<Option<ServHlrAsync<'a>>, KernErr> {
+    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: String, msg: Msg) -> Result<Option<ServHlrAsync<'a>>, KernErr> {
         // verify msg
         let usr = mtx.lock().get_usr(&msg.ath)?;
-        usr.verify(&msg.msg, &msg.sign, &msg.hash)?;
+        usr.verify(msg.msg.clone(), &msg.sign, &msg.hash)?;
 
         // prepare msg
-        if let Some(_msg) = mtx.lock().msg_hlr(msg, usr)? {
-            msg = _msg;
-        } else {
-            return Ok(None);
-        }
-
         let tmp = mtx.lock();
         let serv = tmp.get_serv(serv.as_str())?;
-        let help_msg = tmp.msg(&msg.ath, Unit::Str(serv.help.clone()))?;
+        let help_msg = tmp.msg(&msg.ath, Unit::str(&serv.help))?;
 
         // check help
-        let topic = if let Some(topic) = msg.msg.as_map_find("help").map(|u| u.as_str()).flatten() {
+        let topic = if let Some(topic) = msg.msg.clone().as_map_find("help").map(|u| u.as_str()).flatten() {
             Some(topic)
-        } else if let Some(topic) = msg.msg.as_str() {
+        } else if let Some(topic) = msg.msg.clone().as_str() {
             Some(topic)
         } else {
             None
