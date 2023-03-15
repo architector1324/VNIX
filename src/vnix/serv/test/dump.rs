@@ -9,7 +9,9 @@ use alloc::boxed::Box;
 use crate::{thread, thread_await, as_map_find_async};
 
 use crate::driver::{CLIErr, DrvErr};
+
 use crate::vnix::core::msg::Msg;
+use crate::vnix::core::unit::UnitReadAsyncI;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 
@@ -19,7 +21,7 @@ pub const SERV_HELP: &'static str = "Test print service\nExample: abc@test.dump"
 
 pub fn dump_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let u = Rc::new(msg.msg.clone());
+        let u = msg.msg.clone();
         let mut ath = Rc::new(msg.ath.clone());
 
         let dump = if let Some((dump, _ath)) = as_map_find_async!(u.clone(), "msg", ath.clone(), u.clone(), kern)? {
@@ -29,7 +31,7 @@ pub fn dump_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             }
             dump
         } else {
-            Rc::unwrap_or_clone(u)
+            u
         };
 
         let task_id = kern.lock().get_task_running();

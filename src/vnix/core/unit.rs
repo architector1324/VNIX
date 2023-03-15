@@ -162,6 +162,20 @@ pub trait UnitReadAsyncI {
     fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
 }
 
+#[macro_export]
+macro_rules! read_async {
+    ($msg:expr, $ath:expr, $orig:expr, $kern:expr) => {
+        thread_await!($msg.clone().read_async($ath.clone(), $orig.clone(), $kern))
+    };
+}
+
+#[macro_export]
+macro_rules! as_map_find_async {
+    ($msg:expr, $sch:expr, $ath:expr, $orig:expr, $kern:expr) => {
+        thread_await!($msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern))
+    };
+}
+
 pub trait UnitModify {
     fn find<'a, I>(&self, path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
     fn replace<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
