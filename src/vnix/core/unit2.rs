@@ -14,6 +14,8 @@ use num::bigint::{BigInt, Sign};
 use num::rational::BigRational;
 use spin::Mutex;
 
+use crate::vnix::core::task::TaskRun;
+
 use crate::driver::MemSizeUnits;
 use crate::{thread, thread_await};
 
@@ -158,6 +160,11 @@ pub type UnitReadAsync<'a> = ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, 
 pub trait UnitReadAsyncI {
     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
     fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+}
+
+pub trait UnitModify {
+    fn find<'a, I>(&self, path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
+    fn replace<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
 }
 
 impl UnitNew for Unit {
@@ -347,11 +354,12 @@ impl UnitReadAsyncI for Unit {
     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
         thread!({
             match self.0.as_ref() {
-                UnitType::Ref(path) => {
-                    yield;
-                    todo!()
-                },
+                UnitType::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
                 UnitType::Stream(msg, serv, _addr) => {
+                    // let run = TaskRun(msg.clone(), serv.clone());
+                    // let id = kern.lock().reg_task(&ath, "unit.read", run)?;
+
+                    yield;
                     todo!()
                 },
                 _ => Ok(Some((self.clone(), ath)))
@@ -1032,6 +1040,86 @@ impl<'a> UnitParse<'a, char, Iter<'a, char>> for Unit {
 
             map.push((u0, u1));
             it = tmp;
+        }
+    }
+}
+
+impl UnitModify for Unit {
+    fn find<'a, I>(&self, mut path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
+        let step = if let Some(step) = path.next() {
+            step
+        } else {
+            return Some(self.clone());
+        };
+
+        match self.0.as_ref() {
+            UnitType::Pair(u0, u1) =>
+                match step.parse::<usize>().ok()? {
+                    0 => u0.find(path),
+                    1 => u1.find(path),
+                    _ => None
+                },
+            UnitType::List(lst) => {
+                let idx = step.parse::<usize>().ok()?;
+                lst.get(idx).map(|u| u.find(path)).flatten()
+            },
+            UnitType::Map(map) => map.iter()
+                .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
+                .find_map(|(s, u)| {
+                    if Rc::unwrap_or_clone(s) == *step {
+                        return u.find(path.clone())
+                    }
+                    None
+                }),
+            _ => None
+        }
+    }
+
+    fn replace<'a, I>(self, mut path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
+        let step = if let Some(step) = path.next() {
+            step
+        } else {
+            return Some(what);
+        };
+
+        match self.0.as_ref() {
+            UnitType::Pair(u0, u1) =>
+                match step.parse::<usize>().ok()? {
+                    0 => Some(Unit::pair(u0.clone().replace(path, what)?, u1.clone())),
+                    1 => Some(Unit::pair(u0.clone(), u1.clone().replace(path, what)?)),
+                    _ => None
+                },
+            UnitType::List(lst) => {
+                let idx = step.parse::<usize>().ok()?;
+                if idx >= lst.len() {
+                    return None;
+                }
+
+                let lst = lst.iter().cloned().enumerate().map(|(i, u)| {
+                    if i == idx {
+                        return u.clone().replace(path.clone(), what.clone())
+                    }
+                    Some(u)
+                }).collect::<Option<Vec<_>>>()?;
+                Some(Unit::list(&lst))
+            },
+            UnitType::Map(map) => {
+                if let None = map.iter().filter_map(|(u0, _)| u0.clone().as_str()).find(|s| Rc::unwrap_or_clone(s.clone()) == step) {
+                    return None
+                }
+
+                let map = map.iter().cloned().map(|(u0, u1)| {
+                    if let Some(s) = u0.clone().as_str().filter(|s| Rc::unwrap_or_clone(s.clone()) == step) {
+                        return Some((
+                            u0.clone(),
+                            u1.clone().replace(path.clone(), what.clone())?
+                        ))
+                    }
+                    Some((u0, u1))
+                }).collect::<Option<Vec<_>>>()?;
+                Some(Unit::map(&map))
+            }
+            _ => None
         }
     }
 }
