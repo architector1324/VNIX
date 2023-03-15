@@ -74,7 +74,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //     (Unit::str("c"), Unit::int_big(BigInt::parse_bytes(b"12345678910111213141516", 10).unwrap())),
     // ]);
 
-    let s = "(load @tmp)@io.store@io.term";
+    let s = "123";
     let (u, _) = Unit::parse(s.chars().collect::<Vec<char>>().iter()).unwrap();
 
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();

@@ -9,6 +9,7 @@ use core::slice::Iter;
 use core::fmt::Display;
 use core::ops::{Generator, GeneratorState};
 
+use num::cast::ToPrimitive;
 use num::bigint::{BigInt, Sign};
 use num::rational::BigRational;
 use spin::Mutex;
@@ -20,20 +21,11 @@ use super::kern::{Addr, KernErr, Kern};
 use super::task::ThreadAsync;
 
 
-// FIXME: remove small and natural, use cast instead
 #[derive(Debug, PartialEq, Clone)]
-pub enum Int {
-    Small(i32),
-    Nat(u32),
-    Big(Rc<BigInt>)
-}
+pub struct Int(Rc<BigInt>);
 
-// FIXME: remove small, use cast instead
 #[derive(Debug, PartialEq, Clone)]
-pub enum Dec {
-    Small(f32),
-    Big(Rc<BigRational>)
-}
+pub struct Dec(Rc<BigRational>);
 
 pub type Path = Vec<String>;
 
@@ -182,23 +174,24 @@ impl UnitNew for Unit {
     }
 
     fn int(v: i32) -> Unit {
-        Unit::new(UnitType::Int(Int::Small(v)))
+        Unit::int_big(BigInt::from(v))
     }
 
     fn uint(v: u32) -> Unit {
-        Unit::new(UnitType::Int(Int::Nat(v)))
+        Unit::int_big(BigInt::from(v))
     }
 
     fn int_big(v: BigInt) -> Unit {
-        Unit::new(UnitType::Int(Int::Big(Rc::new(v))))
+        Unit::new(UnitType::Int(Int(Rc::new(v))))
     }
 
     fn dec(v: f32) -> Unit {
-        Unit::new(UnitType::Dec(Dec::Small(v)))
+        let v = BigRational::from_float(v).unwrap_or_default();
+        Unit::dec_big(v)
     }
 
     fn dec_big(v: BigRational) -> Unit {
-        Unit::new(UnitType::Dec(Dec::Big(Rc::new(v))))
+        Unit::new(UnitType::Dec(Dec(Rc::new(v))))
     }
 
     fn str(s: &str) -> Unit {
@@ -254,8 +247,8 @@ impl UnitAs for Unit {
 
     fn as_int(self) -> Option<i32> {
         if let UnitType::Int(v) = self.0.as_ref() {
-            if let Int::Small(v) = v {
-                return Some(*v)
+            if let Some(v) = v.to_small() {
+                return Some(v)
             }
         }
         None
@@ -263,8 +256,8 @@ impl UnitAs for Unit {
 
     fn as_uint(self) -> Option<u32> {
         if let UnitType::Int(v) = self.0.as_ref() {
-            if let Int::Nat(v) = v {
-                return Some(*v)
+            if let Some(v) = v.to_nat() {
+                return Some(v)
             }
         }
         None
@@ -272,17 +265,15 @@ impl UnitAs for Unit {
 
     fn as_int_big(self) -> Option<Rc<BigInt>> {
         if let UnitType::Int(v) = self.0.as_ref() {
-            if let Int::Big(v) = v {
-                return Some(v.clone())
-            }
+            return Some(v.0.clone())
         }
         None
     }
 
     fn as_dec(self) -> Option<f32> {
         if let UnitType::Dec(v) = self.0.as_ref() {
-            if let Dec::Small(v) = v {
-                return Some(*v)
+            if let Some(v) = v.to_small() {
+                return Some(v)
             }
         }
         None
@@ -290,9 +281,7 @@ impl UnitAs for Unit {
 
     fn as_dec_big(self) -> Option<Rc<BigRational>> {
         if let UnitType::Dec(v) = self.0.as_ref() {
-            if let Dec::Big(v) = v {
-                return Some(v.clone())
-            }
+            return Some(v.0.clone())
         }
         None
     }
@@ -390,16 +379,11 @@ impl Display for Unit {
             UnitType::None => write!(f, "-"),
             UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
             UnitType::Byte(v) => write!(f, "{:#02x}", *v),
-            UnitType::Int(v) =>
-                match v {
-                    Int::Small(v) => write!(f, "{v}"),
-                    Int::Nat(v) => write!(f, "{v}"),
-                    Int::Big(v) => write!(f, "{v}")
-                }
+            UnitType::Int(v) => write!(f, "{}", v.0),
             UnitType::Dec(v) =>
-                match v {
-                    Dec::Small(v) => write!(f, "{v}"),
-                    Dec::Big(v) => write!(f, "{v}") // FIXME: use `<i>.<i>` format
+                match v.to_small() {
+                    Some(v) => write!(f, "{v}"),
+                    None => write!(f, "{}", v.0) // FIXME: use `<i>.<i>` format
                 }
             UnitType::Str(s) => {
                 if s.as_str().chars().all(char_no_quoted) {
@@ -423,28 +407,31 @@ impl UnitAsBytes for Unit {
             UnitType::None => vec![UnitBin::None as u8],
             UnitType::Bool(v) => vec![UnitBin::Bool as u8, if *v {1} else {0}],
             UnitType::Byte(v) => vec![UnitBin::Byte as u8, *v],
-            UnitType::Int(v) =>
-                match v {
-                    Int::Small(v) => [UnitBin::Int as u8].into_iter().chain(v.to_le_bytes()).collect(),
-                    Int::Nat(v) => [UnitBin::IntNat as u8].into_iter().chain(v.to_le_bytes()).collect(),
-                    Int::Big(v) => {
-                        let (s, b) = v.to_bytes_le();
-                        let len = (b.len() as u32).to_le_bytes();
-                        [UnitBin::IntBig as u8].into_iter()
-                            .chain([if let Sign::Minus = s {1} else {0}])
-                            .chain(len)
-                            .chain(b)
-                            .collect()
-                    }
-                },
+            UnitType::Int(v) => {
+                if let Some(v) = v.to_small() {
+                    return [UnitBin::Int as u8].into_iter().chain(v.to_le_bytes()).collect();
+                }
+                
+                if let Some(v) = v.to_nat() {
+                    return [UnitBin::IntNat as u8].into_iter().chain(v.to_le_bytes()).collect();
+                }
+
+                let (s, b) = v.0.to_bytes_le();
+                let len = (b.len() as u32).to_le_bytes();
+                [UnitBin::IntBig as u8].into_iter()
+                    .chain([if let Sign::Minus = s {1} else {0}])
+                    .chain(len)
+                    .chain(b)
+                    .collect()
+            },
             UnitType::Dec(v) =>
-                match v {
-                    Dec::Small(v) => [UnitBin::Dec as u8].into_iter().chain(v.to_le_bytes()).collect(),
-                    Dec::Big(v) => {
-                        let (s, b0) = v.numer().to_bytes_le();
+                match v.to_small() {
+                    Some(v) => [UnitBin::Dec as u8].into_iter().chain(v.to_le_bytes()).collect(),
+                    None => {
+                        let (s, b0) = v.0.numer().to_bytes_le();
                         let len0 = (b0.len() as u32).to_le_bytes();
 
-                        let (_, b1) = v.denom().to_bytes_le();
+                        let (_, b1) = v.0.denom().to_bytes_le();
                         let len1 = (b1.len() as u32).to_le_bytes();
 
                         [UnitBin::DecBig as u8].into_iter()
@@ -867,18 +854,6 @@ impl<'a> UnitParse<'a, char, Iter<'a, char>> for Unit {
         }
 
         let big = BigInt::parse_bytes(s.as_bytes(), 10).ok_or(UnitParseErr::NotInt)?;
-
-        // FIXME: remove it
-        // try small or natural
-        let (sign, tmp) = big.to_u32_digits();
-
-        if tmp.len() == 1 {
-            return match sign {
-                Sign::Minus => Ok((Unit::int(-(tmp[0] as i32)), it)),
-                Sign::NoSign | Sign::Plus => Ok((Unit::uint(tmp[0]), it))
-            }
-        }
-
         Ok((Unit::int_big(big), it))
     }
 
@@ -1061,6 +1036,22 @@ impl<'a> UnitParse<'a, char, Iter<'a, char>> for Unit {
     }
 }
 
+impl Int {
+    pub fn to_small(&self) -> Option<i32> {
+        self.0.to_i32()
+    }
+
+    pub fn to_nat(&self) -> Option<u32> {
+        self.0.to_u32()
+    }
+}
+
+impl Dec {
+    pub fn to_small(&self) -> Option<f32> {
+        self.0.to_f32()
+    }
+}
+
 impl Unit {
     fn new(t: UnitType) -> Unit {
         Unit(Rc::new(t))
@@ -1073,16 +1064,8 @@ impl Unit {
     pub fn size(&self, units: MemSizeUnits) -> usize {
         let size = core::mem::size_of::<UnitType>() + match self.0.as_ref() {
             UnitType::None | UnitType::Bool(..) | UnitType::Byte(..) => 0,
-            UnitType::Int(v) =>
-                match v {
-                    Int::Small(..) | Int::Nat(..) => 0,
-                    Int::Big(v) => v.to_bytes_le().1.len(),
-                },
-            UnitType::Dec(v) =>
-                match v {
-                    Dec::Small(..) => 0,
-                    Dec::Big(v) => v.numer().to_bytes_le().1.len() + v.denom().to_bytes_le().1.len()
-                },
+            UnitType::Int(v) => v.0.to_bytes_le().1.len(),
+            UnitType::Dec(v) => v.0.numer().to_bytes_le().1.len() + v.0.denom().to_bytes_le().1.len(),
             UnitType::Str(s) => s.len(),
             UnitType::Ref(path) => path.iter().fold(0, |prev, s| prev + s.len()),
             UnitType::Stream(msg, serv, _addr) => msg.size(MemSizeUnits::Bytes) + serv.len(),
