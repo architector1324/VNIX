@@ -67,19 +67,15 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();
     writeln!(kern.drv.cli, "MEM: {mem} bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
-    let s = "{a:- b:(123 -)}";
-    let (u, _) = Unit::parse(s.chars().collect::<Vec<char>>().iter()).unwrap();
+    let s = "{a:- b:(123 -) c:{d:e}}";
+    let (u0, _) = Unit::parse(s.chars().collect::<Vec<char>>().iter()).unwrap();
 
-    let u1 = u.clone().replace(["b", "1"].into_iter(), Unit::int(456)).unwrap();
-
-    let p0 = u.clone().as_map().map(|map| map.iter().map(|(u0, u1)| (u0.as_ptr(), u1.as_ptr())).collect::<Vec<_>>()).unwrap();
-    let p1 = u1.clone().as_map().map(|map| map.iter().map(|(u0, u1)| (u0.as_ptr(), u1.as_ptr())).collect::<Vec<_>>()).unwrap();
+    let u = u0.merge(["c", "d"].into_iter(), Unit::int(456)).unwrap();
 
     let mem = kern.drv.mem.free(MemSizeUnits::Bytes).unwrap();
     writeln!(kern.drv.cli, "MEM: {mem} bytes").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
-    writeln!(kern.drv.cli, "UNIT: {:?} {:?}", p0, p1).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-    writeln!(kern.drv.cli, "UNIT: {u1}").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    writeln!(kern.drv.cli, "UNIT: {u}").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
     writeln!(kern.drv.cli, "SIZE: {} bytes", u.size(MemSizeUnits::Bytes)).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     Ok(())

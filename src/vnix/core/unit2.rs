@@ -165,6 +165,9 @@ pub trait UnitReadAsyncI {
 pub trait UnitModify {
     fn find<'a, I>(&self, path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
     fn replace<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
+
+    fn merge_with(self, what: Unit) -> Unit;
+    fn merge<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
 }
 
 impl UnitNew for Unit {
@@ -1120,6 +1123,61 @@ impl UnitModify for Unit {
                 Some(Unit::map(&map))
             }
             _ => None
+        }
+    }
+
+    fn merge<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
+        let u = self.find(path.clone())?;
+        let what = u.merge_with(what);
+        self.replace(path, what)
+    }
+
+    fn merge_with(self, what: Unit) -> Unit {
+        if self == what {
+            return self;
+        }
+
+        match self.0.as_ref() {
+            UnitType::List(lst) => {
+                let lst = match what.0.as_ref() {
+                    UnitType::List(w_lst) => {
+                        let mut lst = Rc::unwrap_or_clone(lst.clone());
+                        lst.extend(Rc::unwrap_or_clone(w_lst.clone()));
+                        lst
+                    },
+                    _ => {
+                        let mut lst = Rc::unwrap_or_clone(lst.clone());
+                        lst.push(what);
+                        lst
+                    }
+                };
+                Unit::list(&lst)
+            },
+            UnitType::Map(map) => {
+                let map = match what.0.as_ref() {
+                    UnitType::Pair(u0, u1) => {
+                        let mut map = Rc::unwrap_or_clone(map.clone());
+                        map.push((u0.clone(), u1.clone()));
+                        map
+                    },
+                    UnitType::Map(w_map) => {
+                        let mut w_map = Rc::unwrap_or_clone(w_map.clone());
+                        let mut map = Rc::unwrap_or_clone(map.clone()).into_iter()
+                            .map(|(u0, u1)| {
+                                if let Some((_, u)) = w_map.drain_filter(|(u00, _)| u00.clone() == u0.clone()).next() {
+                                    return (u0.clone(), u1.merge_with(u))
+                                }
+                                (u0, u1)
+                            }).collect::<Vec<_>>();
+
+                        map.append(&mut w_map);
+                        map
+                    },
+                    _ => return what
+                };
+                Unit::map(&map)
+            },
+            _ => what
         }
     }
 }
