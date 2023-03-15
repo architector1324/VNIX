@@ -21,17 +21,16 @@ pub const SERV_HELP: &'static str = "Test print service\nExample: abc@test.dump"
 
 pub fn dump_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let u = msg.msg.clone();
         let mut ath = Rc::new(msg.ath.clone());
 
-        let dump = if let Some((dump, _ath)) = as_map_find_async!(u.clone(), "msg", ath.clone(), u.clone(), kern)? {
+        let dump = if let Some((dump, _ath)) = as_map_find_async!(msg.msg.clone(), "msg", ath.clone(), msg.msg.clone(), kern)? {
             if ath != _ath {
                 msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
                 ath = _ath;
             }
             dump
         } else {
-            u
+            msg.msg.clone()
         };
 
         let task_id = kern.lock().get_task_running();

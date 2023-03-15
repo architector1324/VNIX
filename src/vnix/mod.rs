@@ -24,8 +24,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         // (math::calc::SERV_PATH, math::calc::SERV_HELP, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
         (sys::task::SERV_PATH, sys::task::SERV_HELP, Box::new(sys::task::task_hlr) as Box<ServHlr>),
-        // (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
-        // (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
+        (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
+        (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
         (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
         (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::echo_hlr) as Box<ServHlr>),
     ];
@@ -48,7 +48,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
     // let s = "{sum:[1 2 3] ath:test task:[sys.usr math.calc test.dump]}";
-    let s = "{task.que:[2@time.chrono a@test.dump]}";
+    let s = "test@sys.usr";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let run = TaskRun(test_msg, "sys.task".into());

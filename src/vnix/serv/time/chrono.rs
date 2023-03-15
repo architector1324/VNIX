@@ -62,10 +62,9 @@ fn get_wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Threa
 
 pub fn chrono_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let u = msg.msg.clone();
         let ath = Rc::new(msg.ath.clone());
 
-        if let Some((dur, _ath)) = thread_await!(get_wait(ath.clone(), u.clone(), u, kern))? {
+        if let Some((dur, _ath)) = thread_await!(get_wait(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             let wait = kern.lock().drv.time.wait_async(dur);
             thread_await!(wait).map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
 

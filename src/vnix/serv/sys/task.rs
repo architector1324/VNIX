@@ -85,10 +85,9 @@ fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
 
 pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let u = msg.msg.clone();
         let mut ath = Rc::new(msg.ath.clone());
 
-        if let Some((u, _ath)) = read_async!(u.clone(), ath, u, kern)? {
+        if let Some((u, _ath)) = read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern)? {
             ath = _ath;
 
             // chain
