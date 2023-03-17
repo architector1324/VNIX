@@ -7,6 +7,22 @@ use base64ct::{Base64, Encoding};
 use super::core::kern::KernErr;
 use super::core::unit::{Unit, UnitAs, UnitModify, UnitNew};
 
+
+pub type Maybe<T, E> = Result<Option<T>, E>;
+
+#[macro_export]
+macro_rules! maybe {
+    ($e:expr) => {
+        {
+            if let Some(res) = $e? {
+                res
+            } else {
+                return Ok(None)
+            }
+        }
+    };
+}
+
 pub fn compress(s: &str) -> Result<String, KernErr> {
     let mut enc = GZipEncoder::new();
     let compressed = s.as_bytes().into_iter().cloned().encode(&mut enc, Action::Finish).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::CompressionFault)?;
