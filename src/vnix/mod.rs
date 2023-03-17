@@ -18,6 +18,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
         // // ("io.term", Box::new(io::term::Term::default()) as Box<dyn ServHlr>),
+        (io::term::SERV_PATH, io::term::SERV_HELP, Box::new(io::term::term_hlr) as Box<ServHlr>),
         (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
         // // // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
@@ -47,14 +48,14 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "(load @task.test)@io.store";
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
-    let s = "{sum:[1 2 3] ath:test task:[sys.usr math.calc test.dump]}";
+    let s = "get.mode";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-    
-    let run = TaskRun(test_msg, "sys.task".into());
+
+    let run = TaskRun(test_msg, "io.term".into());
 
     kern.reg_task(&_super.name, "init.load", run)?;
 

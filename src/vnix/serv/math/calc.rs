@@ -168,12 +168,11 @@ pub fn calc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         let ath = Rc::new(msg.ath.clone());
 
         if let Some((val, ath)) = thread_await!(op_int(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
-            let m = Unit::map(&[
+            let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::int_share(val.0))]
             );
 
-            let _msg = msg.msg.merge_with(m);
-            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
         Ok(Some(msg))

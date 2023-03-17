@@ -41,12 +41,11 @@ fn get_freemem(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Th
 pub fn hw_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         if let Some((free_mem, ath)) = thread_await!(get_freemem(Rc::new(msg.ath.clone()), msg.msg.clone(), msg.msg.clone(), kern))? {
-            let m = Unit::map(&[
+            let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::int(free_mem as i32))]
             );
 
-            let _msg = msg.msg.merge_with(m);
-            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
         Ok(Some(msg))

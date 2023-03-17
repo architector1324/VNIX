@@ -92,22 +92,20 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
 
         // get size
         if let Some((size, ath)) = thread_await!(get_size(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
-            let m = Unit::map(&[
+            let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(size as u32))]
             );
 
-            let _msg = msg.msg.merge_with(m);
-            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
         // load
         if let Some((u, ath)) = thread_await!(load(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
-            let m = Unit::map(&[
+            let msg = Unit::map(&[
                 (Unit::str("msg"), u)]
             );
 
-            let _msg = msg.msg.merge_with(m);
-            return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
         // save
