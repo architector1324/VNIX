@@ -166,8 +166,6 @@ pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernE
 
 pub trait UnitReadAsyncI {
     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
-
-    fn as_str_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitTypeReadAsync<'a, Rc<String>>;
     fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
 }
 
@@ -179,9 +177,24 @@ macro_rules! read_async {
 }
 
 #[macro_export]
-macro_rules! as_str_async {
-    ($msg:expr, $ath:expr, $orig:expr, $kern:expr) => {
-        thread_await!($msg.clone().as_str_async($ath.clone(), $orig.clone(), $kern))
+macro_rules! as_async {
+    ($msg:expr, $as:ident, $ath:expr, $orig:expr, $kern:expr) => {
+        {
+            match crate::read_async!($msg, $ath, $orig, $kern) {
+                Ok(res) => {
+                    if let Some((msg, ath)) = res {
+                        if let Some(u) = msg.$as() {
+                            Ok(Some((u, ath)))
+                        } else {
+                            Ok(None)
+                        }
+                    } else {
+                        Ok(None)
+                    }
+                },
+                Err(e) => Err(e)
+            }
+        }
     };
 }
 
@@ -418,17 +431,6 @@ impl UnitReadAsyncI for Unit {
                 },
                 _ => Ok(Some((self.clone(), ath)))
             }
-        })
-    }
-
-    fn as_str_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitTypeReadAsync<'a, Rc<String>> {
-        thread!({
-            if let Some((msg, ath)) = read_async!(self, ath, orig, kern)? {
-                if let Some(s) = msg.as_str() {
-                    return Ok(Some((s, ath)))
-                }
-            }
-            Ok(None)
         })
     }
 

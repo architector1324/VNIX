@@ -10,7 +10,7 @@ use alloc::string::String;
 use crate::driver::MemSizeUnits;
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async, as_str_async, maybe, maybe_ok};
+use crate::{thread, thread_await, read_async, as_map_find_async, as_async, maybe, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::ThreadAsync;
@@ -31,7 +31,7 @@ fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Threa
             // database
             (s, kern.lock().ram_store.data.clone(), ath)
         } else if let Some((u, path)) = msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))) {
-            let (s, ath) = maybe!(as_str_async!(u, ath, orig, kern));
+            let (s, ath) = maybe!(as_async!(u, as_str, ath, orig, kern));
             // unit
             (s, kern.lock().ram_store.load(Unit::path_share(path)).ok_or(KernErr::DbLoadFault)?, ath)
         } else {
@@ -54,7 +54,7 @@ fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Threa
 fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         let (u, path) = maybe_ok!(msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))));
-        let (s, ath) = maybe!(as_str_async!(u, ath, orig, kern));
+        let (s, ath) = maybe!(as_async!(u, as_str, ath, orig, kern));
 
         if s.as_str() == "load" {
             let u = kern.lock().ram_store.load(Unit::path_share(path)).ok_or(KernErr::DbLoadFault)?;

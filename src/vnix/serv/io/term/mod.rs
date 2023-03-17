@@ -15,7 +15,7 @@ use alloc::string::String;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_str_async, maybe};
+use crate::{thread, thread_await, as_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -68,7 +68,7 @@ impl TermBase {
 
 fn get_mode(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Mode, Rc<String>), KernErr>> {
     thread!({
-        let (s, ath) = maybe!(as_str_async!(msg, ath, orig, kern));
+        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
 
         match s.as_str() {
             "get.mode" => Ok(Some((kern.lock().term.mode.clone(), ath))),
