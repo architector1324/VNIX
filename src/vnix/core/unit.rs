@@ -389,7 +389,7 @@ impl UnitAs for Unit {
             return map.iter()
                 .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
                 .find_map(|(s, u)| {
-                    if Rc::unwrap_or_clone(s) == sch {
+                    if s.as_str() == sch {
                         return Some(u)
                     }
                     None
@@ -1131,7 +1131,7 @@ impl UnitModify for Unit {
             UnitType::Map(map) => map.iter()
                 .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
                 .find_map(|(s, u)| {
-                    if Rc::unwrap_or_clone(s) == *step {
+                    if s.as_str() == step {
                         return u.find(path.clone())
                     }
                     None
@@ -1189,8 +1189,12 @@ impl UnitModify for Unit {
     }
 
     fn merge<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone {
-        let u = self.find(path.clone())?;
-        let what = u.merge_with(what);
+        // FIXME: make it work
+        let what = if let Some(u) = self.find(path.clone()) {
+            u.merge_with(what)
+        } else {
+            what
+        };
         self.replace(path, what)
     }
 

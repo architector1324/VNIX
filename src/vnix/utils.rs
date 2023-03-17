@@ -11,15 +11,22 @@ use super::core::unit::{Unit, UnitAs, UnitModify, UnitNew};
 pub type Maybe<T, E> = Result<Option<T>, E>;
 
 #[macro_export]
-macro_rules! maybe {
+macro_rules! maybe_ok {
     ($e:expr) => {
         {
-            if let Some(res) = $e? {
+            if let Some(res) = $e {
                 res
             } else {
                 return Ok(None)
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! maybe {
+    ($e:expr) => {
+        crate::maybe_ok!($e?)
     };
 }
 

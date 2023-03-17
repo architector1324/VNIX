@@ -10,13 +10,13 @@ use alloc::string::String;
 use crate::driver::MemSizeUnits;
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async};
+use crate::{thread, thread_await, read_async, as_map_find_async, as_str_async, maybe, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI};
 
 
 pub const SERV_PATH: &'static str = "io.store";
@@ -25,65 +25,52 @@ pub const SERV_HELP: &'static str = "Disk units storage service\nExample: {save:
 
 fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(usize, Rc<String>), KernErr>> {
     thread!({
-        if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
-            // database size
-            if let Some(s) = res.as_str() {
-                let units = match s.as_str() {
-                    "get.size" => MemSizeUnits::Bytes,
-                    "get.size.kb" => MemSizeUnits::Kilo,
-                    "get.size.mb" => MemSizeUnits::Mega,
-                    "get.size.gb" => MemSizeUnits::Giga,
-                    _ => return Ok(None)
-                };
-    
-                let size = kern.lock().ram_store.data.size(units);
-                return Ok(Some((size, ath)))
-            }
+        let (res, ath) = maybe!(read_async!(msg, ath, orig, kern));
 
-            // unit size
-            if let Some((s, path)) = msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))) {
-                if let Some((s, ath)) = read_async!(s, ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
-                    let units = match s.as_str() {
-                        "get.size" => MemSizeUnits::Bytes,
-                        "get.size.kb" => MemSizeUnits::Kilo,
-                        "get.size.mb" => MemSizeUnits::Mega,
-                        "get.size.gb" => MemSizeUnits::Giga,
-                        _ => return Ok(None)
-                    };
+        let (s, u, ath) = if let Some(s) = res.as_str() {
+            // database
+            (s, kern.lock().ram_store.data.clone(), ath)
+        } else if let Some((u, path)) = msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))) {
+            let (s, ath) = maybe!(as_str_async!(u, ath, orig, kern));
+            // unit
+            (s, kern.lock().ram_store.load(Unit::path_share(path)).ok_or(KernErr::DbLoadFault)?, ath)
+        } else {
+            return Ok(None);
+        };
 
-                    let size = kern.lock().ram_store.load(Unit::path_share(path)).ok_or(KernErr::DbLoadFault)?.size(units);
-                    return Ok(Some((size, ath)))
-                }
-            }
-        }
+        let units = match s.as_str() {
+            "get.size" => MemSizeUnits::Bytes,
+            "get.size.kb" => MemSizeUnits::Kilo,
+            "get.size.mb" => MemSizeUnits::Mega,
+            "get.size.gb" => MemSizeUnits::Giga,
+            _ => return Ok(None)
+        };
 
-        Ok(None)
+        let size = u.size(units);
+        Ok(Some((size, ath)))
     })
 }
 
 fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
-        if let Some((s, path)) = msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))) {
-            if let Some((s, ath)) = read_async!(s, ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
-                if Rc::unwrap_or_clone(s) == "load" {
-                    let u = kern.lock().ram_store.load(Unit::path_share(path)).ok_or(KernErr::DbLoadFault)?;
-                    return Ok(Some((u, ath)))
-                }
-            }
+        let (u, path) = maybe_ok!(msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))));
+        let (s, ath) = maybe!(as_str_async!(u, ath, orig, kern));
+
+        if s.as_str() == "load" {
+            let u = kern.lock().ram_store.load(Unit::path_share(path)).ok_or(KernErr::DbLoadFault)?;
+            return Ok(Some((u, ath)))
         }
         Ok(None)
     })
 }
 
-fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Rc<String>, KernErr>> {
+fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        if let Some((u, ath)) = as_map_find_async!(msg, "save", ath, orig, kern)? {
-            if let Some(path) = msg.as_map_find("out").and_then(|u| u.as_path()) {
-                kern.lock().ram_store.save(Unit::path_share(path), u);
-                return Ok(ath)
-            }
-        }
-        Ok(ath)
+        let (u, ath) = maybe!(as_map_find_async!(msg, "save", ath, orig, kern));
+        let path = maybe_ok!(msg.as_map_find("out").and_then(|u| u.as_path()));
+
+        kern.lock().ram_store.save(Unit::path_share(path), u);
+        Ok(Some(ath))
     })
 }
 
@@ -96,7 +83,6 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(size as u32))]
             );
-
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
@@ -105,15 +91,14 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
             let msg = Unit::map(&[
                 (Unit::str("msg"), u)]
             );
-
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
         // save
-        let _ath = thread_await!(save(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))?;
-
-        if ath != _ath {
-            msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
+        if let Some(_ath) = thread_await!(save(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+            if ath != _ath {
+                msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
+            }
         }
 
         Ok(Some(msg))

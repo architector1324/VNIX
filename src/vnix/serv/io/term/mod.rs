@@ -15,12 +15,12 @@ use alloc::string::String;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, read_async, as_str_async, maybe};
+use crate::{thread, thread_await, as_str_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitModify, UnitReadAsyncI};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -86,9 +86,6 @@ pub fn term_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str(format!("{mode}").as_str()))]
             );
-
-            writeln!(kern.lock().drv.cli, "{msg}");
-
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
