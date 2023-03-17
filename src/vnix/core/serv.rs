@@ -1,6 +1,8 @@
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::vnix::utils::Maybe;
+
 use super::msg::Msg;
 use super::kern::{KernErr, Kern};
 use super::task::ThreadAsync;
@@ -8,7 +10,7 @@ use super::task::ThreadAsync;
 use spin::Mutex;
 
 
-pub type ServHlrAsync<'a> = ThreadAsync<'a, Result<Option<Msg>, KernErr>>;
+pub type ServHlrAsync<'a> = ThreadAsync<'a, Maybe<Msg, KernErr>>;
 pub type ServHlr = dyn Fn(Msg, ServInfo, &Mutex<Kern>) -> ServHlrAsync;
 
 

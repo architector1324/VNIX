@@ -9,6 +9,7 @@ use alloc::string::String;
 
 use crate::driver::{DrvErr, CLIErr};
 
+use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
@@ -23,7 +24,7 @@ pub const SERV_PATH: &'static str = "sys.usr";
 pub const SERV_HELP: &'static str = "Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr";
 
 
-fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Usr, Option<String>)>, KernErr>> {
+fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Usr, Option<String>), KernErr>> {
     thread!({
         // test
         if let Some(_ath) = read_async!(msg, ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {

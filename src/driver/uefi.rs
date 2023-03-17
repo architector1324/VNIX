@@ -10,8 +10,10 @@ use uefi::proto::rng::{Rng, RngAlgorithmType};
 use uefi::prelude::{SystemTable, Boot};
 use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType, EventType, Tpl, TimerTrigger};
 
-use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
 use crate::thread;
+
+use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
+use crate::vnix::utils::Maybe;
 
 use super::{TimeAsync, Duration};
 
@@ -148,7 +150,7 @@ impl CLI for UefiCLI {
         Ok(())
     }
 
-    fn get_key(&mut self, block: bool) -> Result<Option<crate::driver::TermKey>, CLIErr> {
+    fn get_key(&mut self, block: bool) -> Maybe<crate::driver::TermKey, CLIErr> {
         // let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 
         if block {
@@ -321,7 +323,7 @@ impl Disp for UefiDisp {
         Ok(())
     }
 
-    fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr> {
+    fn mouse(&mut self, block: bool) -> Maybe<Mouse, DispErr> {
         let mut mouse = self.st.boot_services().open_protocol_exclusive::<Pointer>(self.mouse_hlr).map_err(|_| DispErr::GetMouseState)?;
 
         if block {

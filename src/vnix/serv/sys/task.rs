@@ -7,6 +7,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
@@ -20,7 +21,7 @@ pub const SERV_PATH: &'static str = "sys.task";
 pub const SERV_HELP: &'static str = "Service for run task from message\nExample: (load @txt.hello)@io.store@sys.task";
 
 
-fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Unit, Rc<String>)>, KernErr>> {
+fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         if let Some((lst, mut ath)) = as_map_find_async!(msg, "task", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_list()?, ath))) {
             let mut _msg = msg.clone();

@@ -16,7 +16,7 @@ use super::user::Usr;
 use crate::thread;
 use crate::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
 use crate::vnix::serv::io::term::TermBase;
-use crate::vnix::utils::RamStore;
+use crate::vnix::utils::{RamStore, Maybe};
 
 use spin::Mutex;
 
@@ -78,7 +78,7 @@ pub struct Kern {
     tasks_queue: Vec<Task>,
     tasks_running: Vec<Task>,
     tasks_signals: Vec<(usize, TaskSig)>,
-    task_result: Vec<(usize, Result<Option<Msg>, KernErr>)>
+    task_result: Vec<(usize, Maybe<Msg, KernErr>)>
 }
 
 
@@ -166,7 +166,7 @@ impl Kern {
         self.curr_task_id
     }
 
-    pub fn get_task_result(&mut self, id: usize) -> Option<Result<Option<Msg>, KernErr>> {
+    pub fn get_task_result(&mut self, id: usize) -> Option<Maybe<Msg, KernErr>> {
         self.task_result.drain_filter(|(i, _)| *i == id).next().map(|(_, msg)| msg)
     }
 
@@ -185,7 +185,7 @@ impl Kern {
         self.msg(ath, u)
     }
 
-    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: String, msg: Msg) -> Result<Option<ServHlrAsync<'a>>, KernErr> {
+    pub fn send<'a>(mtx: &'a Mutex<Self>, serv: String, msg: Msg) -> Maybe<ServHlrAsync<'a>, KernErr> {
         // verify msg
         let usr = mtx.lock().get_usr(&msg.ath)?;
         usr.verify(msg.msg.clone(), &msg.sign, &msg.hash)?;

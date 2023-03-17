@@ -15,6 +15,7 @@ use num::cast::ToPrimitive;
 use num::bigint::{BigInt, Sign};
 use num::rational::BigRational;
 
+use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::TaskRun;
 
 use crate::driver::MemSizeUnits;
@@ -160,8 +161,8 @@ pub trait UnitParse<'a, T: 'a, I> {
     }
 }
 
-pub type UnitReadAsync<'a> = ThreadAsync<'a, Result<Option<(Unit, Rc<String>)>, KernErr>>;
-pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Result<Option<(T, Rc<String>)>, KernErr>>;
+pub type UnitReadAsync<'a> = ThreadAsync<'a, Maybe<(Unit, Rc<String>), KernErr>>;
+pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
 
 pub trait UnitReadAsyncI {
     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;

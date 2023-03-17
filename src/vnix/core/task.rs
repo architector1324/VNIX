@@ -5,9 +5,11 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use spin::Mutex;
 
-use super::kern::{KernErr, Kern};
+use crate::vnix::utils::Maybe;
+
 use super::msg::Msg;
 use super::unit::Unit;
+use super::kern::{KernErr, Kern};
 
 
 #[derive(Debug, Clone)]
@@ -27,7 +29,7 @@ pub enum TaskSig {
     Kill
 }
 
-pub type TaskRunAsync<'a> = impl Generator<Yield = (), Return = Result<Option<Msg>, KernErr>> + 'a;
+pub type TaskRunAsync<'a> = impl Generator<Yield = (), Return = Maybe<Msg, KernErr>> + 'a;
 pub type ThreadAsync<'a, T> = Box<dyn Generator<Yield = (), Return = T> + 'a>;
 
 #[macro_export]

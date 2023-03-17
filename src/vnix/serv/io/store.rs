@@ -9,6 +9,7 @@ use alloc::string::String;
 
 use crate::driver::MemSizeUnits;
 
+use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
@@ -22,7 +23,7 @@ pub const SERV_PATH: &'static str = "io.store";
 pub const SERV_HELP: &'static str = "Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store";
 
 
-fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(usize, Rc<String>)>, KernErr>> {
+fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(usize, Rc<String>), KernErr>> {
     thread!({
         if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // database size
@@ -60,7 +61,7 @@ fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Threa
     })
 }
 
-fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Unit, Rc<String>)>, KernErr>> {
+fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         if let Some((s, path)) = msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))) {
             if let Some((s, ath)) = read_async!(s, ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {

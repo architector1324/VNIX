@@ -7,6 +7,8 @@ use core::fmt::{Write, Display};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 
+use crate::vnix::utils::Maybe;
+
 
 #[derive(Debug)]
 pub enum CLIErr {
@@ -89,7 +91,7 @@ pub trait CLI: Write {
     fn set_res(&mut self, res: (usize, usize)) -> Result<(), CLIErr>;
 
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr>;
-    fn get_key(&mut self, block: bool) -> Result<Option<TermKey>, CLIErr>;
+    fn get_key(&mut self, block: bool) -> Maybe<TermKey, CLIErr>;
     fn clear(&mut self) -> Result<(), CLIErr>;
 }
 
@@ -102,7 +104,7 @@ pub trait Disp {
     fn res_list(&self) -> Result<Vec<(usize, usize)>, DispErr>;
     fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr>; 
 
-    fn mouse(&mut self, block: bool) -> Result<Option<Mouse>, DispErr>;
+    fn mouse(&mut self, block: bool) -> Maybe<Mouse, DispErr>;
 
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr>;
     fn blk(&mut self, pos: (i32, i32), img_size: (usize, usize), src: u32, img: &[u32]) -> Result<(), DispErr>;

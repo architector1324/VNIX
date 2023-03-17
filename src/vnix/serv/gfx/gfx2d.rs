@@ -10,6 +10,7 @@ use alloc::string::String;
 use crate::driver::DrvErr;
 
 use crate::vnix::utils;
+use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
@@ -23,7 +24,7 @@ pub const SERV_PATH: &'static str = "gfx.2d";
 pub const SERV_HELP: &'static str = "Service for rendering 2d graphics\nExample: #ff0000@gfx.2d # fill screen with red color";
 
 
-fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<((usize, usize), u32, Rc<String>)>, KernErr>> {
+fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<((usize, usize), u32, Rc<String>), KernErr>> {
     thread!({
         if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // #ff0000

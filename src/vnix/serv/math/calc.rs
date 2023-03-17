@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, read_async, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
@@ -54,7 +55,7 @@ fn calc_multi_op_int(op: &str, vals: Vec<Int>) -> Option<Int> {
     }).flatten()
 }
 
-fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Int, Rc<String>)>, KernErr>> {
+fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Int, Rc<String>), KernErr>> {
     thread!({
         if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // val
@@ -85,7 +86,7 @@ fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> 
     })
 }
 
-fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Int, Rc<String>)>, KernErr>> {
+fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Int, Rc<String>), KernErr>> {
     thread!({
         if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
             // (op (v0 v1))
@@ -148,7 +149,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
     })
 }
 
-fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Option<(Int, Rc<String>)>, KernErr>> {
+fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Int, Rc<String>), KernErr>> {
     thread!({
         // single operation
         if let Some((val, ath)) = thread_await!(single_op_int(ath.clone(), orig.clone(), msg.clone(), kern))? {
