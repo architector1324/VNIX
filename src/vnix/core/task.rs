@@ -58,6 +58,21 @@ macro_rules! thread_await {
     };
 }
 
+#[macro_export]
+macro_rules! task_result {
+    ($id:expr, $kern:expr) => {
+        {
+            let res = loop {
+                if let Some(res) = $kern.lock().get_task_result($id) {
+                    break res;
+                }
+                yield;
+            };
+            res
+        }
+    };
+}
+
 impl Task {
     pub fn new(usr: String, name: String, id: usize, parent_id: usize, run: TaskRun) -> Self {
         Task{usr, name, id, parent_id, run}

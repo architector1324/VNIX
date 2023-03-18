@@ -8,7 +8,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_find_as_async, as_async, maybe_ok};
+use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_find_as_async, as_async, maybe_ok, task_result};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -38,15 +38,7 @@ fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
             let run = TaskRun(_msg, Rc::unwrap_or_clone(serv));
             let id = kern.lock().reg_task(&_ath, "sys.task", run)?;
 
-            let __msg = loop {
-                if let Some(res) = kern.lock().get_task_result(id) {
-                    if let Some(__msg) = res? {
-                        break __msg;
-                    }
-                    return Ok(None)
-                }
-                yield;
-            };
+            let __msg = maybe_ok!(task_result!(id, kern)?);
 
             _msg = prev.merge_with(__msg.msg);
             ath = Rc::new(__msg.ath);
@@ -94,11 +86,8 @@ fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
             let run = TaskRun(msg, serv.clone());
             let id = kern.lock().reg_task(&ath, "sys.task", run)?;
 
-            loop {
-                if let Some(..) = kern.lock().get_task_result(id) {
-                    break;
-                }
-                yield;
+            if let Some(msg) = task_result!(id, kern)? {
+                ath = Rc::new(msg.ath);
             }
         }
         Ok(Some(ath))

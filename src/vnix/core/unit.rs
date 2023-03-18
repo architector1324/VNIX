@@ -19,7 +19,7 @@ use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::TaskRun;
 
 use crate::driver::MemSizeUnits;
-use crate::{thread, thread_await};
+use crate::{thread, thread_await, task_result, maybe, maybe_ok};
 
 use super::task::ThreadAsync;
 use super::kern::{Addr, KernErr, Kern};
@@ -431,13 +431,10 @@ impl UnitReadAsyncI for Unit {
                     let run = TaskRun(msg.clone(), serv.clone());
                     let id = kern.lock().reg_task(&ath, "unit.read", run)?;
 
-                    let res = loop {
-                        if let Some(res) = kern.lock().get_task_result(id) {
-                            break Ok(res?.and_then(|msg| Some((msg.msg.as_map_find("msg")?, Rc::new(msg.ath)))).map(|(u, ath)| (u, ath)));
-                        }
-                        yield;
-                    };
-                    res
+                    let res = maybe!(task_result!(id, kern));
+                    let msg = maybe_ok!(res.msg.as_map_find("msg"));
+
+                    Ok(Some((msg, Rc::new(res.ath))))
                 },
                 _ => Ok(Some((self.clone(), ath)))
             }
