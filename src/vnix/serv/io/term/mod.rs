@@ -18,7 +18,7 @@ use crate::driver::DrvErr;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe, maybe_ok};
+use crate::{thread, thread_await, as_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -71,8 +71,6 @@ impl TermBase {
 
 fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
-        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
-
         let info = {
             let mode = kern.lock().term.mode.clone();
             let res_txt = kern.lock().drv.cli.res().map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
@@ -130,18 +128,26 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
             ])
         };
 
-        let res = match s.as_str() {
-            "get" => info,
-            "get.mode" => maybe_ok!(info.find(["mode"].into_iter())),
-            "get.res" => maybe_ok!(info.find(["res"].into_iter())),
-            "get.res.txt" => maybe_ok!(info.find(["res", "txt"].into_iter())),
-            "get.res.gfx" => maybe_ok!(info.find(["res", "gfx"].into_iter())),
-            "get.res.all" => maybe_ok!(info.find(["res", "all"].into_iter())),
-            "get.res.all.txt" => maybe_ok!(info.find(["res", "all", "txt"].into_iter())),
-            "get.res.all.gfx" => maybe_ok!(info.find(["res", "all", "gfx"].into_iter())),
-            _ => return Ok(None)
-        };
-        Ok(Some((res, ath)))
+        // get
+        if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
+            let res = match s.as_str() {
+                "get" => info,
+                _ => return Ok(None)
+            };
+            return Ok(Some((res, ath)))
+        }
+
+        // get with ref
+        if let Some(path) = msg.as_path() {
+            let mut path = path.iter().map(|s| s.as_str());
+
+            let res = match maybe_ok!(path.next()) {
+                "get" => maybe_ok!(info.find(path)),
+                _ => return Ok(None)
+            };
+            return Ok(Some((res, ath)))
+        }
+        Ok(None)
     })
 }
 
