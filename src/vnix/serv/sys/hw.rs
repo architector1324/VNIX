@@ -11,7 +11,7 @@ use crate::driver::{DrvErr, MemSizeUnits};
 
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async};
+use crate::{thread, thread_await, maybe, as_async};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
@@ -24,18 +24,16 @@ pub const SERV_HELP: &'static str = "Service for hardware management\nExample: g
 
 fn get_freemem(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(usize, Rc<String>), KernErr>> {
     thread!({
-        if let Some((s, ath)) = read_async!(msg, ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_str()?, ath))) {
-            let units = match s.as_str() {
-                "get.mem.free" => MemSizeUnits::Bytes,
-                "get.mem.free.kb" => MemSizeUnits::Kilo,
-                "get.mem.free.mb" => MemSizeUnits::Mega,
-                "get.mem.free.gb" => MemSizeUnits::Giga,
-                _ => return Ok(None)
-            };
+        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
 
-            return kern.lock().drv.mem.free(units).map_err(|e| KernErr::DrvErr(DrvErr::Mem(e))).map(|res| Some((res, ath)))
-        }
-        Ok(None)
+        let units = match s.as_str() {
+            "get.mem.free" => MemSizeUnits::Bytes,
+            "get.mem.free.kb" => MemSizeUnits::Kilo,
+            "get.mem.free.mb" => MemSizeUnits::Mega,
+            "get.mem.free.gb" => MemSizeUnits::Giga,
+            _ => return Ok(None)
+        };
+        return kern.lock().drv.mem.free(units).map_err(|e| KernErr::DrvErr(DrvErr::Mem(e))).map(|res| Some((res, ath)))
     })
 }
 
@@ -45,7 +43,6 @@ pub fn hw_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::int(free_mem as i32))]
             );
-
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 

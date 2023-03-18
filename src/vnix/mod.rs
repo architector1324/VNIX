@@ -49,14 +49,14 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
     // let s = "{sum:(1 2) ath:test task:[sys.usr math.calc test.dump]}";
-    let s = "{ath:arch1324 pub:AoaHgZNb2bv8ftQLvVtdghXATGUJjSOdSfIy31DB9EHU}";
+    let s = "get.mem.free.mb";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run
     // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
-    let run = TaskRun(test_msg, "sys.usr".into());
+    let run = TaskRun(test_msg, "sys.hw".into());
 
     kern.reg_task(&_super.name, "init.load", run)?;
 
