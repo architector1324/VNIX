@@ -205,6 +205,16 @@ macro_rules! as_map_find_async {
     };
 }
 
+#[macro_export]
+macro_rules! as_map_find_as_async {
+    ($msg:expr, $sch:expr, $as:ident, $ath:expr, $orig:expr, $kern:expr) => {
+        match crate::as_map_find_async!($msg, $sch, $ath, $orig, $kern) {
+            Ok(res) => Ok(res.and_then(|(u, ath)| Some((u.$as()?, ath)))),
+            Err(e) => Err(e)
+        }
+    };
+}
+
 pub trait UnitModify {
     fn find<'a, I>(&self, path: I) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;
     fn replace<'a, I>(self, path: I, what: Unit) -> Option<Unit> where I: Iterator<Item = &'a str> + Clone;

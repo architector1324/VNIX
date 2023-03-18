@@ -9,7 +9,7 @@ use alloc::boxed::Box;
 use crate::driver::{Duration, DrvErr};
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async};
+use crate::{thread, thread_await, as_map_find_as_async, as_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::ThreadAsync;
@@ -24,36 +24,33 @@ pub const SERV_HELP: &'static str = "Service for time control\nExample: {wait.ms
 
 fn get_wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Duration, Rc<String>), KernErr>> {
     thread!({
-        if let Some((res, ath)) = read_async!(msg, ath, orig, kern)? {
-            // sec
-            if let Some(sec) = res.clone().as_int() {
-                return Ok(Some((Duration::Seconds(sec as usize), ath)))
-            }
-
-            // (wait.<units> <time>)
-            if let Some((s, time)) = res.as_pair() {
-                if let Some((s, ath)) = read_async!(s, ath, orig, kern)?.and_then(|(s, ath)| Some((s.as_str()?, ath))) {
-                    if let Some((time, ath)) = read_async!(time, ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_int()?, ath))) {
-                        match s.as_str() {
-                            "wait" => return Ok(Some((Duration::Seconds(time as usize), ath))),
-                            "wait.ms" => return Ok(Some((Duration::Milli(time as usize), ath))),
-                            "wait.mcs" => return Ok(Some((Duration::Micro(time as usize), ath))),
-                            _ => return Ok(None)
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some((sec, ath)) = as_map_find_async!(msg, "wait", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_int()?, ath))) {
+        // sec
+        if let Some((sec, ath)) = as_async!(msg, as_uint, ath, orig, kern)? {
             return Ok(Some((Duration::Seconds(sec as usize), ath)))
         }
 
-        if let Some((ms, ath)) = as_map_find_async!(msg, "wait.ms", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_int()?, ath))) {
+        // (wait.<units> <time>)
+        if let Some(((s, time), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
+            let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+            let (time, ath) = maybe!(as_async!(time, as_uint, ath, orig, kern));
+
+            match s.as_str() {
+                "wait" => return Ok(Some((Duration::Seconds(time as usize), ath))),
+                "wait.ms" => return Ok(Some((Duration::Milli(time as usize), ath))),
+                "wait.mcs" => return Ok(Some((Duration::Micro(time as usize), ath))),
+                _ => return Ok(None)
+            }
+        }
+
+        if let Some((sec, ath)) = as_map_find_as_async!(msg, "wait", as_uint, ath, orig, kern)? {
+            return Ok(Some((Duration::Seconds(sec as usize), ath)))
+        }
+
+        if let Some((ms, ath)) = as_map_find_as_async!(msg, "wait.ms", as_uint, ath, orig, kern)? {
             return Ok(Some((Duration::Milli(ms as usize), ath)))
         }
 
-        if let Some((mcs, ath)) = as_map_find_async!(msg, "wait.mcs", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_int()?, ath))) {
+        if let Some((mcs, ath)) = as_map_find_as_async!(msg, "wait.mcs", as_uint, ath, orig, kern)? {
             return Ok(Some((Duration::Micro(mcs as usize), ath)))
         }
 
