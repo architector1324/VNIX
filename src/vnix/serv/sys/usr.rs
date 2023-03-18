@@ -10,7 +10,7 @@ use alloc::string::String;
 use crate::driver::{DrvErr, CLIErr};
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async};
+use crate::{thread, thread_await, as_async, as_map_find_as_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::user::Usr;
@@ -27,26 +27,24 @@ pub const SERV_HELP: &'static str = "Users management service\nExample: {ath:tes
 fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Usr, Option<String>), KernErr>> {
     thread!({
         // test
-        if let Some(_ath) = read_async!(msg, ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
-            return Usr::new(&_ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
+        if let Some((ath, _)) = as_async!(msg, as_str, ath, orig, kern)? {
+            return Usr::new(&ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
         }
 
-        if let Some(_ath) = as_map_find_async!(msg, "ath", ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
-            if let Some(pub_key) = as_map_find_async!(msg, "pub", ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
-                if let Some(priv_key) = as_map_find_async!(msg, "priv", ath, orig, kern)?.and_then(|(u, _)| u.as_str()) {
-                    // {ath:test pub:.. priv:..}
-                    return Ok(Some((Usr::login(&_ath, &priv_key, &pub_key)?, None)))
-                } else {
-                    // {ath:test pub:..}
-                    return Ok(Some((Usr::guest(&_ath, &pub_key)?, None)))
-                }
-            } else {
-                // {ath:test}
-                return Usr::new(&_ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
+        let (ath, _) = maybe!(as_map_find_as_async!(msg, "ath", as_str, ath, orig, kern));
+
+        if let Some((pub_key, _)) = as_map_find_as_async!(msg, "pub", as_str, ath, orig, kern)? {
+            if let Some((priv_key, _)) = as_map_find_as_async!(msg, "priv", as_str, ath, orig, kern)? {
+                // {ath:test pub:.. priv:..}
+                return Ok(Some((Usr::login(&ath, &priv_key, &pub_key)?, None)))
             }
+
+            // {ath:test pub:..}
+            return Ok(Some((Usr::guest(&ath, &pub_key)?, None)))
         }
 
-        Ok(None)
+        // {ath:test}
+        return Usr::new(&ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
     })
 }
 
@@ -61,10 +59,10 @@ pub fn usr_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
                 writeln!(kern.lock().drv.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
                 yield;
 
-                let m = Unit::map(&[
+                let msg = Unit::map(&[
                     (Unit::str("msg"), Unit::parse(out.chars()).map_err(|e| KernErr::ParseErr(e))?.0),
                 ]);
-                return kern.lock().msg(&usr.name, m).map(|msg| Some(msg));
+                return kern.lock().msg(&usr.name, msg).map(|msg| Some(msg));
             }
 
             return kern.lock().msg(&usr.name, msg.msg).map(|msg| Some(msg))
