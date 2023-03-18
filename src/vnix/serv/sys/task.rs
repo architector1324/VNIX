@@ -8,7 +8,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async};
+use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_find_as_async, as_async};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -23,95 +23,99 @@ pub const SERV_HELP: &'static str = "Service for run task from message\nExample:
 
 fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
-        if let Some((lst, mut ath)) = as_map_find_async!(msg, "task", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_list()?, ath))) {
-            let mut _msg = msg.clone();
+        let (lst, mut ath) = maybe!(as_map_find_as_async!(msg, "task", as_list, ath, orig, kern));
+        let mut _msg = if let Some((_msg, _ath)) = as_map_find_async!(msg, "msg", ath, orig, kern)? {
+            ath = _ath;
+            _msg
+        } else {
+            msg.clone()
+        };
 
-            for p in Rc::unwrap_or_clone(lst) {
-                if let Some((serv, _ath)) = read_async!(p, ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_str()?, ath))) {
-                    let prev = _msg.clone();
+        for p in Rc::unwrap_or_clone(lst) {
+            let (serv, _ath) = maybe!(as_async!(p, as_str, ath, orig, kern));
+            let prev = _msg.clone();
 
-                    let run = TaskRun(_msg, Rc::unwrap_or_clone(serv));
-                    let id = kern.lock().reg_task(&_ath, "sys.task", run)?;
+            let run = TaskRun(_msg, Rc::unwrap_or_clone(serv));
+            let id = kern.lock().reg_task(&_ath, "sys.task", run)?;
 
-                    loop {
-                        if let Some(res) = kern.lock().get_task_result(id) {
-                            if let Some(__msg) = res? {
-                                _msg = prev.merge_with(__msg.msg);
-                                ath = Rc::new(__msg.ath);
-                                break;
-                            }
-                            return Ok(None)
-                        }
-                        yield;
+            let __msg = loop {
+                if let Some(res) = kern.lock().get_task_result(id) {
+                    if let Some(__msg) = res? {
+                        break __msg;
                     }
-                } else {
                     return Ok(None)
                 }
-            }
+                yield;
+            };
 
-            return Ok(Some((_msg, ath)))
+            _msg = prev.merge_with(__msg.msg);
+            ath = Rc::new(__msg.ath);
+        }
+        return Ok(Some((_msg, ath)))
+    })
+}
+
+fn queue(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        let (lst, mut ath) = maybe!(as_map_find_as_async!(msg, "task.que", as_list, ath, orig, kern));
+
+        for p in Rc::unwrap_or_clone(lst) {
+            if let Some((_, _ath)) = read_async!(p, ath, orig, kern)? {
+                ath = _ath;
+            }
+        }
+        Ok(Some(ath))
+    })
+}
+
+fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(), KernErr>> {
+    thread!({
+        let (lst, _) = maybe!(as_map_find_as_async!(msg, "task.sim", as_list, ath, orig, kern));
+
+        for p in lst.iter() {
+            if let Some((_msg, serv, _)) = p.clone().as_stream() {
+                let run = TaskRun(_msg, serv);
+                kern.lock().reg_task(&ath, "sys.task", run)?;
+            }
         }
         Ok(None)
     })
 }
 
-fn queue(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<Rc<String>, KernErr>> {
+fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
-        if let Some((lst, _ath)) = as_map_find_async!(msg, "task.que", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_list()?, ath))) {
-            ath = _ath;
-
-            for p in Rc::unwrap_or_clone(lst) {
-                if let Some((_, _ath)) = read_async!(p, ath, orig, kern)? {
-                    ath = _ath;
-                }
-            }
-        }
-        Ok(ath)
-    })
-}
-
-fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Result<(), KernErr>> {
-    thread!({
-        if let Some((lst, _)) = as_map_find_async!(msg, "task.sim", ath, orig, kern)?.and_then(|(u, ath)| Some((u.as_list()?, ath))) {
-            for p in lst.iter() {
-                if let Some((_msg, serv, _)) = p.clone().as_stream() {
-                    let run = TaskRun(_msg, serv);
-                    kern.lock().reg_task(&ath, "sys.task", run)?;
-                }
-            }
-        }
-        Ok(())
-    })
-}
-
-pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let mut ath = Rc::new(msg.ath.clone());
-
-        if let Some((u, _ath)) = read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern)? {
-            ath = _ath;
-
-            // chain
-            if let Some((u, ath)) = thread_await!(chain(ath.clone(), u.clone(), u.clone(), kern))? {
-                let m = Unit::map(&[
-                    (Unit::str("msg"), u)]
-                );
-
-                let _msg = msg.msg.merge_with(m);
-                return kern.lock().msg(&ath, _msg).map(|msg| Some(msg))
-            }
+        let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
     
-            // sim
-            thread_await!(sim(ath.clone(), u.clone(), u.clone(), kern))?;
-
-            // queue
-            let _ath = thread_await!(queue(ath.clone(), u.clone(), u.clone(), kern))?;
-
-            if ath != _ath {
-                msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
+        // chain
+        if let Some((msg, ath)) = thread_await!(chain(ath.clone(), msg.clone(), msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)]
+            );
+            return Ok(Some((msg, ath)))
+        }
+    
+        // sim
+        thread_await!(sim(ath.clone(), msg.clone(), msg.clone(), kern))?;
+    
+        // queue
+        if let Some(_ath) = thread_await!(queue(ath.clone(), msg.clone(), msg.clone(), kern))? {
+            if _ath != ath {
+                return Ok(Some((msg, ath)))
             }
         }
+        Ok(None)
+    })
+}
 
+pub fn task_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let ath = Rc::new(msg.ath.clone());
+
+        // task
+        if let Some((_msg, ath)) = thread_await!(run(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+            let msg = msg.msg.merge_with(_msg);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
         Ok(Some(msg))
     })
 }

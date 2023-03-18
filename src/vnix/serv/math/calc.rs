@@ -152,7 +152,6 @@ pub fn calc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::int_share(val.0))]
             );
-            writeln!(kern.lock().drv.cli, "{msg}");
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
