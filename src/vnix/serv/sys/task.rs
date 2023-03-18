@@ -8,7 +8,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_find_as_async, as_async};
+use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_find_as_async, as_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -82,6 +82,29 @@ fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
     })
 }
 
+fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        let (u, serv, _) = maybe_ok!(msg.as_map_find("task.stk").and_then(|u| u.as_stream()));
+        let (lst, mut ath) = maybe!(as_async!(u, as_list, ath, orig, kern));
+
+        for p in Rc::unwrap_or_clone(lst) {
+            let (msg, _ath) = maybe!(read_async!(p, ath, orig, kern));
+            ath = _ath;
+
+            let run = TaskRun(msg, serv.clone());
+            let id = kern.lock().reg_task(&ath, "sys.task", run)?;
+
+            loop {
+                if let Some(..) = kern.lock().get_task_result(id) {
+                    break;
+                }
+                yield;
+            }
+        }
+        Ok(Some(ath))
+    })
+}
+
 fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
@@ -99,6 +122,13 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
     
         // queue
         if let Some(_ath) = thread_await!(queue(ath.clone(), msg.clone(), msg.clone(), kern))? {
+            if _ath != ath {
+                return Ok(Some((msg, ath)))
+            }
+        }
+
+        // stack
+        if let Some(_ath) = thread_await!(stack(ath.clone(), msg.clone(), msg.clone(), kern))? {
             if _ath != ath {
                 return Ok(Some((msg, ath)))
             }
