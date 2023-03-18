@@ -15,7 +15,7 @@ use crate::{thread, thread_await, read_async};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs, UnitModify};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs};
 
 
 pub const SERV_PATH: &'static str = "sys.hw";

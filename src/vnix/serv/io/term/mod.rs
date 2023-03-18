@@ -1,6 +1,6 @@
 mod content;
 
-use core::fmt::{Display, Write};
+use core::fmt::Display;
 
 use core::pin::Pin;
 use core::ops::{Generator, GeneratorState};
