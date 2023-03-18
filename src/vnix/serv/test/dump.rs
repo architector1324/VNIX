@@ -6,7 +6,7 @@ use spin::Mutex;
 use alloc::rc::Rc;
 use alloc::boxed::Box;
 
-use crate::{thread, thread_await, as_map_find_async};
+use crate::{thread, thread_await, as_map_find_async, read_async, maybe};
 
 use crate::driver::{CLIErr, DrvErr};
 
@@ -30,7 +30,12 @@ pub fn dump_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             }
             dump
         } else {
-            msg.msg.clone()
+            let (dump, _ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
+            if ath != _ath {
+                msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
+                ath = _ath;
+            }
+            dump
         };
 
         let task_id = kern.lock().get_task_running();
