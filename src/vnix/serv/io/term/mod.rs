@@ -12,6 +12,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::driver::DrvErr;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
@@ -66,14 +67,26 @@ impl TermBase {
     
 }
 
-fn get_mode(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Mode, Rc<String>), KernErr>> {
+fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
 
-        match s.as_str() {
-            "get.mode" => Ok(Some((kern.lock().term.mode.clone(), ath))),
-            _ => Ok(None)
-        }
+        let res = match s.as_str() {
+            "get.mode" => {
+                let mode = kern.lock().term.mode.clone();
+                Unit::str(format!("{mode}").as_str())                
+            },
+            "get.res.txt" => {
+                let (w, h) = kern.lock().drv.cli.res().map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
+                Unit::pair(Unit::uint(w as u32), Unit::uint(h as u32))
+            },
+            "get.res.gfx" => {
+                let (w, h) = kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+                Unit::pair(Unit::uint(w as u32), Unit::uint(h as u32))
+            },
+            _ => return Ok(None)
+        };
+        Ok(Some((res, ath)))
     })
 }
 
@@ -81,15 +94,15 @@ pub fn term_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let ath = Rc::new(msg.ath.clone());
 
-        // get mode
-        if let Some((mode, ath)) = thread_await!(get_mode(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        // get command
+        if let Some((res, ath)) = thread_await!(get(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             let msg = Unit::map(&[
-                (Unit::str("msg"), Unit::str(format!("{mode}").as_str()))]
+                (Unit::str("msg"), res)]
             );
+            writeln!(kern.lock().drv.cli, "{msg}");
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
-        yield;
         Ok(Some(msg))
     })
 }
