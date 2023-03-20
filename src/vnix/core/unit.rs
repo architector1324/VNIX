@@ -905,7 +905,7 @@ impl<I> UnitParse<'_, char, I> for Unit where I: Iterator<Item = char> + Clone {
         };
 
         if let Some(ch) = it.clone().next() {
-            if !ch.is_whitespace() {
+            if char_no_quoted(ch) {
                 return Err(UnitParseErr::UnexpectedChar)
             }
         }
