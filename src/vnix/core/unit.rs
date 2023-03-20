@@ -113,6 +113,7 @@ pub trait UnitNew {
     fn stream(u: Unit, serv: &str, addr: Addr) -> Unit;
     fn pair(u0: Unit, u1: Unit) -> Unit;
     fn list(lst: &[Unit]) -> Unit;
+    fn list_share(lst: Rc<Vec<Unit>>) -> Unit;
     fn map(map: &[(Unit, Unit)]) -> Unit;
 }
 
@@ -160,6 +161,9 @@ pub trait UnitParse<'a, T: 'a, I> {
         unimplemented!()
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct DisplayStr(pub Unit);
 
 pub type UnitReadAsync<'a> = ThreadAsync<'a, Maybe<(Unit, Rc<String>), KernErr>>;
 pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
@@ -295,6 +299,10 @@ impl UnitNew for Unit {
 
     fn list(lst: &[Unit]) -> Unit {
         Unit::new(UnitType::List(Rc::new(lst.to_vec())))
+    }
+
+    fn list_share(lst: Rc<Vec<Unit>>) -> Unit {
+        Unit::new(UnitType::List(lst))
     }
 
     fn map(map: &[(Unit, Unit)]) -> Unit {
@@ -453,6 +461,15 @@ impl UnitReadAsyncI for Unit {
 
 fn char_no_quoted(c: char) -> bool {
     c.is_alphanumeric() || c == '.' || c == '#' || c == '_' || c == '.'
+}
+
+impl Display for DisplayStr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.0.0.as_ref() {
+            UnitType::Str(s) => write!(f, "{s}"),
+            _ => write!(f, "{}", self.0)
+        }
+    }
 }
 
 impl Display for Unit {

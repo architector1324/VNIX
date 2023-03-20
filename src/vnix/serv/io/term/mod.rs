@@ -23,7 +23,7 @@ use crate::{thread, thread_await, as_async, maybe_ok, maybe, read_async, as_map_
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify, DisplayStr};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -245,15 +245,17 @@ fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync
     })
 }
 
-fn say(nl: bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
+        let (msg, mut ath) = maybe!(read_async!(msg, ath, orig, kern));
 
-        // (say <unit>)
         if let Some(((s, msg), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
             let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
             return match s.as_str() {
-                "say" => thread_await!(say(false, ath, orig, msg, kern)),
+                // (say <unit>)
+                "say" => thread_await!(say(false, false, ath, orig, msg, kern)),
+                // (say.fmt [<unit> ..])
+                "say.fmt" => thread_await!(say(false, true, ath, orig, msg, kern)),
                 _ => Ok(None)
             }
         }
@@ -275,15 +277,42 @@ fn say(nl: bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> 
                 None
             };
 
-            return thread_await!(say(nl, ath, orig, _msg, kern))
+            return thread_await!(say(nl, false, ath, orig, _msg, kern))
+        }
+
+        // {say.fmt:[<unit> ..] nl:<t|f> shrt:<uint>}
+        if let Some((lst, mut ath)) = as_map_find_as_async!(msg, "say.fmt", as_list, ath, orig, kern)? {
+            let nl = if let Some((nl, _ath)) = as_map_find_as_async!(msg, "nl", as_bool, ath, orig, kern)? {
+                ath = _ath;
+                nl
+            } else {
+                false
+            };
+
+            // FIXME: implement short
+            let _shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
+                ath = _ath;
+                Some(shrt)
+            } else {
+                None
+            };
+
+            return thread_await!(say(nl, true, ath, orig, Unit::list_share(lst), kern))
         }
 
         // <unit>
-        let s = if nl {
-            format!("{msg}\n")
+        let mut s = if fmt {
+            let (lst, _ath) = maybe!(as_async!(msg, as_list, ath, orig, kern));
+            ath = _ath; 
+
+            lst.iter().map(|u| format!("{}", DisplayStr(u.clone()))).collect()
         } else {
-            format!("{msg}")
+            format!("{}", DisplayStr(msg))
         };
+
+        if nl {
+            s += "\n";
+        }
 
         let term = kern.lock().term.clone();
 
@@ -325,7 +354,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // say command
-        if let Some(_ath) = thread_await!(say(false, ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(say(false, false, ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, msg.msg)?;
