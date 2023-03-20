@@ -18,7 +18,7 @@ use crate::driver::DrvErr;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe_ok};
+use crate::{thread, thread_await, as_async, maybe_ok, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -66,13 +66,27 @@ impl Display for Mode {
 }
 
 impl TermBase {
-    
+    fn clear(&mut self, kern: &Mutex<Kern>) -> Result<(), DrvErr> {
+        self.pos = (0, 0);
+
+        match self.mode {
+            Mode::Text => kern.lock().drv.cli.clear().map_err(|e| DrvErr::CLI(e)),
+            Mode::Gfx => kern.lock().drv.disp.fill(&|_, _| 0).map_err(|e| DrvErr::Disp(e)),
+        }
+    }
+
+    fn flush(&mut self, kern: &Mutex<Kern>) -> Result<(), DrvErr> {
+        match self.mode {
+            Mode::Gfx => kern.lock().drv.disp.flush().map_err(|e| DrvErr::Disp(e)),
+            _ => Ok(())
+        }
+    }
 }
 
 fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         let info = {
-            let mode = kern.lock().term.mode.clone();
+            let mode = kern.lock().term.lock().mode.clone();
             let res_txt = kern.lock().drv.cli.res().map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
             let res_gfx = kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
 
@@ -151,17 +165,43 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
     })
 }
 
-pub fn term_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+fn cls(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        let ath = Rc::new(msg.ath.clone());
+        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
+
+        if s.as_str() != "cls" {
+            return Ok(Some(ath))
+        }
+
+        let term = kern.lock().term.clone();
+
+        term.lock().clear(kern).map_err(|e| KernErr::DrvErr(e))?;
+        yield;
+
+        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
+
+        Ok(Some(ath))
+    })
+}
+
+pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let mut ath = Rc::new(msg.ath.clone());
 
         // get command
         if let Some((res, ath)) = thread_await!(get(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), res)]
             );
-            writeln!(kern.lock().drv.cli, "{msg}");
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // cls command
+        if let Some(_ath) = thread_await!(cls(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+            if _ath != ath {
+                ath = _ath;
+                msg = kern.lock().msg(&ath, msg.msg)?;
+            }
         }
 
         Ok(Some(msg))

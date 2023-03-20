@@ -18,23 +18,28 @@ extern crate alloc;
 pub mod vnix;
 pub mod driver;
 
+use spin::Mutex;
+
+use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
+
+use uefi::prelude::cstr16;
+pub use uefi_services::println;
+use uefi::proto::media::file::File;
+use uefi::proto::media::file::FileMode;
+use uefi::proto::media::file::FileAttribute;
+use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
+
 use driver::Disp;
 use driver::MemSizeUnits;
 use driver::Rnd;
-use uefi::prelude::cstr16;
-use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
-use uefi::proto::media::file::File;
-use uefi::proto::media::file::FileAttribute;
-use uefi::proto::media::file::FileMode;
-pub use uefi_services::println;
 
+use vnix::vnix_entry;
+use vnix::core::kern::Kern;
 use vnix::core::kern::KernDrv;
 use vnix::serv::io::term::Mode;
 use vnix::serv::io::term::TermBase;
-use vnix::vnix_entry;
-use vnix::core::kern::Kern;
 
 use crate::vnix::core::unit::{Unit, UnitParse};
 
@@ -106,10 +111,10 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mem = mem.unwrap();
 
         // kernel console
-        let mut term = TermBase::default();
+        let term = Rc::new(Mutex::new(TermBase::default()));
 
         if disp.is_err() {
-            term.mode = Mode::Text;
+            term.lock().mode = Mode::Text;
         }
 
         // drivers
@@ -136,9 +141,8 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
         // run
         writeln!(kern.drv.cli, "INFO vnix: kernel running on `uefi` platform").unwrap();
-        writeln!(kern.drv.cli, "INFO vnix:kern: `{}` console mode", kern.term.mode).unwrap();
+        writeln!(kern.drv.cli, "INFO vnix:kern: `{}` console mode", kern.term.lock().mode).unwrap();
         writeln!(kern.drv.cli, "INFO vnix:kern: {}mb. free memory", kern.drv.mem.free(MemSizeUnits::Mega).unwrap()).unwrap();
-        
 
         if let Err(err) = vnix_entry(kern) {
             println!("ERR vnix: {:?}", err);

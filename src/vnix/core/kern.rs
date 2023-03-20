@@ -2,6 +2,7 @@ use core::pin::Pin;
 use core::fmt::Display;
 use core::ops::{Generator, GeneratorState};
 
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -66,7 +67,7 @@ pub struct KernDrv {
 
 pub struct Kern {
     pub drv: KernDrv,
-    pub term: TermBase,
+    pub term: Rc<Mutex<TermBase>>,
     pub ram_store: RamStore,
 
     // vnix
@@ -95,7 +96,7 @@ impl KernDrv {
 }
 
 impl Kern {
-    pub fn new(drv: KernDrv, term: TermBase) -> Self {
+    pub fn new(drv: KernDrv, term: Rc<Mutex<TermBase>>) -> Self {
         let kern = Kern {
             drv,
             ram_store: RamStore::default(),
