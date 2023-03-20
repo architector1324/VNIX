@@ -242,6 +242,14 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             return Ok(Some(msg))
         }
 
+        // get key command
+        if let Some((key, ath)) = thread_await!(text::get_key(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), Unit::str(format!("{key}").as_str()))]
+            );
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
         // say command
         if let Some(_ath) = thread_await!(text::say(false, false, ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             if _ath != ath {
@@ -250,7 +258,6 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             }
             return Ok(Some(msg))
         }
-
         Ok(Some(msg))
     })
 }

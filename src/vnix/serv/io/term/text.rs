@@ -10,6 +10,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::driver::{TermKey, DrvErr};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
@@ -135,5 +136,28 @@ pub fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mu
         term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
 
         Ok(Some(ath))
+    })
+}
+
+pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(TermKey, Rc<String>), KernErr>> {
+    thread!({
+        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
+
+        match s.as_str() {
+            "inp.key" => {
+                let key = loop {
+                    if let Some(key) = kern.lock().drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))? {
+                        break key;
+                    }
+                    yield;
+                };
+                Ok(Some((key, ath)))
+            },
+            "inp.key.async" => {
+                let key = maybe!(kern.lock().drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e))));
+                Ok(Some((key, ath)))
+            },
+            _ => Ok(None)
+        }
     })
 }
