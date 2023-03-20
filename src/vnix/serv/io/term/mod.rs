@@ -1,3 +1,4 @@
+mod text;
 mod content;
 
 use core::fmt::Display;
@@ -18,12 +19,12 @@ use crate::driver::{DrvErr, CLIErr};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe_ok, maybe, read_async, as_map_find_as_async, as_map_find_async};
+use crate::{thread, thread_await, as_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify, DisplayStr};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -211,125 +212,6 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
     })
 }
 
-fn cls(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
-        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
-
-        if s.as_str() != "cls" {
-            return Ok(None)
-        }
-
-        let term = kern.lock().term.clone();
-
-        term.lock().clear(kern).map_err(|e| KernErr::DrvErr(e))?;
-        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
-
-        Ok(Some(ath))
-    })
-}
-
-fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
-        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
-    
-        if s.as_str() != "nl" {
-            return Ok(None)
-        }
-
-        let term = kern.lock().term.clone();
-
-        term.lock().print_ch('\n', kern).map_err(|e| KernErr::DrvErr(e))?;
-        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
-
-        Ok(Some(ath))
-    })
-}
-
-fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
-        let (msg, mut ath) = maybe!(read_async!(msg, ath, orig, kern));
-
-        if let Some(((s, msg), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
-            let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
-            return match s.as_str() {
-                // (say <unit>)
-                "say" => thread_await!(say(false, false, ath, orig, msg, kern)),
-                // (say.fmt [<unit> ..])
-                "say.fmt" => thread_await!(say(false, true, ath, orig, msg, kern)),
-                _ => Ok(None)
-            }
-        }
-
-        // {say:<unit> nl:<t|f> shrt:<uint>}
-        if let Some((_msg, mut ath)) = as_map_find_async!(msg, "say", ath, orig, kern)? {
-            let nl = if let Some((nl, _ath)) = as_map_find_as_async!(msg, "nl", as_bool, ath, orig, kern)? {
-                ath = _ath;
-                nl
-            } else {
-                false
-            };
-
-            // FIXME: implement short
-            let _shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
-                ath = _ath;
-                Some(shrt)
-            } else {
-                None
-            };
-
-            return thread_await!(say(nl, false, ath, orig, _msg, kern))
-        }
-
-        // {say.fmt:[<unit> ..] nl:<t|f> shrt:<uint>}
-        if let Some((lst, mut ath)) = as_map_find_as_async!(msg, "say.fmt", as_list, ath, orig, kern)? {
-            let nl = if let Some((nl, _ath)) = as_map_find_as_async!(msg, "nl", as_bool, ath, orig, kern)? {
-                ath = _ath;
-                nl
-            } else {
-                false
-            };
-
-            // FIXME: implement short
-            let _shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
-                ath = _ath;
-                Some(shrt)
-            } else {
-                None
-            };
-
-            return thread_await!(say(nl, true, ath, orig, Unit::list_share(lst), kern))
-        }
-
-        // <unit>
-        let mut s = if fmt {
-            let (lst, _ath) = maybe!(as_async!(msg, as_list, ath, orig, kern));
-            ath = _ath; 
-
-            let mut out = Vec::new();
-
-            for u in Rc::unwrap_or_clone(lst) {
-                let (u, _ath) = maybe!(read_async!(u, ath, orig, kern));
-                out.push(format!("{}", DisplayStr(u)));
-                ath = _ath;
-            }
-            out.join("")
-        } else {
-            format!("{}", DisplayStr(msg))
-        };
-
-        if nl {
-            s += "\n";
-        }
-
-        let term = kern.lock().term.clone();
-
-        term.lock().print(s.as_str(), kern).map_err(|e| KernErr::DrvErr(e))?;
-        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
-
-        Ok(Some(ath))
-    })
-}
-
 pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let mut ath = Rc::new(msg.ath.clone());
@@ -343,7 +225,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // cls command
-        if let Some(_ath) = thread_await!(cls(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::cls(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, msg.msg)?;
@@ -352,7 +234,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // nl command
-        if let Some(_ath) = thread_await!(nl(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::nl(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, msg.msg)?;
@@ -361,7 +243,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // say command
-        if let Some(_ath) = thread_await!(say(false, false, ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::say(false, false, ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, msg.msg)?;
