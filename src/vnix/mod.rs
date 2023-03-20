@@ -49,7 +49,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
     // let s = "{sum:(1 2) ath:test task:[sys.usr math.calc test.dump]}";
     // let s = "{task.stk:[a b]@test.dump}";
-    let s = "{task.stk:[cls (say.fmt [`a:` 123 ` b:` 456]) nl {say.fmt:[abc 123] nl:t}]@io.term}";
+    let s = "{task.stk:[cls (say.fmt [`a:` 123 ` b:` {sum:[1 2 3]}@math.calc]) nl {say.fmt:[abc 123] nl:t}]@io.term}";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run

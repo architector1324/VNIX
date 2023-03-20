@@ -305,7 +305,14 @@ fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<
             let (lst, _ath) = maybe!(as_async!(msg, as_list, ath, orig, kern));
             ath = _ath; 
 
-            lst.iter().map(|u| format!("{}", DisplayStr(u.clone()))).collect()
+            let mut out = Vec::new();
+
+            for u in Rc::unwrap_or_clone(lst) {
+                let (u, _ath) = maybe!(read_async!(u, ath, orig, kern));
+                out.push(format!("{}", DisplayStr(u)));
+                ath = _ath;
+            }
+            out.join("")
         } else {
             format!("{}", DisplayStr(msg))
         };
