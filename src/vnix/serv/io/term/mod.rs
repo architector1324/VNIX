@@ -15,7 +15,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::{DrvErr, CLIErr};
+use crate::driver::{DrvErr, CLIErr, TermKey};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
@@ -24,7 +24,7 @@ use crate::{thread, thread_await, as_async, maybe_ok};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify, UnitParse};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -40,7 +40,6 @@ pub enum Mode {
 #[derive(Debug)]
 pub struct TermBase {
     pos: (usize, usize),
-    inp_lck: bool,
     font: &'static [(char, [u8; 16])],
     pub mode: Mode
 }
@@ -50,7 +49,6 @@ impl Default for TermBase {
     fn default() -> Self {
         TermBase {
             pos: (0, 0),
-            inp_lck: false,
             font: &content::SYS_FONT,
             mode: Mode::Gfx
         }
@@ -90,7 +88,14 @@ impl TermBase {
         match self.mode {
             Mode::Text => write!(kern.lock().drv.cli, "{ch}").map_err(|_| DrvErr::CLI(CLIErr::Write))?,
             Mode::Gfx => {
-                if ch != '\n' {
+                if ch == '\u{8}' {
+                    for y in 0..16 {
+                        for x in 0..8 {
+                            kern.lock().drv.disp.px(0, x + (self.pos.0 - 1) * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
+                        }
+                    }
+                    kern.lock().drv.disp.flush_blk(((self.pos.0 - 1) as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
+                } else if !(ch == '\n' || ch == '\r') {
                     let img = self.font.iter().find_map(|(_ch, img)| {
                         if *_ch == ch {
                             return Some(img)
@@ -104,14 +109,17 @@ impl TermBase {
                             kern.lock().drv.disp.px(px, x + self.pos.0 * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
                         }
                     }
+                    kern.lock().drv.disp.flush_blk((self.pos.0 as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
                 }
             }
         };
 
         // move cursor
-        if ch == '\n' {
+        if ch == '\n' || ch == '\r' {
             self.pos.0 = 0;
             self.pos.1 += 1;
+        } else if ch == '\u{8}' && self.pos.0 != 0 {
+            self.pos.0 -= 1;
         } else {
             self.pos.0 += 1;
             if self.pos.0 == w {
@@ -127,6 +135,57 @@ impl TermBase {
             self.print_ch(ch, kern)?;
         }
         Ok(())
+    }
+
+    fn input(term: Rc<Mutex<Self>>, pmt: String, parse: bool, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
+        thread!({
+            term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
+
+            let save_pos = term.lock().pos.clone();
+
+            let mut s = String::new();
+            loop {
+                // get key
+                let mut grd = kern.lock();
+                let key = grd.drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
+                drop(grd);
+
+                // push to string
+                if let Some(key) = key {
+                    match key {
+                        TermKey::Char(ch) => {
+                            if ch == '\n' || ch == '\r' {
+                                break;
+                            }
+
+                            if ch == '\u{8}' {
+                                if term.lock().pos.0 > save_pos.0 {
+                                    s.pop();
+                                    term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                                }
+
+                                yield;
+                                continue;
+                            }
+
+                            s.push(ch);
+
+                            term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                        },
+                        TermKey::Esc => break,
+                        _ => yield
+                    }
+                }
+                yield;
+            }
+
+            // parse string
+            if parse {
+                let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+                return Ok(Some(u))
+            }
+            return Ok(Some(Unit::str(&s)))
+        })
     }
 }
 
@@ -217,10 +276,10 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         let mut ath = Rc::new(msg.ath.clone());
 
         // get command
-        if let Some((res, ath)) = thread_await!(get(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some((msg, ath)) = thread_await!(get(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             let msg = Unit::map(&[
-                (Unit::str("msg"), res)]
-            );
+                (Unit::str("msg"), msg)
+            ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
@@ -245,8 +304,16 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         // get key command
         if let Some((key, ath)) = thread_await!(text::get_key(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
             let msg = Unit::map(&[
-                (Unit::str("msg"), Unit::str(format!("{key}").as_str()))]
-            );
+                (Unit::str("msg"), Unit::str(format!("{key}").as_str()))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // input command
+        if let Some((msg, ath)) = thread_await!(text::input(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 

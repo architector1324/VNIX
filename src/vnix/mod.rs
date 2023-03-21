@@ -51,8 +51,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{task.stk:[a b]@test.dump}";
     let s = "{
         task.stk:[
-            cls
-            inp.key@io.term
+            {inp:`λ ` prs:t nl:t}@io.term
+            nl
         ]@io.term
     }";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;

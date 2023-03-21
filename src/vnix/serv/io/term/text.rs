@@ -14,7 +14,7 @@ use crate::driver::{TermKey, DrvErr};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async};
+use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async, maybe_ok};
 
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr};
@@ -46,9 +46,7 @@ pub fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadA
         }
 
         let term = kern.lock().term.clone();
-
         term.lock().print_ch('\n', kern).map_err(|e| KernErr::DrvErr(e))?;
-        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
 
         Ok(Some(ath))
     })
@@ -131,9 +129,7 @@ pub fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mu
         }
 
         let term = kern.lock().term.clone();
-
         term.lock().print(s.as_str(), kern).map_err(|e| KernErr::DrvErr(e))?;
-        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
 
         Ok(Some(ath))
     })
@@ -159,5 +155,68 @@ pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Th
             },
             _ => Ok(None)
         }
+    })
+}
+
+pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
+    thread!({
+        let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
+
+        let term = kern.lock().term.clone();
+
+        // inp
+        if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
+            return match s.as_str() {
+                "inp" => {
+                    let inp = super::TermBase::input(term, "".into(), false, kern);
+                    let res = maybe_ok!(thread_await!(inp)?);
+                    Ok(Some((res, ath)))
+                },
+                _ => Ok(None)
+            }
+        }
+
+        // (inp <pmt>)
+        if let Some(((s, pmt), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
+            let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+            let (pmt, ath) = maybe!(as_async!(pmt, as_str, ath, orig, kern));
+
+            return match s.as_str() {
+                "inp" => {
+                    let inp = super::TermBase::input(term, Rc::unwrap_or_clone(pmt), false, kern);
+                    let res = maybe_ok!(thread_await!(inp)?);
+                    Ok(Some((res, ath)))
+                },
+                _ => Ok(None)
+            }
+        }
+
+        // {inp:<pmt> prs:<t|f> nl:<t|f>}
+        if let Some((pmt, mut ath)) = as_map_find_as_async!(msg, "inp", as_str, ath, orig, kern)? {
+            let prs = if let Some((prs, _ath)) = as_map_find_as_async!(msg, "prs", as_bool, ath, orig, kern)? {
+                ath = _ath;
+                prs
+            } else {
+                false
+            };
+
+            let nl = if let Some((nl, _ath)) = as_map_find_as_async!(msg, "nl", as_bool, ath, orig, kern)? {
+                ath = _ath;
+                nl
+            } else {
+                false
+            };
+
+            let inp = super::TermBase::input(term.clone(), Rc::unwrap_or_clone(pmt), prs, kern);
+            let res = maybe_ok!(thread_await!(inp)?);
+
+            if nl {
+                term.lock().print_ch('\n', kern).map_err(|e| KernErr::DrvErr(e))?;
+            }
+
+            return Ok(Some((res, ath)))
+        }
+
+        Ok(None)
     })
 }
