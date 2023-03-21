@@ -51,7 +51,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{task.stk:[a b]@test.dump}";
     let s = "{
         task.stk:[
-            {inp:`λ ` prs:t nl:t}@io.term
+            {inp:`λ ` prs:t nl:t sct:t lim:5}@io.term
             nl
         ]@io.term
     }";

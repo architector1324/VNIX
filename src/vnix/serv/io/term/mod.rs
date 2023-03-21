@@ -137,10 +137,8 @@ impl TermBase {
         Ok(())
     }
 
-    fn input(term: Rc<Mutex<Self>>, pmt: String, parse: bool, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
+    fn input(term: Rc<Mutex<Self>>, secret:bool, parse: bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
         thread!({
-            term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
-
             let save_pos = term.lock().pos.clone();
 
             let mut s = String::new();
@@ -161,16 +159,26 @@ impl TermBase {
                             if ch == '\u{8}' {
                                 if term.lock().pos.0 > save_pos.0 {
                                     s.pop();
-                                    term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                                    if !secret {
+                                        term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                                    }
                                 }
 
                                 yield;
                                 continue;
                             }
 
-                            s.push(ch);
+                            if let Some(lim) = limit {
+                                if s.len() >= lim {
+                                    yield;
+                                    continue;
+                                }
+                            }
 
-                            term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                            s.push(ch);
+                            if !secret {
+                                term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                            }
                         },
                         TermKey::Esc => break,
                         _ => yield

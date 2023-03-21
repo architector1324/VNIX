@@ -168,7 +168,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
         if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
             return match s.as_str() {
                 "inp" => {
-                    let inp = super::TermBase::input(term, "".into(), false, kern);
+                    let inp = super::TermBase::input(term, false, false, None, kern);
                     let res = maybe_ok!(thread_await!(inp)?);
                     Ok(Some((res, ath)))
                 },
@@ -183,7 +183,9 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
 
             return match s.as_str() {
                 "inp" => {
-                    let inp = super::TermBase::input(term, Rc::unwrap_or_clone(pmt), false, kern);
+                    term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
+
+                    let inp = super::TermBase::input(term, false, false, None, kern);
                     let res = maybe_ok!(thread_await!(inp)?);
                     Ok(Some((res, ath)))
                 },
@@ -207,7 +209,23 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
                 false
             };
 
-            let inp = super::TermBase::input(term.clone(), Rc::unwrap_or_clone(pmt), prs, kern);
+            let sct = if let Some((sct, _ath)) = as_map_find_as_async!(msg, "sct", as_bool, ath, orig, kern)? {
+                ath = _ath;
+                sct
+            } else {
+                false
+            };
+
+            let lim = if let Some((lim, _ath)) = as_map_find_as_async!(msg, "lim", as_uint, ath, orig, kern)? {
+                ath = _ath;
+                Some(lim as usize)
+            } else {
+                None
+            };
+
+            term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
+
+            let inp = super::TermBase::input(term.clone(), sct, prs, lim, kern);
             let res = maybe_ok!(thread_await!(inp)?);
 
             if nl {
