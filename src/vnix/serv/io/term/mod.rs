@@ -187,6 +187,10 @@ impl TermBase {
                 yield;
             }
 
+            if s.is_empty() {
+                return Ok(Some(Unit::none()))
+            }
+
             // parse string
             if parse {
                 let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;

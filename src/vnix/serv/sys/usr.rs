@@ -31,20 +31,20 @@ fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
             return Usr::new(&ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
         }
 
-        let (ath, _) = maybe!(as_map_find_as_async!(msg, "ath", as_str, ath, orig, kern));
+        let (_ath, ath) = maybe!(as_map_find_as_async!(msg, "ath", as_str, ath, orig, kern));
 
         if let Some((pub_key, _)) = as_map_find_as_async!(msg, "pub", as_str, ath, orig, kern)? {
             if let Some((priv_key, _)) = as_map_find_as_async!(msg, "priv", as_str, ath, orig, kern)? {
                 // {ath:test pub:.. priv:..}
-                return Ok(Some((Usr::login(&ath, &priv_key, &pub_key)?, None)))
+                return Ok(Some((Usr::login(&_ath, &priv_key, &pub_key)?, None)))
             }
 
             // {ath:test pub:..}
-            return Ok(Some((Usr::guest(&ath, &pub_key)?, None)))
+            return Ok(Some((Usr::guest(&_ath, &pub_key)?, None)))
         }
 
         // {ath:test}
-        return Usr::new(&ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
+        return Usr::new(&_ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
     })
 }
 
