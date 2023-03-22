@@ -55,14 +55,16 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //         nl
     //     ]@io.term
     // }";
-    let s = "(load @task.login)@io.store";
-    let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let s = "(load @task.login)@io.store";
+    // let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run
-    // let path = Unit::parse("@task.init.gfx.cli".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+    let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
-    let run = TaskRun(test_msg, "sys.task".into());
+    writeln!(kern.drv.cli, "{msg}");
+
+    let run = TaskRun(msg, "sys.task".into());
 
     kern.reg_task(&_super.name, "init.load", run)?;
 

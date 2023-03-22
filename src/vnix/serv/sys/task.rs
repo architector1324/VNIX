@@ -21,6 +21,13 @@ pub const SERV_PATH: &'static str = "sys.task";
 pub const SERV_HELP: &'static str = "Service for run task from message\nExample: (load @txt.hello)@io.store@sys.task";
 
 
+fn stream(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
+    thread!({
+        let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
+        Ok(Some((msg, ath)))
+    })
+}
+
 fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         let (lst, mut ath) = maybe!(as_map_find_as_async!(msg, "task", as_list, ath, orig, kern));
@@ -98,11 +105,6 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
     thread!({
         let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
 
-        // stream
-        if let Some((msg, ath)) = read_async!(msg, ath, orig, kern)? {
-            return Ok(Some((msg, ath)))
-        }
-
         // chain
         if let Some((msg, ath)) = thread_await!(chain(ath.clone(), msg.clone(), msg.clone(), kern))? {
             let msg = Unit::map(&[
@@ -127,6 +129,15 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
                 return Ok(Some((msg, ath)))
             }
         }
+
+        // stream
+        if let Some((msg, ath)) = thread_await!(stream(ath.clone(), msg.clone(), msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)]
+            );
+            return Ok(Some((msg, ath)))
+        }
+
         Ok(None)
     })
 }
