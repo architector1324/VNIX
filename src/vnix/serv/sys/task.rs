@@ -97,7 +97,12 @@ fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
 fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
         let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
-    
+
+        // stream
+        if let Some((msg, ath)) = read_async!(msg, ath, orig, kern)? {
+            return Ok(Some((msg, ath)))
+        }
+
         // chain
         if let Some((msg, ath)) = thread_await!(chain(ath.clone(), msg.clone(), msg.clone(), kern))? {
             let msg = Unit::map(&[

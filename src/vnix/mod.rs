@@ -55,11 +55,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //         nl
     //     ]@io.term
     // }";
-    let s = "{
-        ath:{inp:`login: ` nl:t}@io.term
-        pub:{inp:`pub: ` nl:t}@io.term
-        priv:{inp:`priv: ` sct:t nl:t}@io.term
-    }@sys.usr";
+    let s = "(load @task.login)@io.store";
     let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run
