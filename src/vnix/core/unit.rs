@@ -466,7 +466,7 @@ fn char_no_quoted(c: char) -> bool {
 impl Display for DisplayStr {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.0.0.as_ref() {
-            UnitType::Str(s) => write!(f, "{s}"),
+            UnitType::Str(s) => write!(f, "{}", s.replace("\\n", "\n").replace("\\r", "\r")),
             _ => write!(f, "{}", self.0)
         }
     }
