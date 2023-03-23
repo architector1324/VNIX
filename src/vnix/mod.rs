@@ -56,8 +56,14 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //         nl
     //     ]@io.term
     // }";
-    // let s = "(load @task.login)@io.store";
-    // let test_msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let s = "{
+    //     sum:[
+    //         {inp:`a:` prs:t nl:t}@io.term
+    //         {inp:`b:` prs:t nl:t}@io.term
+    //     ]
+    // }@math.calc";
+    // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let run = TaskRun(msg, "io.term".into());
 
     // run
     let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;

@@ -25,9 +25,7 @@ pub const SERV_HELP: &'static str = "Disk units storage service\nExample: {save:
 
 fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(usize, Rc<String>), KernErr>> {
     thread!({
-        let (res, ath) = maybe!(read_async!(msg, ath, orig, kern));
-
-        let (s, u, ath) = if let Some(s) = res.as_str() {
+        let (s, u, ath) = if let Some(s) = msg.clone().as_str() {
             // database
             (s, kern.lock().ram_store.data.clone(), ath)
         } else if let Some((u, path)) = msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))) {
@@ -77,9 +75,10 @@ fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
 pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let ath = Rc::new(msg.ath.clone());
+        let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // get size
-        if let Some((size, ath)) = thread_await!(get_size(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some((size, ath)) = thread_await!(get_size(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(size as u32))]
             );
@@ -87,7 +86,7 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
         }
 
         // load
-        if let Some((u, ath)) = thread_await!(load(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some((u, ath)) = thread_await!(load(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), u)]
             );
@@ -95,9 +94,9 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
         }
 
         // save
-        if let Some(_ath) = thread_await!(save(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(save(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if ath != _ath {
-                msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
+                msg = kern.lock().msg(&_ath.clone(), _msg)?;
             }
         }
 

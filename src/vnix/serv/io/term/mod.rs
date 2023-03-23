@@ -19,7 +19,7 @@ use crate::driver::{DrvErr, CLIErr, TermKey};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe_ok};
+use crate::{thread, thread_await, as_async, maybe_ok, read_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -285,10 +285,11 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
 
 pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let mut ath = Rc::new(msg.ath.clone());
+        let ath = Rc::new(msg.ath.clone());
+        let (_msg, mut ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // get command
-        if let Some((msg, ath)) = thread_await!(get(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some((msg, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -296,25 +297,25 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // cls command
-        if let Some(_ath) = thread_await!(text::cls(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::cls(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
-                msg = kern.lock().msg(&ath, msg.msg)?;
+                msg = kern.lock().msg(&ath, _msg)?;
             }
             return Ok(Some(msg))
         }
 
         // nl command
-        if let Some(_ath) = thread_await!(text::nl(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::nl(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
-                msg = kern.lock().msg(&ath, msg.msg)?;
+                msg = kern.lock().msg(&ath, _msg)?;
             }
             return Ok(Some(msg))
         }
 
         // get key command
-        if let Some((key, ath)) = thread_await!(text::get_key(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some((key, ath)) = thread_await!(text::get_key(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str(format!("{key}").as_str()))
             ]);
@@ -322,7 +323,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // input command
-        if let Some((_msg, ath)) = thread_await!(text::input(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some((_msg, ath)) = thread_await!(text::input(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if let Some(msg) = _msg {
                 let msg = Unit::map(&[
                     (Unit::str("msg"), msg)
@@ -333,10 +334,10 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // say command
-        if let Some(_ath) = thread_await!(text::say(false, false, ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::say(false, false, ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
-                msg = kern.lock().msg(&ath, msg.msg)?;
+                msg = kern.lock().msg(&ath, _msg)?;
             }
             return Ok(Some(msg))
         }

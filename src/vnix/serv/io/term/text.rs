@@ -52,12 +52,11 @@ pub fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadA
     })
 }
 
-pub fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        let (msg, mut ath) = maybe!(read_async!(msg, ath, orig, kern));
-
         if let Some(((s, msg), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
             let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
             return match s.as_str() {
                 // (say <unit>)
                 "say" => thread_await!(say(false, false, ath, orig, msg, kern)),
@@ -160,8 +159,6 @@ pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Th
 
 pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Option<Unit>, Rc<String>), KernErr>> {
     thread!({
-        let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
-
         let term = kern.lock().term.clone();
 
         // inp
