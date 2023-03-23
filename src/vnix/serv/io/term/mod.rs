@@ -175,6 +175,11 @@ impl TermBase {
                                 }
                             }
 
+                            if ch.is_control() {
+                                yield;
+                                continue;
+                            }
+
                             s.push(ch);
                             if !secret {
                                 term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
