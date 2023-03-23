@@ -14,7 +14,7 @@ use crate::driver::{TermKey, DrvErr};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async, maybe_ok};
+use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async};
 
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr};
@@ -158,7 +158,7 @@ pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Th
     })
 }
 
-pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
+pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Option<Unit>, Rc<String>), KernErr>> {
     thread!({
         let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
 
@@ -169,7 +169,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
             return match s.as_str() {
                 "inp" => {
                     let inp = super::TermBase::input(term, false, false, None, kern);
-                    let res = maybe_ok!(thread_await!(inp)?);
+                    let res = thread_await!(inp)?;
                     Ok(Some((res, ath)))
                 },
                 _ => Ok(None)
@@ -186,7 +186,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
                     term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
 
                     let inp = super::TermBase::input(term, false, false, None, kern);
-                    let res = maybe_ok!(thread_await!(inp)?);
+                    let res = thread_await!(inp)?;
                     Ok(Some((res, ath)))
                 },
                 _ => Ok(None)
@@ -226,7 +226,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
             term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
 
             let inp = super::TermBase::input(term.clone(), sct, prs, lim, kern);
-            let res = maybe_ok!(thread_await!(inp)?);
+            let res = thread_await!(inp)?;
 
             if nl {
                 term.lock().print_ch('\n', kern).map_err(|e| KernErr::DrvErr(e))?;

@@ -188,7 +188,7 @@ impl TermBase {
             }
 
             if s.is_empty() {
-                return Ok(Some(Unit::none()))
+                return Ok(None)
             }
 
             // parse string
@@ -322,11 +322,14 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // input command
-        if let Some((msg, ath)) = thread_await!(text::input(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
-            let msg = Unit::map(&[
-                (Unit::str("msg"), msg)
-            ]);
-            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        if let Some((_msg, ath)) = thread_await!(text::input(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+            if let Some(msg) = _msg {
+                let msg = Unit::map(&[
+                    (Unit::str("msg"), msg)
+                ]);
+                return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+            }
+            return Ok(Some(msg))
         }
 
         // say command
