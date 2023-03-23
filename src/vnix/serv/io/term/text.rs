@@ -19,6 +19,8 @@ use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_as
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr};
 
+use super::base;
+
 
 pub fn cls(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
@@ -30,8 +32,8 @@ pub fn cls(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
 
         let term = kern.lock().term.clone();
 
-        term.lock().clear(kern).map_err(|e| KernErr::DrvErr(e))?;
-        term.lock().flush(kern).map_err(|e| KernErr::DrvErr(e))?;
+        term.lock().clear(&mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
+        term.lock().flush(&mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
         Ok(Some(ath))
     })
@@ -165,7 +167,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
         if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
             return match s.as_str() {
                 "inp" => {
-                    let inp = super::TermBase::input(term, false, false, None, kern);
+                    let inp = base::Term::input(term, false, false, None, kern);
                     let res = thread_await!(inp)?;
                     Ok(Some((res, ath)))
                 },
@@ -182,7 +184,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
                 "inp" => {
                     term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
-                    let inp = super::TermBase::input(term, false, false, None, kern);
+                    let inp = base::Term::input(term, false, false, None, kern);
                     let res = thread_await!(inp)?;
                     Ok(Some((res, ath)))
                 },
@@ -222,7 +224,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
 
             term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
-            let inp = super::TermBase::input(term.clone(), sct, prs, lim, kern);
+            let inp = base::Term::input(term.clone(), sct, prs, lim, kern);
             let res = thread_await!(inp)?;
 
             if nl {

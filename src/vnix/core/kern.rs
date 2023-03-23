@@ -16,7 +16,8 @@ use super::user::Usr;
 
 use crate::thread;
 use crate::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
-use crate::vnix::serv::io::term::TermBase;
+
+use crate::vnix::serv::io::term::base;
 use crate::vnix::utils::{RamStore, Maybe};
 
 use spin::Mutex;
@@ -67,7 +68,7 @@ pub struct KernDrv {
 
 pub struct Kern {
     pub drv: KernDrv,
-    pub term: Rc<Mutex<TermBase>>,
+    pub term: Rc<Mutex<base::Term>>,
     pub ram_store: RamStore,
 
     // vnix
@@ -96,7 +97,7 @@ impl KernDrv {
 }
 
 impl Kern {
-    pub fn new(drv: KernDrv, term: Rc<Mutex<TermBase>>) -> Self {
+    pub fn new(drv: KernDrv, term: Rc<Mutex<base::Term>>) -> Self {
         let kern = Kern {
             drv,
             ram_store: RamStore::default(),

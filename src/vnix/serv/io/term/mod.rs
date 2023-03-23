@@ -1,3 +1,5 @@
+pub mod base;
+
 mod text;
 mod content;
 
@@ -15,7 +17,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::{DrvErr, CLIErr, TermKey};
+use crate::driver::DrvErr;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
@@ -24,35 +26,16 @@ use crate::{thread, thread_await, as_async, maybe_ok, read_async, maybe};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify, UnitParse};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify};
 
 
 pub const SERV_PATH: &'static str = "io.term";
 pub const SERV_HELP: &'static str = "Terminal I/O service\nExample: hello@io.term";
 
-
 #[derive(Debug, Clone)]
 pub enum Mode {
     Text,
     Gfx,
-}
-
-#[derive(Debug)]
-pub struct TermBase {
-    pos: (usize, usize),
-    font: &'static [(char, [u8; 16])],
-    pub mode: Mode
-}
-
-
-impl Default for TermBase {
-    fn default() -> Self {
-        TermBase {
-            pos: (0, 0),
-            font: &content::SYS_FONT,
-            mode: Mode::Gfx
-        }
-    }
 }
 
 impl Display for Mode {
@@ -61,148 +44,6 @@ impl Display for Mode {
             Mode::Text => write!(f, "txt"),
             Mode::Gfx => write!(f, "gfx")
         }
-    }
-}
-
-impl TermBase {
-    fn clear(&mut self, kern: &Mutex<Kern>) -> Result<(), DrvErr> {
-        self.pos = (0, 0);
-
-        match self.mode {
-            Mode::Text => kern.lock().drv.cli.clear().map_err(|e| DrvErr::CLI(e)),
-            Mode::Gfx => kern.lock().drv.disp.fill(&|_, _| 0).map_err(|e| DrvErr::Disp(e)),
-        }
-    }
-
-    fn flush(&mut self, kern: &Mutex<Kern>) -> Result<(), DrvErr> {
-        match self.mode {
-            Mode::Gfx => kern.lock().drv.disp.flush().map_err(|e| DrvErr::Disp(e)),
-            _ => Ok(())
-        }
-    }
-
-    fn print_ch(&mut self, ch: char, kern: &mut Kern) -> Result<(), DrvErr> {
-        let (w, _) = kern.drv.cli.res().map_err(|e| DrvErr::CLI(e))?;
-
-        // display char
-        match self.mode {
-            Mode::Text => write!(kern.drv.cli, "{ch}").map_err(|_| DrvErr::CLI(CLIErr::Write))?,
-            Mode::Gfx => {
-                if ch == '\u{8}' {
-                    for y in 0..16 {
-                        for x in 0..8 {
-                            kern.drv.disp.px(0, x + (self.pos.0 - 1) * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
-                        }
-                    }
-                    kern.drv.disp.flush_blk(((self.pos.0 - 1) as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
-                } else if !(ch == '\n' || ch == '\r') {
-                    let img = self.font.iter().find_map(|(_ch, img)| {
-                        if *_ch == ch {
-                            return Some(img)
-                        }
-                        None
-                    }).ok_or(DrvErr::CLI(CLIErr::Write))?;
-    
-                    for y in 0..16 {
-                        for x in 0..8 {
-                            let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0};
-                            kern.drv.disp.px(px, x + self.pos.0 * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
-                        }
-                    }
-                    kern.drv.disp.flush_blk((self.pos.0 as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
-                }
-            }
-        };
-
-        // move cursor
-        if ch == '\n' || ch == '\r' {
-            self.pos.0 = 0;
-            self.pos.1 += 1;
-        } else if ch == '\u{8}' && self.pos.0 != 0 {
-            self.pos.0 -= 1;
-        } else {
-            self.pos.0 += 1;
-            if self.pos.0 == w {
-                self.pos.0 = 0;
-                self.pos.1 += 1;
-            }
-        }
-        Ok(())
-    }
-
-    pub fn print(&mut self, s: &str, kern: &mut Kern) -> Result<(), DrvErr> {
-        for ch in s.chars() {
-            self.print_ch(ch, kern)?;
-        }
-        Ok(())
-    }
-
-    fn input(term: Rc<Mutex<Self>>, secret:bool, parse: bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
-        thread!({
-            let save_pos = term.lock().pos.clone();
-
-            let mut s = String::new();
-            loop {
-                // get key
-                let mut grd = kern.lock();
-                let key = grd.drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
-                drop(grd);
-
-                // push to string
-                if let Some(key) = key {
-                    match key {
-                        TermKey::Char(ch) => {
-                            if ch == '\n' || ch == '\r' {
-                                break;
-                            }
-
-                            if ch == '\u{8}' {
-                                if term.lock().pos.0 > save_pos.0 {
-                                    s.pop();
-                                    if !secret {
-                                        term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
-                                    }
-                                }
-
-                                yield;
-                                continue;
-                            }
-
-                            if let Some(lim) = limit {
-                                if s.len() >= lim {
-                                    yield;
-                                    continue;
-                                }
-                            }
-
-                            if ch.is_control() {
-                                yield;
-                                continue;
-                            }
-
-                            s.push(ch);
-                            if !secret {
-                                term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
-                            }
-                        },
-                        TermKey::Esc => break,
-                        _ => yield
-                    }
-                }
-                yield;
-            }
-
-            if s.is_empty() {
-                return Ok(None)
-            }
-
-            // parse string
-            if parse {
-                let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-                return Ok(Some(u))
-            }
-            return Ok(Some(Unit::str(&s)))
-        })
     }
 }
 

@@ -41,7 +41,7 @@ use vnix::vnix_entry;
 use vnix::core::kern::Kern;
 use vnix::core::kern::KernDrv;
 use vnix::serv::io::term::Mode;
-use vnix::serv::io::term::TermBase;
+use vnix::serv::io::term::base;
 
 use crate::vnix::core::unit::{Unit, UnitParse};
 
@@ -113,7 +113,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mem = mem.unwrap();
 
         // kernel console
-        let term = Rc::new(Mutex::new(TermBase::default()));
+        let term = Rc::new(Mutex::new(base::Term::default()));
 
         if disp.is_err() {
             term.lock().mode = Mode::Text;
