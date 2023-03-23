@@ -23,7 +23,7 @@ pub struct Msg {
 
 impl Display for Msg {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{{ath:{} size:{} msg:{} hsh:{} sign:{}}}", self.ath, self.size, self.msg, self.hash, self.sign)
+        write!(f, "{{ath:{} size:{} msg:{} hsh:`{}` sign:`{}`}}", self.ath, self.size, self.msg, self.hash, self.sign)
     }
 }
 
