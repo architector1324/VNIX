@@ -1,4 +1,5 @@
 use core::pin::Pin;
+use core::fmt::Write;
 use core::ops::{Generator, GeneratorState};
 
 use spin::Mutex;
@@ -52,11 +53,11 @@ pub fn usr_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         if let Some((usr, out)) = thread_await!(auth(Rc::new(msg.ath.clone()), msg.msg.clone(), msg.msg.clone(), kern))? {
             kern.lock().reg_usr(usr.clone())?;
-            writeln!(kern.lock().drv.cli, "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+            writeln!(kern.lock(), "INFO vnix:sys.usr: user `{}` registered", usr).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
             yield;
 
             if let Some(out) = out {
-                writeln!(kern.lock().drv.cli, "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                writeln!(kern.lock(), "WARN vnix:sys.usr: please, remember this account and save it anywhere {}", out).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
                 yield;
 
                 let msg = Unit::map(&[

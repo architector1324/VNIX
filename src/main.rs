@@ -24,6 +24,8 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use core::fmt::Write;
+
 use uefi::prelude::cstr16;
 pub use uefi_services::println;
 use uefi::proto::media::file::File;
@@ -91,7 +93,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         if time.is_err() {
             println!("ERR loader:time: not available");
         }
-    
+
         let time = time.unwrap();
 
         // rnd
@@ -130,7 +132,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mut kern = Kern::new(driver, term);
 
         // load store
-        writeln!(kern.drv.cli, "INFO vnix: load `super` storage").unwrap();
+        writeln!(kern, "INFO vnix: load `super` storage").unwrap();
 
         if let Some(store) = load_store(image, st.unsafe_clone()) {
             kern.ram_store.data = store;
@@ -140,9 +142,11 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         }
 
         // run
-        writeln!(kern.drv.cli, "INFO vnix: kernel running on `uefi` platform").unwrap();
-        writeln!(kern.drv.cli, "INFO vnix:kern: `{}` console mode", kern.term.lock().mode).unwrap();
-        writeln!(kern.drv.cli, "INFO vnix:kern: {}mb. free memory", kern.drv.mem.free(MemSizeUnits::Mega).unwrap()).unwrap();
+        writeln!(kern, "INFO vnix: kernel running on `uefi` platform").unwrap();
+
+        let mode = kern.term.lock().mode.clone();
+        writeln!(kern, "INFO vnix:kern: `{}` console mode", mode).unwrap();
+        writeln!(kern, "INFO vnix:kern: {}mb. free memory", kern.drv.mem.free(MemSizeUnits::Mega).unwrap()).unwrap();
 
         if let Err(err) = vnix_entry(kern) {
             println!("ERR vnix: {:?}", err);

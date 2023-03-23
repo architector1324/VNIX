@@ -1,5 +1,5 @@
 use core::pin::Pin;
-use core::fmt::Display;
+use core::fmt::{Display, Write};
 use core::ops::{Generator, GeneratorState};
 
 use alloc::rc::Rc;
@@ -241,7 +241,7 @@ impl Kern {
             // run tasks
             for (task, _) in runs.iter() {
                 kern_mtx.lock().tasks_running.push(task.clone());
-                // writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
 
             loop {
@@ -263,10 +263,10 @@ impl Kern {
 
                     if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
                         match &res {
-                            Ok(..) => (), //writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+                            Ok(..) => (), //writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
                             Err(e) => {
-                                writeln!(kern_mtx.lock().drv.cli, "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-                                // writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?
+                                writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                                // writeln!(kern_mtx.lock(), "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?
                             }
                         };
 
@@ -288,7 +288,7 @@ impl Kern {
 
                     for (task, _) in new_runs.iter() {
                         kern_mtx.lock().tasks_running.push(task.clone());
-                        // writeln!(kern_mtx.lock().drv.cli, "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
                     }
 
                     runs.append(&mut new_runs);
@@ -313,5 +313,13 @@ impl Display for Addr {
                 addr[4], addr[5], addr[6], addr[7]
             )
         }
+    }
+}
+
+impl Write for Kern {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let term = self.term.clone();
+        term.lock().print(s, self).ok();
+        Ok(())
     }
 }

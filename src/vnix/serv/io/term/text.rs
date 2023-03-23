@@ -46,7 +46,7 @@ pub fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadA
         }
 
         let term = kern.lock().term.clone();
-        term.lock().print_ch('\n', kern).map_err(|e| KernErr::DrvErr(e))?;
+        term.lock().print_ch('\n', &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
         Ok(Some(ath))
     })
@@ -129,7 +129,7 @@ pub fn say(nl: bool, fmt:bool, ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mu
         }
 
         let term = kern.lock().term.clone();
-        term.lock().print(s.as_str(), kern).map_err(|e| KernErr::DrvErr(e))?;
+        term.lock().print(s.as_str(), &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
         Ok(Some(ath))
     })
@@ -183,7 +183,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
 
             return match s.as_str() {
                 "inp" => {
-                    term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
+                    term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
                     let inp = super::TermBase::input(term, false, false, None, kern);
                     let res = thread_await!(inp)?;
@@ -223,13 +223,13 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
                 None
             };
 
-            term.lock().print(&pmt, kern).map_err(|e| KernErr::DrvErr(e))?;
+            term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
             let inp = super::TermBase::input(term.clone(), sct, prs, lim, kern);
             let res = thread_await!(inp)?;
 
             if nl {
-                term.lock().print_ch('\n', kern).map_err(|e| KernErr::DrvErr(e))?;
+                term.lock().print_ch('\n', &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
             }
 
             return Ok(Some((res, ath)))

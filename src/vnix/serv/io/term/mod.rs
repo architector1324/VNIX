@@ -81,20 +81,20 @@ impl TermBase {
         }
     }
 
-    fn print_ch(&mut self, ch: char, kern: &Mutex<Kern>) -> Result<(), DrvErr> {
-        let (w, _) = kern.lock().drv.cli.res().map_err(|e| DrvErr::CLI(e))?;
+    fn print_ch(&mut self, ch: char, kern: &mut Kern) -> Result<(), DrvErr> {
+        let (w, _) = kern.drv.cli.res().map_err(|e| DrvErr::CLI(e))?;
 
         // display char
         match self.mode {
-            Mode::Text => write!(kern.lock().drv.cli, "{ch}").map_err(|_| DrvErr::CLI(CLIErr::Write))?,
+            Mode::Text => write!(kern.drv.cli, "{ch}").map_err(|_| DrvErr::CLI(CLIErr::Write))?,
             Mode::Gfx => {
                 if ch == '\u{8}' {
                     for y in 0..16 {
                         for x in 0..8 {
-                            kern.lock().drv.disp.px(0, x + (self.pos.0 - 1) * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
+                            kern.drv.disp.px(0, x + (self.pos.0 - 1) * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
                         }
                     }
-                    kern.lock().drv.disp.flush_blk(((self.pos.0 - 1) as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
+                    kern.drv.disp.flush_blk(((self.pos.0 - 1) as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
                 } else if !(ch == '\n' || ch == '\r') {
                     let img = self.font.iter().find_map(|(_ch, img)| {
                         if *_ch == ch {
@@ -106,10 +106,10 @@ impl TermBase {
                     for y in 0..16 {
                         for x in 0..8 {
                             let px = if (img[y] >> (8 - x)) & 1 == 1 {0xffffff} else {0};
-                            kern.lock().drv.disp.px(px, x + self.pos.0 * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
+                            kern.drv.disp.px(px, x + self.pos.0 * 8, y + self.pos.1 * 16).map_err(|e| DrvErr::Disp(e))?;
                         }
                     }
-                    kern.lock().drv.disp.flush_blk((self.pos.0 as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
+                    kern.drv.disp.flush_blk((self.pos.0 as i32 * 8, self.pos.1 as i32 * 16), (8, 16)).map_err(|e| DrvErr::Disp(e))?;
                 }
             }
         };
@@ -130,7 +130,7 @@ impl TermBase {
         Ok(())
     }
 
-    fn print(&mut self, s: &str, kern: &Mutex<Kern>) -> Result<(), DrvErr> {
+    pub fn print(&mut self, s: &str, kern: &mut Kern) -> Result<(), DrvErr> {
         for ch in s.chars() {
             self.print_ch(ch, kern)?;
         }
@@ -160,7 +160,7 @@ impl TermBase {
                                 if term.lock().pos.0 > save_pos.0 {
                                     s.pop();
                                     if !secret {
-                                        term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                                        term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
                                     }
                                 }
 
@@ -177,7 +177,7 @@ impl TermBase {
 
                             s.push(ch);
                             if !secret {
-                                term.lock().print_ch(ch, kern).map_err(|e| KernErr::DrvErr(e))?;
+                                term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
                             }
                         },
                         TermKey::Esc => break,

@@ -3,6 +3,7 @@ pub mod serv;
 pub mod utils;
 
 use alloc::boxed::Box;
+use ::core::fmt::Write;
 
 use crate::driver::{CLIErr, DrvErr};
 
@@ -34,14 +35,14 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         let serv = Serv::new(name, help, hlr);
         kern.reg_serv(serv)?;
 
-        writeln!(kern.drv.cli, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+        writeln!(kern, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
     }
 
     // register user
     let _super = Usr::new("super", &mut kern)?.0;
     kern.reg_usr(_super.clone())?;
 
-    writeln!(kern.drv.cli, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+    writeln!(kern, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
     // test
     // let s = "(load @task.test)@io.store";
