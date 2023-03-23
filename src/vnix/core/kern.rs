@@ -194,7 +194,11 @@ impl Kern {
         // prepare msg
         let tmp = mtx.lock();
         let serv = tmp.get_serv(serv.as_str())?;
-        let help_msg = tmp.msg(&msg.ath, Unit::str(&serv.help))?;
+
+        let help_msg = Unit::map(&[
+            (Unit::str("msg"), Unit::str(&serv.help))
+        ]);
+        let help_msg = tmp.msg(&msg.ath, help_msg)?;
 
         // check help
         let topic = if let Some(topic) = msg.msg.clone().as_map_find("help").map(|u| u.as_str()).flatten() {

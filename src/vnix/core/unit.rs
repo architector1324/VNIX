@@ -486,9 +486,9 @@ impl Display for Unit {
                 }
             UnitType::Str(s) => {
                 if s.as_str().chars().all(char_no_quoted) {
-                    write!(f, "{s}")
+                    write!(f, "{}", s.replace("\n", "\\n").replace("\r", "\\r"))
                 } else {
-                    write!(f, "`{s}`")
+                    write!(f, "`{}`", s.replace("\n", "\\n").replace("\r", "\\r"))
                 }
             },
             UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
