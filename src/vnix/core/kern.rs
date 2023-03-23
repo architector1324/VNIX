@@ -246,7 +246,6 @@ impl Kern {
             // run tasks
             for (task, _) in runs.iter() {
                 kern_mtx.lock().tasks_running.push(task.clone());
-                // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
             }
 
             loop {
@@ -254,7 +253,10 @@ impl Kern {
                     // check signals
                     if let Some(sig) = kern_mtx.lock().tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
                         match sig {
-                            TaskSig::Kill => *done = true
+                            TaskSig::Kill => {
+                                // writeln!(kern_mtx.lock(), "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                                *done = true
+                            }
                         }
                     }
 
@@ -268,7 +270,7 @@ impl Kern {
 
                     if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
                         match &res {
-                            Ok(..) => (), //writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?,
+                            Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
                             Err(e) => {
                                 writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
                                 // writeln!(kern_mtx.lock(), "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?
@@ -293,7 +295,7 @@ impl Kern {
 
                     for (task, _) in new_runs.iter() {
                         kern_mtx.lock().tasks_running.push(task.clone());
-                        // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?;
+                        // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
                     }
 
                     runs.append(&mut new_runs);

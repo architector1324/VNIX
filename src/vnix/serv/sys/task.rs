@@ -12,7 +12,7 @@ use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_f
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::task::{ThreadAsync, TaskRun};
+use crate::vnix::core::task::{ThreadAsync, TaskRun, TaskSig};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitModify, UnitAs, UnitNew};
 
@@ -23,6 +23,8 @@ pub const SERV_HELP: &'static str = "Service for run task from message\nExample:
 
 fn stream(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
+        maybe_ok!(msg.clone().as_stream());
+
         let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
         Ok(Some((msg, ath)))
     })
@@ -113,15 +115,13 @@ fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
 
 fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
     thread!({
-        let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
-
         // loop
-        if let Some(()) = thread_await!(_loop(ath.clone(), msg.clone(), msg.clone(), kern))? {
+        if let Some(()) = thread_await!(_loop(ath.clone(), msg.clone(), orig.clone(), kern))? {
             return Ok(None)
         }
 
         // chain
-        if let Some((msg, ath)) = thread_await!(chain(ath.clone(), msg.clone(), msg.clone(), kern))? {
+        if let Some((msg, ath)) = thread_await!(chain(ath.clone(), msg.clone(), orig.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)]
             );
@@ -129,24 +129,24 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
         }
     
         // sim
-        thread_await!(sim(ath.clone(), msg.clone(), msg.clone(), kern))?;
+        thread_await!(sim(ath.clone(), msg.clone(), orig.clone(), kern))?;
     
         // queue
-        if let Some(_ath) = thread_await!(queue(ath.clone(), msg.clone(), msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(queue(ath.clone(), msg.clone(), orig.clone(), kern))? {
             if _ath != ath {
                 return Ok(Some((msg, ath)))
             }
         }
 
         // stack
-        if let Some(_ath) = thread_await!(stack(ath.clone(), msg.clone(), msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(stack(ath.clone(), msg.clone(), orig.clone(), kern))? {
             if _ath != ath {
                 return Ok(Some((msg, ath)))
             }
         }
 
         // stream
-        if let Some((msg, ath)) = thread_await!(stream(ath.clone(), msg.clone(), msg.clone(), kern))? {
+        if let Some((msg, ath)) = thread_await!(stream(ath.clone(), msg.clone(), orig.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)]
             );
@@ -157,15 +157,42 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
     })
 }
 
-pub fn task_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+pub fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        let (sig, id) = maybe_ok!(msg.as_pair());
+
+        let (sig, ath) = maybe!(as_async!(sig, as_str, ath, orig, kern));
+        let (id, ath) = maybe!(as_async!(id, as_uint, ath, orig, kern));
+
+        match sig.as_str() {
+            "kill" => kern.lock().task_sig(id as usize, TaskSig::Kill)?,
+            _ => return Ok(None)
+        }
+
+        Ok(Some(ath))
+    })
+}
+
+pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let ath = Rc::new(msg.ath.clone());
+        let (_msg, mut ath) = maybe!(read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern));
 
         // task
-        if let Some((_msg, ath)) = thread_await!(run(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
-            let msg = msg.msg.merge_with(_msg);
+        if let Some((__msg, ath)) = thread_await!(run(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = _msg.clone().merge_with(__msg);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
+
+        // signal
+        if let Some(_ath) = thread_await!(signal(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            if _ath != ath {
+                ath = _ath;
+                msg = kern.lock().msg(&ath, _msg.clone())?;
+            }
+            return Ok(Some(msg))
+        }
+
         Ok(Some(msg))
     })
 }
