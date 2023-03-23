@@ -251,17 +251,22 @@ impl Kern {
             loop {
                 for (task, (run, done)) in &mut runs {
                     // check signals
-                    if let Some(sig) = kern_mtx.lock().tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
-                        match sig {
-                            TaskSig::Kill => {
-                                // writeln!(kern_mtx.lock(), "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-                                *done = true
+                    {
+                        let mut grd = kern_mtx.lock();
+
+                        if let Some(sig) = grd.tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
+                            match sig {
+                                TaskSig::Kill => {
+                                    // writeln!(grd, "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                                    grd.tasks_running.drain_filter(|t| t.id == task.id).next();
+                                    grd.tasks_signals.drain_filter(|(id, _)| *id == task.id).next();
+                                    *done = true
+                                }
                             }
                         }
                     }
 
                     if *done {
-                        kern_mtx.lock().tasks_running.drain_filter(|t| t.id == task.id).next();
                         continue;
                     }
 
@@ -273,11 +278,11 @@ impl Kern {
                             Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
                             Err(e) => {
                                 writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-                                // writeln!(kern_mtx.lock(), "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::CLIErr(CLIErr::Write))?
                             }
                         };
 
                         kern_mtx.lock().task_result.push((task.id, res));
+                        kern_mtx.lock().tasks_running.drain_filter(|t| t.id == task.id).next();
                         *done = true;
                     }
                 }
