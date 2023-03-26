@@ -17,7 +17,7 @@ use crate::vnix::core::task::ThreadAsync;
 use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async};
 
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, UnitTypeReadAsync};
 
 use super::base;
 
@@ -136,7 +136,7 @@ pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern:
     })
 }
 
-pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(TermKey, Rc<String>), KernErr>> {
+pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<TermKey> {
     thread!({
         let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
 
@@ -159,7 +159,7 @@ pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Th
     })
 }
 
-pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Option<Unit>, Rc<String>), KernErr>> {
+pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Option<Unit>> {
     thread!({
         let term = kern.lock().term.clone();
 

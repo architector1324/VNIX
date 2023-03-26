@@ -1,7 +1,6 @@
 pub mod base;
 
 mod text;
-mod content;
 
 use core::fmt::Display;
 
@@ -18,15 +17,13 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::driver::DrvErr;
-use crate::vnix::utils::Maybe;
-use crate::vnix::core::task::ThreadAsync;
 
 use crate::{thread, thread_await, as_async, maybe_ok, read_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify, UnitReadAsync};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -47,7 +44,7 @@ impl Display for Mode {
     }
 }
 
-fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
+fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let info = {
             let mode = kern.lock().term.lock().mode.clone();

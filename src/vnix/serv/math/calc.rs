@@ -11,14 +11,12 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, as_map_find_async, as_async, maybe};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::task::ThreadAsync;
-use crate::vnix::core::kern::{Kern, KernErr};
+use crate::vnix::core::kern::Kern;
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, Int, UnitNew, UnitAs, UnitReadAsyncI};
+use crate::vnix::core::unit::{Unit, Int, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeReadAsync};
 
 
 pub const SERV_PATH: &'static str = "math.calc";
@@ -55,7 +53,7 @@ fn calc_multi_op_int(op: &str, vals: Vec<Int>) -> Option<Int> {
     }).flatten()
 }
 
-fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Int, Rc<String>), KernErr>> {
+fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Int> {
     thread!({
         // val
         if let Some((val, ath)) = as_async!(msg, as_int_big, ath, orig, kern)? {
@@ -82,7 +80,7 @@ fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> 
     })
 }
 
-fn multi_args_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Vec<Int>, Rc<String>), KernErr>> {
+fn multi_args_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Int>> {
     thread!({
         // (v0 v1)
         if let Some(((v0, v1), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
@@ -108,7 +106,7 @@ fn multi_args_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) ->
     })
 }
 
-fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Int, Rc<String>), KernErr>> {
+fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Int> {
     thread!({
         // (op (v0 v1)) | (op [v ..])
         if let Some(((op, args), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
@@ -129,7 +127,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
     })
 }
 
-fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Int, Rc<String>), KernErr>> {
+fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Int> {
     thread!({
         // single operation
         if let Some((val, ath)) = thread_await!(single_op_int(ath.clone(), orig.clone(), msg.clone(), kern))? {

@@ -9,20 +9,19 @@ use alloc::string::String;
 
 use crate::driver::{DrvErr, MemSizeUnits};
 
-use crate::vnix::core::task::ThreadAsync;
-use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, maybe, as_async};
+
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs, UnitTypeReadAsync};
 
 
 pub const SERV_PATH: &'static str = "sys.hw";
 pub const SERV_HELP: &'static str = "Service for hardware management\nExample: get.mem.free.mb@sys.hw";
 
 
-fn get_freemem(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(usize, Rc<String>), KernErr>> {
+fn get_freemem(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
     thread!({
         let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
 

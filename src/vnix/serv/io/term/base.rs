@@ -21,18 +21,15 @@ pub struct Term {
     pub mode: super::Mode
 }
 
-
-impl Default for Term {
-    fn default() -> Self {
+impl Term {
+    pub fn new(font: &'static [(char, [u8; 16])]) -> Term {
         Term {
             pos: (0, 0),
-            font: &super::content::SYS_FONT,
+            font: font,
             mode: super::Mode::Gfx
         }
     }
-}
 
-impl Term {
     pub fn clear(&mut self, kern: &mut Kern) -> Result<(), DrvErr> {
         self.pos = (0, 0);
 

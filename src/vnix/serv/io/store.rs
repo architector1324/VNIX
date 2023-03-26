@@ -16,14 +16,14 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeReadAsync, UnitReadAsync};
 
 
 pub const SERV_PATH: &'static str = "io.store";
 pub const SERV_HELP: &'static str = "Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store";
 
 
-fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(usize, Rc<String>), KernErr>> {
+fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
     thread!({
         let (s, u, ath) = if let Some(s) = msg.clone().as_str() {
             // database
@@ -49,7 +49,7 @@ fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Threa
     })
 }
 
-fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Unit, Rc<String>), KernErr>> {
+fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let (u, path) = maybe_ok!(msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))));
         let (s, ath) = maybe!(as_async!(u, as_str, ath, orig, kern));

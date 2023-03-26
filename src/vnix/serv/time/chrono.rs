@@ -8,21 +8,19 @@ use alloc::boxed::Box;
 
 use crate::driver::{Duration, DrvErr};
 
-use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, as_map_find_as_async, as_async, maybe};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync};
 
 
 pub const SERV_PATH: &'static str = "time.chrono";
 pub const SERV_HELP: &'static str = "Service for time control\nExample: {wait.ms:500}@time.chrono # wait for 0.5 sec.";
 
 
-fn get_wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Duration, Rc<String>), KernErr>> {
+fn get_wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Duration> {
     thread!({
         // sec
         if let Some((sec, ath)) = as_async!(msg, as_uint, ath, orig, kern)? {

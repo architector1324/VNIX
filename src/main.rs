@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-#![feature(abi_efiapi)]
 #![feature(array_chunks)]
 #![feature(drain_filter)]
 #![feature(iter_array_chunks)]
@@ -15,8 +14,9 @@
 
 extern crate alloc;
 
-pub mod vnix;
-pub mod driver;
+mod vnix;
+mod driver;
+mod content;
 
 use spin::Mutex;
 
@@ -113,7 +113,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mem = mem.unwrap();
 
         // kernel console
-        let term = Rc::new(Mutex::new(base::Term::default()));
+        let term = Rc::new(Mutex::new(base::Term::new(&content::SYS_FONT)));
 
         if disp.is_err() {
             term.lock().mode = Mode::Text;

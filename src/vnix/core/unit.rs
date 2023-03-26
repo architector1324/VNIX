@@ -165,8 +165,8 @@ pub trait UnitParse<'a, T: 'a, I> {
 #[derive(Debug, Clone)]
 pub struct DisplayStr(pub Unit);
 
-pub type UnitReadAsync<'a> = ThreadAsync<'a, Maybe<(Unit, Rc<String>), KernErr>>;
 pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
+pub type UnitReadAsync<'a> = UnitTypeReadAsync<'a, Unit>;
 
 pub trait UnitReadAsyncI {
     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
