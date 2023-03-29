@@ -107,17 +107,13 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
         if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
             let res = match s.as_str() {
                 "get" => info,
-                _ => return Ok(None)
-            };
-            return Ok(Some((res, ath)))
-        }
-
-        // get with ref
-        if let Some(path) = msg.as_path() {
-            let mut path = path.iter().map(|s| s.as_str());
-
-            let res = match maybe_ok!(path.next()) {
-                "get" => maybe_ok!(info.find(path)),
+                "get.mode" => maybe_ok!(info.find(["mode"].into_iter())),
+                "get.res" => maybe_ok!(info.find(["res"].into_iter())),
+                "get.res.txt" => maybe_ok!(info.find(["res", "txt"].into_iter())),
+                "get.res.gfx" => maybe_ok!(info.find(["res", "gfx"].into_iter())),
+                "get.res.all" => maybe_ok!(info.find(["res", "all"].into_iter())),
+                "get.res.all.txt" => maybe_ok!(info.find(["res", "all", "txt"].into_iter())),
+                "get.res.all.gfx" => maybe_ok!(info.find(["res", "all", "gfx"].into_iter())),
                 _ => return Ok(None)
             };
             return Ok(Some((res, ath)))
