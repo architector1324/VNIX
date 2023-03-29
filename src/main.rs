@@ -79,7 +79,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         }
     
         let cli = cli.unwrap();
-    
+
         // disp
         let disp = driver::uefi::UefiDisp::new(st.unsafe_clone());
         if disp.is_err() {

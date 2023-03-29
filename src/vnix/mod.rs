@@ -47,7 +47,10 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // test
     // let s = "(load @task.test)@io.store";
     // let s = "{task.sim:[a@test.dump b@test.dump]}";
+    // let s = "(task.sim [a@test.dump b@test.dump])";
+    // let s = "(task.stk [a b]@test.dump)";
     // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
+    // let s = "(task.loop a@test.dump)";
     // let s = "{sum:(1 2) ath:test task:[sys.usr math.calc test.dump]}";
     // let s = "{task.stk:[a b]@test.dump}";
     // let s = "{
@@ -63,7 +66,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //     ]
     // }@math.calc";
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let run = TaskRun(msg, "io.term".into());
+    // let run = TaskRun(msg, "sys.task".into());
 
     // run
     let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
