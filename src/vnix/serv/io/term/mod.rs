@@ -18,7 +18,7 @@ use alloc::string::String;
 
 use crate::driver::DrvErr;
 
-use crate::{thread, thread_await, as_async, maybe_ok, read_async, maybe};
+use crate::{thread, thread_await, maybe_ok, read_async, maybe};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -44,7 +44,7 @@ impl Display for Mode {
     }
 }
 
-fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let info = {
             let mode = kern.lock().term.lock().mode.clone();
@@ -103,8 +103,10 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             ])
         };
 
+        yield;
+
         // get
-        if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
+        if let Some(s) = msg.as_str() {
             let res = match s.as_str() {
                 "get" => info,
                 "get.mode" => maybe_ok!(info.find(["mode"].into_iter())),

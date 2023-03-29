@@ -14,7 +14,7 @@ use crate::driver::{TermKey, DrvErr};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 
-use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async};
+use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async, maybe_ok};
 
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, UnitTypeReadAsync};
@@ -22,10 +22,9 @@ use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr,
 use super::base;
 
 
-pub fn cls(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub fn cls(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
-
+        let s = maybe_ok!(msg.as_str());
         if s.as_str() != "cls" {
             return Ok(None)
         }
@@ -35,14 +34,14 @@ pub fn cls(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         term.lock().clear(&mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
         term.lock().flush(&mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
+        yield;
         Ok(Some(ath))
     })
 }
 
-pub fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub fn nl(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
-    
+        let s = maybe_ok!(msg.as_str());
         if s.as_str() != "nl" {
             return Ok(None)
         }
@@ -50,13 +49,14 @@ pub fn nl(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadA
         let term = kern.lock().term.clone();
         term.lock().print_ch('\n', &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
+        yield;
         Ok(Some(ath))
     })
 }
 
 pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
-        if let Some(((s, msg), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
+        if let Some((s, msg)) = msg.clone().as_pair() {
             let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
             return match s.as_str() {
@@ -122,6 +122,8 @@ pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern:
             }
             out.join("")
         } else {
+            let (msg, _ath) = maybe!(read_async!(msg, ath, orig, kern));
+            ath = _ath;
             format!("{}", DisplayStr(msg))
         };
 
@@ -136,9 +138,9 @@ pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern:
     })
 }
 
-pub fn get_key(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<TermKey> {
+pub fn get_key(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<TermKey> {
     thread!({
-        let (s, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
+        let s = maybe_ok!(msg.as_str());
 
         match s.as_str() {
             "inp.key" => {
@@ -164,7 +166,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
         let term = kern.lock().term.clone();
 
         // inp
-        if let Some((s, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
+        if let Some(s) = msg.clone().as_str() {
             return match s.as_str() {
                 "inp" => {
                     let inp = base::Term::input(term, false, false, None, kern);
@@ -176,12 +178,12 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
         }
 
         // (inp <pmt>)
-        if let Some(((s, pmt), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
+        if let Some((s, pmt)) = msg.clone().as_pair() {
             let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
-            let (pmt, ath) = maybe!(as_async!(pmt, as_str, ath, orig, kern));
-
+            
             return match s.as_str() {
                 "inp" => {
+                    let (pmt, ath) = maybe!(as_async!(pmt, as_str, ath, orig, kern));
                     term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
                     let inp = base::Term::input(term, false, false, None, kern);
