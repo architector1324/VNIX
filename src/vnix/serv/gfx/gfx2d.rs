@@ -10,7 +10,7 @@ use alloc::string::String;
 use crate::driver::DrvErr;
 
 use crate::vnix::utils;
-use crate::{thread, thread_await, as_map_find_async, as_async, maybe_ok, maybe};
+use crate::{thread, thread_await, as_async, maybe_ok, maybe, read_async, as_map_find_as_async};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -25,28 +25,44 @@ pub const SERV_HELP: &'static str = "Service for rendering 2d graphics\nExample:
 fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<((usize, usize), u32)> {
     thread!({
         // #ff0000
-        if let Some((col, ath)) = as_async!(msg, as_str, ath, orig, kern)? {
+        if let Some(col) = msg.clone().as_str() {
             let col = maybe_ok!(utils::hex_to_u32(&col));
             let res = kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
 
             return Ok(Some(((res, col), ath)))
         }
 
-        // ((320 240) #ff0000)
-        if let Some(((res, col), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
-            let ((w, h), ath) = maybe!(as_async!(res, as_pair, ath, orig, kern));
-            let (w, ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
-            let (h, ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
+        // (fill #ff0000)
+        if let Some((s, col)) = msg.clone().as_pair() {
+            let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+            if s.as_str() != "fill" {
+                return Ok(None)
+            }
 
             let (col, ath) = maybe!(as_async!(col, as_str, ath, orig, kern));
             let col = maybe_ok!(utils::hex_to_u32(&col));
 
-            return Ok(Some((((w as usize, h as usize), col), ath)))
+            let res = kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+
+            return Ok(Some(((res, col), ath)))
         }
 
-        if let Some((msg, ath)) = as_map_find_async!(msg, "fill", ath, orig, kern)? {
-            // {fill:#ff0000} | {fill:((320 240) #ff0000)}
-            return thread_await!(fill_act(ath, orig, msg, kern));
+        // {fill:#ff0000} | {fill:((320 240) #ff0000)}
+        if let Some((col, mut ath)) = as_map_find_as_async!(msg, "fill", as_str, ath, orig, kern)? {
+            let col = maybe_ok!(utils::hex_to_u32(&col));
+
+            let res = if let Some(((w, h), _ath)) = as_map_find_as_async!(msg, "size", as_pair, ath, orig, kern)? {
+                let (w, _ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
+                let (h, _ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
+
+                ath = _ath;
+                (w as usize, h as usize)
+            } else {
+                kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?
+            };
+
+            return Ok(Some(((res, col), ath)))
         }
         Ok(None)
     })
@@ -54,7 +70,10 @@ fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
 
 pub fn gfx2d_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        if let Some((((w, h), col), ath)) = thread_await!(fill_act(Rc::new(msg.ath.clone()), msg.msg.clone(), msg.msg.clone(), kern))? {
+        let ath = Rc::new(msg.ath.clone());
+        let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern));
+
+        if let Some((((w, h), col), ath)) = thread_await!(fill_act(ath.clone(), _msg.clone(), _msg, kern))? {
             let msg = Unit::map(&[
                 (
                     Unit::str("msg"),
