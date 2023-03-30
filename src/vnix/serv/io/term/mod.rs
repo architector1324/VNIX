@@ -18,7 +18,9 @@ use alloc::string::String;
 
 use crate::driver::DrvErr;
 
-use crate::{thread, thread_await, maybe_ok, read_async, maybe};
+use crate::vnix::core::task::ThreadAsync;
+use crate::vnix::utils::Maybe;
+use crate::{thread, thread_await, maybe_ok, read_async, maybe, as_async};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -124,6 +126,45 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
     })
 }
 
+fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        let (s, msg) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        return match s.as_str() {
+            "set.mode" => {
+                let (mode, ath) = maybe!(as_async!(msg, as_str, ath, orig, kern));
+                match mode.as_str() {
+                    "txt" => kern.lock().term.lock().mode = Mode::Text,
+                    "gfx" => kern.lock().term.lock().mode = Mode::Gfx,
+                    _ => return Ok(None)
+                };
+                Ok(Some(ath))
+            },
+            "set.res.txt" => {
+                let ((w, h), ath) = maybe!(as_async!(msg, as_pair, ath, orig, kern));
+                let (w, ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
+                let (h, ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
+
+                kern.lock().drv.cli.set_res((w as usize, h as usize)).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
+
+                return Ok(Some(ath))
+            },
+            "set.res.gfx" => {
+                let ((w, h), ath) = maybe!(as_async!(msg, as_pair, ath, orig, kern));
+                let (w, ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
+                let (h, ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
+
+                kern.lock().drv.disp.set_res((w as usize, h as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+
+                return Ok(Some(ath))
+            },
+            _ => Ok(None)
+        }
+        
+    })
+}
+
 pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let ath = Rc::new(msg.ath.clone());
@@ -135,6 +176,15 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
                 (Unit::str("msg"), msg)
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // set command
+        if let Some(_ath) = thread_await!(set(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            if _ath != ath {
+                ath = _ath;
+                msg = kern.lock().msg(&ath, _msg)?;
+            }
+            return Ok(Some(msg))
         }
 
         // cls command
