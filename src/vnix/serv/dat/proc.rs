@@ -71,7 +71,7 @@ fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
         // [v0 ..]
         if let Some(lst) = dat.as_list() {
             let mut lst = Rc::unwrap_or_clone(lst);
-            lst.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+            lst.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less));
 
             return Ok(Some((Unit::list(&lst), ath)))
         }
