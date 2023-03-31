@@ -8,6 +8,7 @@ use base64ct::{Base64, Encoding};
 use spin::Mutex;
 use alloc::rc::Rc;
 
+use alloc::format;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -134,6 +135,8 @@ fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
             return Ok(None)
         }
 
+        let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
         let b = dat.as_bytes();
         let s = utils::compress_bytes(&b)?;
 
@@ -168,10 +171,34 @@ fn hash(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
             return Ok(None)
         }
 
+        let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
         let h = Sha3_256::digest(dat.as_bytes());
         let s = Base64::encode_string(&h[..]);
 
         return Ok(Some((Rc::new(s), ath)))
+    })
+}
+
+fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        let (u, ath) = match s.as_str() {
+            "ser.str" => {
+                let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+                let s = format!("{dat}");
+                (Unit::str(&s), ath)
+            },
+            "ser.bytes" => {
+                let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+                let b = dat.as_bytes().into_iter().map(|b| Unit::byte(b)).collect::<Vec<_>>();
+                (Unit::list(&b), ath)
+            }
+            _ => return Ok(None)
+        };
+        return Ok(Some((u, ath)))
     })
 }
 
@@ -232,6 +259,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((s, ath)) = thread_await!(hash(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str_share(s))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // serialize
+        if let Some((msg, ath)) = thread_await!(serialize(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
