@@ -1,4 +1,5 @@
 use core::pin::Pin;
+use core::cmp::Ordering;
 use core::ops::{Generator, GeneratorState};
 
 use spin::Mutex;
@@ -43,6 +44,37 @@ fn len(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
             return Ok(Some((len, ath)))
         }
 
+        Ok(None)
+    })
+}
+
+fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+        
+        if s.as_str() != "sort" {
+            return Ok(None)
+        }
+
+        let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
+        // (a b)
+        if let Some((a, b)) = dat.clone().as_pair() {
+            let u = match maybe_ok!(a.partial_cmp(&b)) {
+                Ordering::Greater => Unit::pair(b, a),
+                _ => dat
+            };
+            return Ok(Some((u, ath)))
+        }
+
+        // [v0 ..]
+        if let Some(lst) = dat.as_list() {
+            let mut lst = Rc::unwrap_or_clone(lst);
+            lst.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+
+            return Ok(Some((Unit::list(&lst), ath)))
+        }
         Ok(None)
     })
 }
@@ -106,6 +138,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((len, ath)) = thread_await!(len(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(len as u32))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // sort
+        if let Some((msg, ath)) = thread_await!(sort(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }

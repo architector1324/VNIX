@@ -8,6 +8,7 @@ use core::pin::Pin;
 use core::slice::Iter;
 use core::fmt::Display;
 use core::ops::{Generator, GeneratorState};
+use core::cmp::PartialOrd;
 
 use spin::Mutex;
 
@@ -25,10 +26,10 @@ use super::task::ThreadAsync;
 use super::kern::{Addr, KernErr, Kern};
 
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Int(pub Rc<BigInt>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Dec(pub Rc<BigRational>);
 
 pub type Path = Vec<String>;
@@ -496,6 +497,36 @@ impl Display for Unit {
             UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
             UnitType::List(lst) => write!(f, "[{}]", lst.iter().map(|u| format!("{u}")).collect::<Vec<_>>().join(" ")),
             UnitType::Map(map) => write!(f, "{{{}}}", map.iter().map(|(u0, u1)| format!("{u0}:{u1}")).collect::<Vec<_>>().join(" ")),
+        }
+    }
+}
+
+impl PartialOrd for Unit {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        match self.0.as_ref() {
+            UnitType::Bool(a) =>
+                match other.0.as_ref() {
+                    UnitType::Bool(b) => a.partial_cmp(b),
+                    _ => None
+                },
+            UnitType::Byte(a) =>
+                match other.0.as_ref() {
+                    UnitType::Byte(b) => a.partial_cmp(b),
+                    _ => None
+                },
+            UnitType::Int(a) =>
+                match other.0.as_ref() {
+                    UnitType::Int(b) => a.partial_cmp(b),
+                    UnitType::Dec(b) => a.0.as_ref().partial_cmp(&b.0.to_integer()),
+                    _ => None
+                },
+            UnitType::Dec(a) =>
+            match other.0.as_ref() {
+                UnitType::Dec(b) => a.partial_cmp(b),
+                UnitType::Int(b) => a.0.to_integer().partial_cmp(b.0.as_ref()),
+                _ => None
+            },
+            _ => None
         }
     }
 }
