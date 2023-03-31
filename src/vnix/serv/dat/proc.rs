@@ -202,6 +202,35 @@ fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
     })
 }
 
+fn enumerate(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "enum" {
+            return Ok(None)
+        }
+
+        let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
+        // (a b)
+        if let Some((a, b)) = dat.clone().as_pair() {
+            let u = Unit::list(&[
+                Unit::pair(Unit::uint(0), a),
+                Unit::pair(Unit::uint(1), b)
+            ]);
+            return Ok(Some((u, ath)))
+        }
+
+        // [v0 ..]
+        if let Some(lst) = dat.as_list() {
+            let lst = lst.iter().enumerate().map(|(i, u)| Unit::pair(Unit::uint(i as u32), u.clone())).collect::<Vec<_>>();
+            return Ok(Some((Unit::list(&lst), ath)))
+        }
+        Ok(None)
+    })
+}
+
 pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let ath = Rc::new(msg.ath.clone());
@@ -225,6 +254,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // rev
         if let Some((msg, ath)) = thread_await!(rev(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // enumerate
+        if let Some((msg, ath)) = thread_await!(enumerate(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
