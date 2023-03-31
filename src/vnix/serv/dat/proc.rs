@@ -79,8 +79,6 @@ fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
     })
 }
 
-use core::fmt::Write;
-
 fn unzip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let (s, dat_s) = maybe_ok!(msg.as_pair());
