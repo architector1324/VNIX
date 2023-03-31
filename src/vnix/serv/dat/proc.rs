@@ -2,6 +2,9 @@ use core::pin::Pin;
 use core::cmp::Ordering;
 use core::ops::{Generator, GeneratorState};
 
+use sha3::{Digest, Sha3_256};
+use base64ct::{Base64, Encoding};
+
 use spin::Mutex;
 use alloc::rc::Rc;
 
@@ -52,7 +55,7 @@ fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
     thread!({
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
-        
+
         if s.as_str() != "sort" {
             return Ok(None)
         }
@@ -72,6 +75,33 @@ fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
         if let Some(lst) = dat.as_list() {
             let mut lst = Rc::unwrap_or_clone(lst);
             lst.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less));
+
+            return Ok(Some((Unit::list(&lst), ath)))
+        }
+        Ok(None)
+    })
+}
+
+fn rev(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "rev" {
+            return Ok(None)
+        }
+
+        let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
+        // (a b)
+        if let Some((a, b)) = dat.clone().as_pair() {
+            return Ok(Some((Unit::pair(b, a), ath)))
+        }
+
+        // [v0 ..]
+        if let Some(lst) = dat.as_list() {
+            let mut lst = Rc::unwrap_or_clone(lst);
+            lst.reverse();
 
             return Ok(Some((Unit::list(&lst), ath)))
         }
@@ -129,6 +159,22 @@ fn unzip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
     })
 }
 
+fn hash(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Rc<String>> {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "hash" {
+            return Ok(None)
+        }
+
+        let h = Sha3_256::digest(dat.as_bytes());
+        let s = Base64::encode_string(&h[..]);
+
+        return Ok(Some((Rc::new(s), ath)))
+    })
+}
+
 pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let ath = Rc::new(msg.ath.clone());
@@ -144,6 +190,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // sort
         if let Some((msg, ath)) = thread_await!(sort(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // rev
+        if let Some((msg, ath)) = thread_await!(rev(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -170,6 +224,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((msg, ath)) = thread_await!(unzip(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // hash
+        if let Some((s, ath)) = thread_await!(hash(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), Unit::str_share(s))
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
