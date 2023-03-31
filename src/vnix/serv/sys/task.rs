@@ -18,7 +18,7 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitModify, UnitAs, UnitNew,
 
 
 pub const SERV_PATH: &'static str = "sys.task";
-pub const SERV_HELP: &'static str = "Service for run task from message\nExample: (load @txt.hello)@io.store@sys.task";
+pub const SERV_HELP: &'static str = "Service for run task from message\nExample: (load @task.hello)@io.store@sys.task";
 
 
 fn stream(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
