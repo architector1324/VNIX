@@ -14,12 +14,12 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::vnix::utils;
-use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok};
+use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok, as_map_find_async};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, UnitNew, UnitAsBytes, UnitReadAsync, UnitParse};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, UnitNew, UnitAsBytes, UnitReadAsync, UnitParse, UnitModify};
 
 
 pub const SERV_PATH: &'static str = "dat.proc";
@@ -123,6 +123,16 @@ fn keys(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
         let keys = map.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
 
         Ok(Some((keys, ath)))
+    })
+}
+
+fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let path = maybe_ok!(msg.clone().as_map_find("get").and_then(|u| u.as_path()));
+        let (from, ath) = maybe!(as_map_find_async!(msg, "from", ath, orig, kern));
+
+        let u = maybe_ok!(from.find(path.iter().map(|s| s.as_str())));
+        Ok(Some((u, ath)))
     })
 }
 
@@ -272,6 +282,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((keys, ath)) = thread_await!(keys(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::list(&keys))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // get
+        if let Some((msg, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
