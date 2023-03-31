@@ -1,6 +1,7 @@
 pub mod base;
 
 mod text;
+mod media;
 
 use core::fmt::Display;
 
@@ -220,6 +221,15 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
                     (Unit::str("msg"), msg)
                 ]);
                 return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+            }
+            return Ok(Some(msg))
+        }
+
+        // img command
+        if let Some(_ath) = thread_await!(media::img(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            if _ath != ath {
+                ath = _ath;
+                msg = kern.lock().msg(&ath, _msg)?;
             }
             return Ok(Some(msg))
         }
