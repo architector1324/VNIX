@@ -526,6 +526,15 @@ impl PartialOrd for Unit {
                 UnitType::Int(b) => a.0.to_integer().partial_cmp(b.0.as_ref()),
                 _ => None
             },
+            UnitType::Str(a) =>
+                match other.0.as_ref() {
+                    UnitType::Str(b) => {
+                        let a = a.chars().next()?;
+                        let b = b.chars().next()?;
+                        a.partial_cmp(&b)
+                    },
+                    _ => None
+                }
             _ => None
         }
     }
