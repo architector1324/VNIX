@@ -57,14 +57,14 @@ pub fn nl(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
 pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
         if let Some((s, msg)) = msg.clone().as_pair() {
-            let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
-
-            return match s.as_str() {
-                // (say <unit>)
-                "say" => thread_await!(say(false, false, ath, orig, msg, kern)),
-                // (say.fmt [<unit> ..])
-                "say.fmt" => thread_await!(say(false, true, ath, orig, msg, kern)),
-                _ => Ok(None)
+            if let Some((s, ath)) = as_async!(s, as_str, ath, orig, kern)? {
+                match s.as_str() {
+                    // (say <unit>)
+                    "say" => return thread_await!(say(false, false, ath, orig, msg, kern)),
+                    // (say.fmt [<unit> ..])
+                    "say.fmt" => return thread_await!(say(false, true, ath, orig, msg, kern)),
+                    _ => ()
+                }
             }
         }
 
