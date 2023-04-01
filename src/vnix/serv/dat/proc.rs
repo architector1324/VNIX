@@ -18,6 +18,7 @@ use crate::vnix::utils;
 use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
+use crate::vnix::core::driver::MemSizeUnits;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, UnitNew, UnitAsBytes, UnitReadAsync, UnitParse, UnitModify};
@@ -312,6 +313,26 @@ fn hash(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
     })
 }
 
+fn size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        let units = match s.as_str() {
+            "size" => MemSizeUnits::Bytes,
+            "size.kb" => MemSizeUnits::Kilo,
+            "size.mb" => MemSizeUnits::Mega,
+            "size.gb" => MemSizeUnits::Giga,
+            _ => return Ok(None)
+        };
+
+        let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+        let size = dat.size(units);
+
+        Ok(Some((size, ath)))
+    })
+}
+
 fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let (s, dat) = maybe_ok!(msg.as_pair());
@@ -460,6 +481,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((s, ath)) = thread_await!(hash(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str_share(s))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // size
+        if let Some((size, ath)) = thread_await!(size(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), Unit::uint(size as u32))
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
