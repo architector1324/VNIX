@@ -2,6 +2,7 @@ use core::pin::Pin;
 use core::cmp::Ordering;
 use core::ops::{Generator, GeneratorState};
 
+use alloc::borrow::ToOwned;
 use sha3::{Digest, Sha3_256};
 use base64ct::{Base64, Encoding};
 
@@ -107,6 +108,59 @@ fn rev(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             return Ok(Some((Unit::list(&lst), ath)))
         }
         Ok(None)
+    })
+}
+
+fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        match s.as_str() {
+            "cat" => {
+                let ((a, b), ath) = maybe!(as_async!(dat, as_pair, ath, orig, kern));
+                let (a, ath) = maybe!(read_async!(a, ath, orig, kern));
+                let (b, ath) = maybe!(read_async!(b, ath, orig, kern));
+
+                // (<str> <str>)
+                if let Some((a, b)) = a.clone().as_str().and_then(|a| Some((a, b.clone().as_str()?))) {
+                    let s = Rc::unwrap_or_clone(a).as_str().to_owned() + Rc::unwrap_or_clone(b).as_str();
+                    return Ok(Some((Unit::str(&s), ath)))
+                }
+
+                // (<list> <list>)
+                if let Some((a, b)) = a.clone().as_list().and_then(|a| Some((a, b.clone().as_list()?))) {
+                    let lst = a.iter().cloned().chain(b.iter().cloned()).collect::<Vec<_>>();
+                    return Ok(Some((Unit::list(&lst), ath)))
+                }
+
+                // (<unit> <list>)
+                if let Some(b) = b.clone().as_list() {
+                    let lst = core::iter::once(a).chain(b.iter().cloned()).collect::<Vec<_>>();
+                    return Ok(Some((Unit::list(&lst), ath)))
+                }
+
+                // (<list> <unit>)
+                if let Some(a) = a.as_list() {
+                    let lst = a.iter().cloned().chain(core::iter::once(b)).collect::<Vec<_>>();
+                    return Ok(Some((Unit::list(&lst), ath)))
+                }
+                Ok(None)
+            },
+            "cat.zip" => {
+                let ((a, b), ath) = maybe!(as_async!(dat, as_pair, ath, orig, kern));
+                let (a, ath) = maybe!(as_async!(a, as_list, ath, orig, kern));
+                let (b, ath) = maybe!(as_async!(b, as_list, ath, orig, kern));
+
+                if a.len() != b.len() {
+                    return Ok(None)
+                }
+
+                let lst = a.iter().cloned().zip(b.iter().cloned()).map(|(a, b)| Unit::pair(a, b)).collect::<Vec<_>>();
+                Ok(Some((Unit::list(&lst), ath)))
+            },
+            _ => Ok(None)
+        }
     })
 }
 
@@ -278,6 +332,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // enumerate
         if let Some((msg, ath)) = thread_await!(enumerate(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // concatenate
+        if let Some((msg, ath)) = thread_await!(cat(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
