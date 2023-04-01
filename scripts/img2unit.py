@@ -48,9 +48,11 @@ def rle_img(dat):
 
 
 def convert_to_bytes_rle(rle):
-    lst = []
+    lst = [28]
+    lst.extend(len(rle).to_bytes(3, 'little'))
 
     for cnt, px in rle:
+        lst.append(34)
         lst.extend(cnt.to_bytes(3, 'little'))
         lst.extend(px.to_bytes(3, 'little'))
 
@@ -58,9 +60,11 @@ def convert_to_bytes_rle(rle):
 
 
 def convert_to_bytes(dat):
-    lst = []
+    lst = [28]
+    lst.extend(len(dat).to_bytes(3, 'little'))
 
     for px in dat:
+        lst.append(22)
         lst.extend(px.to_bytes(3, 'little'))
 
     return lst
@@ -86,7 +90,7 @@ def convert(size, dat, zip):
 
         img_s, fmt = (img_s0, 'rgb') if len(img_s0) < len(img_s1) else (img_s1, 'rgb.rle')
 
-    return f'{{size:({size[0]} {size[1]}) fmt:{fmt} img:{img_s}}}'
+    return f'{{size:({size[0]} {size[1]}) fmt:{fmt} img:(unzip {img_s})@dat.proc}}'
 
 
 def convert_sys(size, dat):
