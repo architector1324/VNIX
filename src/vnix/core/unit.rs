@@ -88,7 +88,10 @@ pub enum UnitBin {
     List24,
     Map8,
     Map16,
-    Map24
+    Map24,
+    PairUint8Uint24,
+    PairUint16Uint24,
+    PairUint24Uint24,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -570,16 +573,6 @@ impl UnitAsBytes for Unit {
                     return vec![UnitBin::Zero as u8]
                 }
 
-                if let Some(v) = v.to_small() {
-                    let b = v.to_le_bytes();
-                    return match v {
-                        -128..=127 => [UnitBin::Int8 as u8].into_iter().chain(b.into_iter().take(1)).collect(),
-                        -32768..=32767 => [UnitBin::Int16 as u8].into_iter().chain(b.into_iter().take(2)).collect(),
-                        -8388608..=8388607 => [UnitBin::Int24 as u8].into_iter().chain(b.into_iter().take(3)).collect(),
-                        _ => [UnitBin::Int as u8].into_iter().chain(b).collect()
-                    };
-                }
-
                 if let Some(v) = v.to_nat() {
                     let b = v.to_le_bytes();
                     return match v {
@@ -588,6 +581,16 @@ impl UnitAsBytes for Unit {
                         65536..=16777215 => [UnitBin::Uint24 as u8].into_iter().chain(b.into_iter().take(3)).collect(),
                         _ => [UnitBin::IntNat as u8].into_iter().chain(b).collect()
                     }
+                }
+
+                if let Some(v) = v.to_small() {
+                    let b = v.to_le_bytes();
+                    return match v {
+                        -128..=127 => [UnitBin::Int8 as u8].into_iter().chain(b.into_iter().take(1)).collect(),
+                        -32768..=32767 => [UnitBin::Int16 as u8].into_iter().chain(b.into_iter().take(2)).collect(),
+                        -8388608..=8388607 => [UnitBin::Int24 as u8].into_iter().chain(b.into_iter().take(3)).collect(),
+                        _ => [UnitBin::Int as u8].into_iter().chain(b).collect()
+                    };
                 }
 
                 let (s, b) = v.0.to_bytes_le();
@@ -648,10 +651,25 @@ impl UnitAsBytes for Unit {
                     Addr::Local => vec![UnitBin::AddrLoc as u8],
                     Addr::Remote(addr) => [UnitBin::AddrRemote as u8].into_iter().chain(addr.into_iter().flat_map(|e| e.to_le_bytes())).collect::<Vec<u8>>()
                 }).collect(),
-            UnitType::Pair(u0, u1) => [UnitBin::Pair as u8].into_iter()
+            UnitType::Pair(u0, u1) => {
+                if let Some((u0, u1)) = u0.clone().as_uint().and_then(|u0| Some((u0, u1.clone().as_uint()?))) {
+                    if u1 <= 16777215 {
+                        let u0_b = u0.to_le_bytes().into_iter();
+                        let u1_b = u1.to_le_bytes().into_iter().take(3);
+                        match u0 {
+                            0..=255 => return [UnitBin::PairUint8Uint24 as u8].into_iter().chain(u0_b.take(1)).chain(u1_b).collect(),
+                            0..=65535 => return [UnitBin::PairUint16Uint24 as u8].into_iter().chain(u0_b.take(2)).chain(u1_b).collect(),
+                            0..=16777215 => return [UnitBin::PairUint24Uint24 as u8].into_iter().chain(u0_b.take(3)).chain(u1_b).collect(),
+                            _ => ()
+                        }
+                    } 
+                }
+
+                [UnitBin::Pair as u8].into_iter()
                 .chain(u0.clone().as_bytes())
                 .chain(u1.clone().as_bytes())
-                .collect(),
+                .collect()
+            }
             UnitType::List(lst) => {
                 let len = lst.len();
                 let len_b = (lst.len() as u32).to_le_bytes();
@@ -712,6 +730,9 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
             _b if _b == UnitBin::Str24 as u8 => Self::parse_str(it),
             _b if _b == UnitBin::Ref as u8 => Self::parse_ref(it),
             _b if _b == UnitBin::Pair as u8 => Self::parse_pair(it),
+            _b if _b == UnitBin::PairUint8Uint24 as u8 => Self::parse_pair(it),
+            _b if _b == UnitBin::PairUint16Uint24 as u8 => Self::parse_pair(it),
+            _b if _b == UnitBin::PairUint24Uint24 as u8 => Self::parse_pair(it),
             _b if _b == UnitBin::List as u8 => Self::parse_list(it),
             _b if _b == UnitBin::List8 as u8 => Self::parse_list(it),
             _b if _b == UnitBin::List16 as u8 => Self::parse_list(it),
@@ -1027,14 +1048,69 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
 
     fn parse_pair(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
         let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
-        if b != UnitBin::Pair as u8 {
-            return Err(UnitParseErr::NotPair)
+        match b {
+            _b if _b == UnitBin::Pair as u8 => {
+                let (u0, it) = Unit::parse(it)?;
+                let (u1, it) = Unit::parse(it)?;
+
+                Ok((Unit::pair(u0, u1), it))
+            },
+            _b if _b == UnitBin::PairUint8Uint24 as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0,
+                    0,
+                    0
+                ];
+                let u0 = <u32>::from_le_bytes(bytes);
+
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0
+                ];
+                let u1 = <u32>::from_le_bytes(bytes);
+                Ok((Unit::pair(Unit::uint(u0), Unit::uint(u1)), it))
+            },
+            _b if _b == UnitBin::PairUint16Uint24 as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0,
+                    0
+                ];
+                let u0 = <u32>::from_le_bytes(bytes);
+
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0
+                ];
+                let u1 = <u32>::from_le_bytes(bytes);
+                Ok((Unit::pair(Unit::uint(u0), Unit::uint(u1)), it))
+            },
+            _b if _b == UnitBin::PairUint24Uint24 as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0
+                ];
+                let u0 = <u32>::from_le_bytes(bytes);
+
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0
+                ];
+                let u1 = <u32>::from_le_bytes(bytes);
+                Ok((Unit::pair(Unit::uint(u0), Unit::uint(u1)), it))
+            },
+            _ => Err(UnitParseErr::NotPair)
         }
-
-        let (u0, it) = Unit::parse(it)?;
-        let (u1, it) = Unit::parse(it)?;
-
-        Ok((Unit::pair(u0, u1), it))
     }
 
     fn parse_list(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
