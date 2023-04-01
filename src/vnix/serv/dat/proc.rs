@@ -14,7 +14,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::vnix::utils;
-use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok, as_map_find_async};
+use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
@@ -128,10 +128,16 @@ fn keys(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
 
 fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
-        let path = maybe_ok!(msg.clone().as_map_find("get").and_then(|u| u.as_path()));
-        let (from, ath) = maybe!(as_map_find_async!(msg, "from", ath, orig, kern));
+        let (path, src) = maybe_ok!(msg.as_pair());
+        let path = maybe_ok!(path.as_path());
 
-        let u = maybe_ok!(from.find(path.iter().map(|s| s.as_str())));
+        if maybe_ok!(path.get(0)).as_str() != "get" {
+            return Ok(None)
+        }
+
+        let (src, ath) = maybe!(read_async!(src, ath, orig, kern));
+
+        let u = maybe_ok!(src.find(path.iter().skip(1).map(|s| s.as_str())));
         Ok(Some((u, ath)))
     })
 }

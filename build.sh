@@ -1,6 +1,7 @@
 #!/bin/bash
 
 cargo build --release --target=x86_64-unknown-uefi
+cargo build --release --target=aarch64-unknown-uefi
 
 if [ $? -ne 0 ]; then
     exit
@@ -18,6 +19,7 @@ mkfs.vfat ./out/vnix.img
 mmd -i ./out/vnix.img ::/EFI
 mmd -i ./out/vnix.img ::/EFI/BOOT
 mcopy -i ./out/vnix.img target/x86_64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i ./out/vnix.img target/aarch64-unknown-uefi/release/vnix.efi ::/EFI/BOOT/BOOTAA64.EFI
 mcopy -i ./out/vnix.img content/vnix.store ::
 
 poweriso -y convert out/vnix.img -o out/vnix.iso
