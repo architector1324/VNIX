@@ -8,14 +8,13 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use super::msg::Msg;
+use super::user::Usr;
 use super::task::{Task, TaskRun, TaskSig};
 use super::unit::{Unit, UnitParseErr, UnitAs, UnitNew};
 use super::serv::{Serv, ServErr, ServHlrAsync};
-
-use super::user::Usr;
+use super::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
 
 use crate::thread;
-use crate::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
 
 use crate::vnix::serv::io::term::base;
 use crate::vnix::utils::{RamStore, Maybe};

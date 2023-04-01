@@ -5,7 +5,7 @@ pub mod utils;
 use alloc::boxed::Box;
 use ::core::fmt::Write;
 
-use crate::driver::{CLIErr, DrvErr};
+use crate::vnix::core::driver::{CLIErr, DrvErr};
 
 use self::core::user::Usr;
 use self::core::task::TaskRun;

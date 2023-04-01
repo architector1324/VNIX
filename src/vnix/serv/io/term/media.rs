@@ -8,7 +8,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::DrvErr;
+use crate::vnix::core::driver::DrvErr;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 

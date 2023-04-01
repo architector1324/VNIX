@@ -5,7 +5,7 @@ use core::fmt::{Display, Formatter};
 use sha3::{Digest, Sha3_256};
 use base64ct::{Base64, Encoding};
 
-use crate::driver::MemSizeUnits;
+use crate::vnix::core::driver::MemSizeUnits;
 
 use super::kern::KernErr;
 use super::unit::{Unit, UnitAsBytes};

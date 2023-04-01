@@ -6,7 +6,7 @@ use alloc::string::String;
 use spin::Mutex;
 use alloc::boxed::Box;
 
-use crate::driver::{Duration, DrvErr};
+use crate::vnix::core::driver::{Duration, DrvErr};
 
 use crate::{thread, thread_await, as_map_find_as_async, as_async, maybe};
 

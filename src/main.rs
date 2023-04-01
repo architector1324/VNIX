@@ -33,16 +33,15 @@ use uefi::proto::media::file::FileMode;
 use uefi::proto::media::file::FileAttribute;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 
-use driver::Disp;
-use driver::MemSizeUnits;
-use driver::Rnd;
-
 use vnix::vnix_entry;
 use vnix::core::kern::Kern;
 use vnix::core::kern::KernDrv;
 use vnix::serv::io::term::Mode;
 use vnix::serv::io::term::base;
 
+use crate::vnix::core::driver::Rnd;
+use crate::vnix::core::driver::Disp;
+use crate::vnix::core::driver::MemSizeUnits;
 use crate::vnix::core::unit::{Unit, UnitParse};
 
 

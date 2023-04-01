@@ -7,7 +7,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::{DrvErr, MemSizeUnits};
+use crate::vnix::core::driver::{DrvErr, MemSizeUnits};
 
 use crate::{thread, thread_await, maybe, as_async};
 

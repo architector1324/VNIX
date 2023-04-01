@@ -8,7 +8,7 @@ use p256::ecdsa::signature::{Signature, Signer, Verifier};
 
 use base64ct::{Base64, Encoding};
 
-use crate::driver::DrvErr;
+use crate::vnix::core::driver::DrvErr;
 
 use super::kern::{KernErr, Kern};
 use super::unit::{Unit, UnitAsBytes};

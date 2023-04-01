@@ -10,14 +10,13 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::{TermKey, DrvErr};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
+use crate::vnix::core::kern::{Kern, KernErr};
+use crate::vnix::core::driver::{TermKey, DrvErr};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, UnitTypeReadAsync};
 
 use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async, maybe_ok};
-
-use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, UnitTypeReadAsync};
 
 use super::base;
 

@@ -19,7 +19,7 @@ use num::rational::BigRational;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::TaskRun;
 
-use crate::driver::MemSizeUnits;
+use crate::vnix::core::driver::MemSizeUnits;
 use crate::{thread, thread_await, task_result, maybe, maybe_ok};
 
 use super::task::ThreadAsync;

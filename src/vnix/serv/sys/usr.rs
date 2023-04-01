@@ -8,7 +8,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::driver::{DrvErr, CLIErr};
+use crate::vnix::core::driver::{DrvErr, CLIErr};
 
 use crate::vnix::utils::Maybe;
 use crate::{thread, thread_await, as_async, as_map_find_as_async, maybe};

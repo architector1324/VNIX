@@ -5,7 +5,7 @@ use core::fmt::Write;
 
 use crate::{thread};
 
-use crate::driver::{CLIErr, DrvErr};
+use crate::vnix::core::driver::{CLIErr, DrvErr};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};

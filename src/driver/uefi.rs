@@ -12,10 +12,8 @@ use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType, 
 
 use crate::thread;
 
-use crate::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse};
+use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, TimeAsync, Duration};
 use crate::vnix::utils::Maybe;
-
-use super::{TimeAsync, Duration};
 
 
 pub struct UefiCLI {
@@ -150,7 +148,7 @@ impl CLI for UefiCLI {
         Ok(())
     }
 
-    fn get_key(&mut self, block: bool) -> Maybe<crate::driver::TermKey, CLIErr> {
+    fn get_key(&mut self, block: bool) -> Maybe<crate::vnix::core::driver::TermKey, CLIErr> {
         // let mut cli = self.st.boot_services().open_protocol_exclusive::<Input>(self.cli_in_hlr).map_err(|_| CLIErr::GetKey)?;
 
         if block {

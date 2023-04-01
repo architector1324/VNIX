@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use rand::{rngs::StdRng, SeedableRng, RngCore};
 
 use crate::vnix::utils::Maybe;
-use crate::driver::{DispErr, Disp, Rnd, RndErr};
+use crate::vnix::core::driver::{DispErr, Disp, Rnd, RndErr, Mouse};
 
 pub struct StubDisp;
 
@@ -39,7 +39,7 @@ impl Disp for StubDisp {
         Ok(())
     }
 
-    fn mouse(&mut self, _block: bool) -> Maybe<super::Mouse, DispErr> {
+    fn mouse(&mut self, _block: bool) -> Maybe<Mouse, DispErr> {
         Ok(None)
     }
 }
