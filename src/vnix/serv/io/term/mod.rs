@@ -152,7 +152,24 @@ fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
                 return Ok(Some(ath))
             },
             "set.res.gfx" => {
-                let ((w, h), ath) = maybe!(as_async!(msg, as_pair, ath, orig, kern));
+                let (res, ath) = maybe!(read_async!(msg, ath, orig, kern));
+                let (w, h) = if let Some((w, h)) = res.clone().as_pair() {
+                    (w, h)
+                } else if let Some(s) = res.as_str() {
+                    match s.as_str() {
+                        "240p" => (Unit::uint(320), Unit::uint(240)),
+                        "360p" => (Unit::uint(480), Unit::uint(360)),
+                        "720p" => (Unit::uint(1280), Unit::uint(720)),
+                        "1080p" => (Unit::uint(1920), Unit::uint(1080)),
+                        "2k" => (Unit::uint(2048), Unit::uint(1080)),
+                        "4k" => (Unit::uint(3840), Unit::uint(2160)),
+                        "8k" => (Unit::uint(7680), Unit::uint(4320)),
+                        _ => return Ok(None)
+                    }
+                } else {
+                    return Ok(None)
+                };
+
                 let (w, ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
                 let (h, ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
 
