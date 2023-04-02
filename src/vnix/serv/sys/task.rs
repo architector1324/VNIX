@@ -30,12 +30,13 @@ fn stream(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRea
     })
 }
 
-fn _loop(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(), KernErr>> {
+fn _loop(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
         let msg = if let Some(msg) = msg.clone().as_map_find("task.loop") {
             msg
         } else if let Some((s, msg)) = msg.clone().as_pair() {
-            let (s, _) = maybe!(as_async!(s, as_str, ath, orig, kern));
+            let (s, _ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+            ath = _ath;
 
             if s.as_str() != "task.loop" {
                 return Ok(None)
@@ -45,6 +46,19 @@ fn _loop(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
             return Ok(None)
         };
 
+        // loop count
+        if let Some((cnt, msg)) = msg.clone().as_pair() {
+            let (cnt, mut ath) = maybe!(as_async!(cnt, as_uint, ath, orig, kern));
+
+            for _ in 0..cnt {
+                if let Some((_, _ath)) = read_async!(msg, ath, orig, kern)? {
+                    ath = _ath;
+                }
+            }
+            return Ok(Some(ath))
+        }
+
+        // infinite
         loop {
             read_async!(msg, ath, orig, kern)?;
         }
@@ -166,8 +180,11 @@ fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
 fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Option<Unit>> {
     thread!({
         // loop
-        if let Some(()) = thread_await!(_loop(ath.clone(), msg.clone(), orig.clone(), kern))? {
-            return Ok(None)
+        if let Some(_ath) = thread_await!(_loop(ath.clone(), msg.clone(), orig.clone(), kern))? {
+            if _ath != ath {
+                return Ok(Some((Some(msg), ath)))
+            }
+            return Ok(Some((None, ath)))
         }
 
         // chain
