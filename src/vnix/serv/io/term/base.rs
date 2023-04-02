@@ -47,7 +47,10 @@ impl Term {
     }
 
     pub fn print_ch(&mut self, ch: char, kern: &mut Kern) -> Result<(), DrvErr> {
-        let (w, _) = kern.drv.cli.res().map_err(|e| DrvErr::CLI(e))?;
+        let w = match self.mode {
+            super::Mode::Text => kern.drv.cli.res().map_err(|e| DrvErr::CLI(e))?.0,
+            super::Mode::Gfx => kern.drv.disp.res().map_err(|e| DrvErr::Disp(e))?.0 / 8
+        };
 
         // display char
         match self.mode {
