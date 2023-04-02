@@ -44,7 +44,7 @@ pub enum UnitType {
     Dec(Dec),
     Str(Rc<String>),
     Ref(Rc<Path>),
-    Stream(Unit, String, Addr),
+    Stream(Unit, Rc<String>, Rc<Addr>),
     Pair(Unit, Unit),
     List(Rc<Vec<Unit>>),
     Map(Rc<Vec<(Unit, Unit)>>)
@@ -309,11 +309,11 @@ impl UnitNew for Unit {
     }
 
     fn stream_loc(u: Unit, serv: &str) -> Unit {
-        Unit::new(UnitType::Stream(u, serv.into(), Addr::Local))
+        Unit::new(UnitType::Stream(u, Rc::new(serv.into()), Rc::new(Addr::Local)))
     }
 
     fn stream(u: Unit, serv: &str, addr: Addr) -> Unit {
-        Unit::new(UnitType::Stream(u, serv.into(), addr))
+        Unit::new(UnitType::Stream(u, Rc::new(serv.into()), Rc::new(addr)))
     }
 
     fn pair(u0: Unit, u1: Unit) -> Unit {
@@ -412,7 +412,7 @@ impl UnitAs for Unit {
 
     fn as_stream(self) -> Option<(Unit, String, Addr)> {
         if let UnitType::Stream(u, serv, addr) = self.0.as_ref() {
-            return Some((u.clone(), serv.clone(), addr.clone()))
+            return Some((u.clone(), Rc::unwrap_or_clone(serv.clone()), Rc::unwrap_or_clone(addr.clone())))
         }
         None
     }
@@ -459,7 +459,7 @@ impl UnitReadAsyncI for Unit {
             match self.0.as_ref() {
                 UnitType::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
                 UnitType::Stream(msg, serv, _addr) => {
-                    let run = TaskRun(msg.clone(), serv.clone());
+                    let run = TaskRun(msg.clone(), Rc::unwrap_or_clone(serv.clone()));
                     let id = kern.lock().reg_task(&ath, "unit.read", run)?;
 
                     let res = maybe!(task_result!(id, kern));
@@ -647,7 +647,7 @@ impl UnitAsBytes for Unit {
                 .chain(msg.clone().as_bytes())
                 .chain((serv.len() as u32).to_le_bytes())
                 .chain(serv.as_bytes().into_iter().cloned())
-                .chain(match addr {
+                .chain(match addr.as_ref() {
                     Addr::Local => vec![UnitBin::AddrLoc as u8],
                     Addr::Remote(addr) => [UnitBin::AddrRemote as u8].into_iter().chain(addr.into_iter().flat_map(|e| e.to_le_bytes())).collect::<Vec<u8>>()
                 }).collect(),
