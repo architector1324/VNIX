@@ -165,6 +165,34 @@ fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
     })
 }
 
+fn split(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        match s.as_str() {
+            "split" => todo!(),
+            "split.uz" => {
+                let (lst, mut ath) = maybe!(as_async!(dat, as_list, ath, orig, kern));
+
+                let mut lst0 = Vec::with_capacity(lst.len());
+                let mut lst1 = Vec::with_capacity(lst.len());
+
+                for p in Rc::unwrap_or_clone(lst) {
+                    let ((a, b), _ath) = maybe!(as_async!(p, as_pair, ath, orig, kern));
+                    lst0.push(a);
+                    lst1.push(b);
+                    ath = _ath;
+                }
+
+                let res = Unit::pair(Unit::list(&lst0), Unit::list(&lst1));
+                Ok(Some((res, ath)))
+            }
+            _ => Ok(None)
+        }
+    })
+}
+
 fn map(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let (s, stream) = maybe_ok!(msg.as_pair());
@@ -439,6 +467,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // concatenate
         if let Some((msg, ath)) = thread_await!(cat(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // split
+        if let Some((msg, ath)) = thread_await!(split(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
