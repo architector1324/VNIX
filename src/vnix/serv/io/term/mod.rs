@@ -17,7 +17,7 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::vnix::core::driver::DrvErr;
+use crate::vnix::core::driver::{DrvErr, CLIErr, DispErr};
 
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::utils::Maybe;
@@ -66,6 +66,12 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
                 .map(|(w, h)| Unit::pair(Unit::uint(w as u32), Unit::uint(h as u32)))
                 .collect::<Vec<_>>();
 
+            let res_min_txt = kern.lock().drv.cli.res_list().map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?.into_iter().min().ok_or(KernErr::DrvErr(DrvErr::CLI(CLIErr::GetResolution)))?;
+            let res_max_txt = kern.lock().drv.cli.res_list().map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?.into_iter().max().ok_or(KernErr::DrvErr(DrvErr::CLI(CLIErr::GetResolution)))?;
+
+            let res_min_gfx = kern.lock().drv.disp.res_list().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?.into_iter().min().ok_or(KernErr::DrvErr(DrvErr::Disp(DispErr::GetResolution)))?;
+            let res_max_gfx = kern.lock().drv.disp.res_list().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?.into_iter().max().ok_or(KernErr::DrvErr(DrvErr::Disp(DispErr::GetResolution)))?;
+
             Unit::map(&[
                 (
                     Unit::str("mode"),
@@ -87,6 +93,44 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
                                 Unit::uint(res_gfx.0 as u32),
                                 Unit::uint(res_gfx.1 as u32)
                             )
+                        ),
+                        (
+                            Unit::str("min"),
+                            Unit::map(&[
+                                (
+                                    Unit::str("txt"),
+                                    Unit::pair(
+                                        Unit::uint(res_min_txt.0 as u32),
+                                        Unit::uint(res_min_txt.1 as u32)
+                                    )
+                                ),
+                                (
+                                    Unit::str("gfx"),
+                                    Unit::pair(
+                                        Unit::uint(res_min_gfx.0 as u32),
+                                        Unit::uint(res_min_gfx.1 as u32)
+                                    )
+                                ),
+                            ])
+                        ),
+                        (
+                            Unit::str("max"),
+                            Unit::map(&[
+                                (
+                                    Unit::str("txt"),
+                                    Unit::pair(
+                                        Unit::uint(res_max_txt.0 as u32),
+                                        Unit::uint(res_max_txt.1 as u32)
+                                    )
+                                ),
+                                (
+                                    Unit::str("gfx"),
+                                    Unit::pair(
+                                        Unit::uint(res_max_gfx.0 as u32),
+                                        Unit::uint(res_max_gfx.1 as u32)
+                                    )
+                                ),
+                            ])
                         ),
                         (
                             Unit::str("all"),
@@ -116,6 +160,13 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
                 "get.res" => maybe_ok!(info.find(["res"].into_iter())),
                 "get.res.txt" => maybe_ok!(info.find(["res", "txt"].into_iter())),
                 "get.res.gfx" => maybe_ok!(info.find(["res", "gfx"].into_iter())),
+                "get.res.min" => maybe_ok!(info.find(["res", "min"].into_iter())),
+                "get.res.min.txt" => maybe_ok!(info.find(["res", "min", "txt"].into_iter())),
+                "get.res.min.gfx" => maybe_ok!(info.find(["res", "min", "gfx"].into_iter())),
+
+                "get.res.max" => maybe_ok!(info.find(["res", "max"].into_iter())),
+                "get.res.max.txt" => maybe_ok!(info.find(["res", "max", "txt"].into_iter())),
+                "get.res.max.gfx" => maybe_ok!(info.find(["res", "max", "gfx"].into_iter())),
                 "get.res.all" => maybe_ok!(info.find(["res", "all"].into_iter())),
                 "get.res.all.txt" => maybe_ok!(info.find(["res", "all", "txt"].into_iter())),
                 "get.res.all.gfx" => maybe_ok!(info.find(["res", "all", "gfx"].into_iter())),
