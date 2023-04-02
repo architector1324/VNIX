@@ -206,18 +206,30 @@ fn map(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
         let (com, lst) = maybe_ok!(dat.as_pair());
 
         let (com, ath) = maybe!(read_async!(com, ath, orig, kern));
-        let (lst, mut ath) = maybe!(as_async!(lst, as_list, ath, orig, kern));
-
+        let (lst, mut ath) = maybe!(read_async!(lst, ath, orig, kern));
+        
         let serv = Rc::new(serv);
-        let streams = lst.iter().cloned().map(|u| Unit::stream_loc(Unit::pair(com.clone(), u), &serv)).collect::<Vec<_>>();
 
-        let mut lst = Vec::new();
-        for u in streams {
-            let (u, _ath) = maybe!(read_async!(u, ath, orig, kern));
-            lst.push(u);
-            ath = _ath;
+        if let Some(lst) = lst.clone().as_list() {
+            let streams = lst.iter().cloned().map(|u| Unit::stream_loc(Unit::pair(com.clone(), u), &serv)).collect::<Vec<_>>();
+
+            let mut lst = Vec::new();
+            for u in streams {
+                let (u, _ath) = maybe!(read_async!(u, ath, orig, kern));
+                lst.push(u);
+                ath = _ath;
+            }
+            return Ok(Some((Unit::list(&lst), ath)))
+        } else if let Some((a, b)) = lst.as_pair() {
+            let stream = Unit::stream_loc(Unit::pair(com.clone(), a), &serv);
+            let (a, ath) = maybe!(read_async!(stream, ath, orig, kern));
+
+            let stream = Unit::stream_loc(Unit::pair(com, b), &serv);
+            let (b, ath) = maybe!(read_async!(stream, ath, orig, kern));
+
+            return Ok(Some((Unit::pair(a, b), ath)))
         }
-        return Ok(Some((Unit::list(&lst), ath)))
+        Ok(None)
     })
 }
 
