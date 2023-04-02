@@ -27,7 +27,7 @@ use alloc::string::String;
 use core::fmt::Write;
 
 use uefi::prelude::cstr16;
-pub use uefi_services::println;
+use uefi_services::println;
 use uefi::proto::media::file::File;
 use uefi::proto::media::file::FileMode;
 use uefi::proto::media::file::FileAttribute;

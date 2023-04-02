@@ -47,6 +47,8 @@ fn calc_multi_op_int(op: &str, vals: Vec<Int>) -> Option<Int> {
             "mul" => a.0.as_ref() * b.0.as_ref(),
             "div" => a.0.as_ref() / b.0.as_ref(),
             "mod" => a.0.as_ref() % b.0.as_ref(),
+            "min" => a.0.as_ref().clone().min(b.0.as_ref().clone()),
+            "max" => a.0.as_ref().clone().max(b.0.as_ref().clone()),
             _ => return None
         };
         Some(Int(Rc::new(res)))
@@ -116,7 +118,7 @@ fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> U
             return Ok(calc_multi_op_int(&op, args).map(|v| (v, ath)))
         }
 
-        let ops = ["sum", "sub", "pow", "mul", "div", "mod"];
+        let ops = ["sum", "sub", "pow", "mul", "div", "mod", "min", "max"];
         for op in ops {
             if let Some((args, ath)) = as_map_find_async!(msg, op, ath, orig, kern)? {
                 let (args, ath) = maybe!(thread_await!(multi_args_int(ath.clone(), orig.clone(), args, kern)));
