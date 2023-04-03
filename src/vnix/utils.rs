@@ -5,8 +5,7 @@ use compression::prelude::{GZipEncoder, GZipDecoder, Action, EncodeExt, DecodeEx
 use base64ct::{Base64, Encoding};
 
 use super::core::kern::KernErr;
-use super::core::unit::{Unit, UnitAs, UnitModify, UnitNew};
-
+use super::core::unit::{Unit, UnitAs, UnitModify, UnitNew, UnitParse, UnitParseBytesIter};
 
 pub type Maybe<T, E> = Result<Option<T>, E>;
 
@@ -60,6 +59,15 @@ pub fn decompress_bytes(s: &str) -> Result<Vec<u8>, KernErr> {
     let decompressed = v.iter().cloned().decode(&mut dec).collect::<Result<Vec<_>, _>>().map_err(|_| KernErr::DecompressionFault)?;
 
     Ok(decompressed)
+}
+
+// optimized units iterator from bytes
+pub fn unit_compressed_iterator(s: &str) -> Maybe<UnitParseBytesIter, KernErr> {
+    let dat = decompress_bytes(&s)?;
+    let (_, it) = maybe_ok!(Unit::parse_list_partial(dat.iter()).ok());
+    let dat = it.cloned().collect::<Vec<u8>>();
+
+    Ok(Some(UnitParseBytesIter::new(dat)))
 }
 
 pub fn hex_to_u32(s: &str) -> Option<u32> {

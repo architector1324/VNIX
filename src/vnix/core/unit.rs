@@ -162,6 +162,11 @@ pub trait UnitAsBytes {
     fn as_bytes(self) -> Vec<u8>;
 }
 
+pub struct UnitParseBytesIter {
+    dat: Vec<u8>,
+    pos: usize
+}
+
 pub trait UnitParse<'a, T: 'a, I> {
     fn parse(it: I) -> Result<(Unit, I), UnitParseErr>;
     fn parse_none(it: I) -> Result<(Unit, I), UnitParseErr>;
@@ -175,6 +180,10 @@ pub trait UnitParse<'a, T: 'a, I> {
     fn parse_pair(it: I) -> Result<(Unit, I), UnitParseErr>;
     fn parse_list(it: I) -> Result<(Unit, I), UnitParseErr>;
     fn parse_map(it: I) -> Result<(Unit, I), UnitParseErr>;
+
+    fn parse_list_partial(_it: I) -> Result<(usize, I), UnitParseErr> {
+        unimplemented!()
+    }
 
     fn parse_ch(_expect: char, _it: I) -> Result<I, UnitParseErr> {
         unimplemented!()
@@ -1113,7 +1122,7 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
         }
     }
 
-    fn parse_list(mut it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+    fn parse_list_partial(mut it: Iter<'a, u8>) -> Result<(usize, Iter<'a, u8>), UnitParseErr> {
         let b = *it.next().ok_or(UnitParseErr::UnexpectedEnd)?;
 
         let bytes = match b {
@@ -1149,8 +1158,13 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
         };
 
         let len = <u32>::from_le_bytes(bytes);
+        Ok((len as usize, it))
+    }
 
-        let mut lst = Vec::with_capacity(len as usize);
+    fn parse_list(it: Iter<'a, u8>) -> Result<(Unit, Iter<'a, u8>), UnitParseErr> {
+        let (len, mut it) = Unit::parse_list_partial(it)?;
+
+        let mut lst = Vec::with_capacity(len);
         for _ in 0..len {
             let (u, next) = Unit::parse(it)?;
             lst.push(u);
@@ -1600,6 +1614,26 @@ impl UnitModify for Unit {
             },
             _ => what
         }
+    }
+}
+
+impl Iterator for UnitParseBytesIter {
+    type Item = Unit;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let it = self.dat.get(self.pos..)?.iter();
+        let (u, new_it) = Unit::parse(it.clone()).ok()?;
+
+        self.pos += unsafe{
+            new_it.as_slice().as_ptr().offset_from(it.as_slice().as_ptr()) as usize
+        };
+        return Some(u);
+    }
+}
+
+impl UnitParseBytesIter {
+    pub fn new(dat: Vec<u8>) -> Self {
+        UnitParseBytesIter {dat, pos: 0}
     }
 }
 

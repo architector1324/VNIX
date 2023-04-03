@@ -8,11 +8,12 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::vnix::core::driver::DrvErr;
+use crate::vnix::utils;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
+use crate::vnix::core::driver::DrvErr;
 
-use crate::{thread, thread_await, as_async, maybe, as_map_find_as_async};
+use crate::{thread, thread_await, as_async, maybe, as_map_find_as_async, as_map_find_async};
 
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitAs, UnitReadAsyncI};
@@ -25,7 +26,19 @@ pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         }
 
         // parse
-        let (dat, ath) = maybe!(as_map_find_as_async!(msg, "img", as_list, ath, orig, kern));
+        let (dat, ath) = maybe!(as_map_find_async!(msg, "img", ath, orig, kern));
+
+        let it = if let Some(lst) = dat.clone().as_list() {
+            let it = Rc::unwrap_or_clone(lst).into_iter();
+            Box::new(it) as Box<dyn Iterator<Item = Unit>>
+        } else if let Some(s) = dat.as_str() {
+            // optimized units iterator from bytes
+            let it = maybe!(utils::unit_compressed_iterator(&s));
+            Box::new(it)
+        } else {
+            return Ok(None)
+        };
+
         let (fmt, ath) = maybe!(as_map_find_as_async!(msg, "fmt", as_str, ath, orig, kern));
 
         let ((w, h), ath) = maybe!(as_map_find_as_async!(msg, "size", as_pair, ath, orig, kern));
@@ -36,7 +49,7 @@ pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         let img = match fmt.as_str() {
             "rgb" => {
                 let mut img = Vec::with_capacity((w * h) as usize);
-                for px in Rc::unwrap_or_clone(dat) {
+                for px in it {
                     let (px, _ath) = maybe!(as_async!(px, as_uint, ath, orig, kern));
                     ath = _ath;
 
@@ -46,7 +59,7 @@ pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
             },
             "rgb.rle" => {
                 let mut img = Vec::with_capacity((w * h) as usize);
-                for px in Rc::unwrap_or_clone(dat) {
+                for px in it {
                     let ((cnt, px), _ath) = maybe!(as_async!(px, as_pair, ath, orig, kern));
                     let (cnt, _ath) = maybe!(as_async!(cnt, as_uint, _ath, orig, kern));
                     let (px, _ath) = maybe!(as_async!(px, as_uint, _ath, orig, kern));

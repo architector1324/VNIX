@@ -66,9 +66,44 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //         {inp:`b:` prs:t nl:t}@io.term
     //     ]
     // }@math.calc";
-    // let s = "(len [1 2 3])";
+    // let s = "{
+    //     task.stk:[
+    //         (set.res.gfx `1080p`)
+    //         cls
+    //         (load @img.minecraft.grass)@io.store
+    //         inp.key
+    //         (load @img.vnix.logo)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.0)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.1)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.2)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.3)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.4)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.5)@io.store
+    //         inp.key
+    //         (load @img.wall.ai.6)@io.store
+    //         inp.key
+    //         (load @img.wall.elk)@io.store
+    //         inp.key
+    //         (load @img.wall.triangles)@io.store
+    //         inp.key
+    //         (load @img.wall.cubes)@io.store
+    //         inp.key
+    //         (load @img.wall.lines)@io.store
+    //         inp.key
+    //         (set.res.gfx (2304 1440))
+    //         (load @img.wall.spirals)@io.store
+    //         inp.key
+    //         (load @img.wall.green_blue)@io.store
+    //         (say done)
+    //     ]@io.term
+    // }";
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let run = TaskRun(msg, "dat.proc".into());
 
     // run
     let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;

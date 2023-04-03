@@ -90,7 +90,7 @@ def convert(size, dat, zip):
 
         img_s, fmt = (img_s0, 'rgb') if len(img_s0) < len(img_s1) else (img_s1, 'rgb.rle')
 
-    return f'{{size:({size[0]} {size[1]}) fmt:{fmt} img:(unzip {img_s})@dat.proc}}'
+    return f'{{size:({size[0]} {size[1]}) fmt:{fmt} img:{img_s}}}'
 
 
 def convert_sys(size, dat):
