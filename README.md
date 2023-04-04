@@ -1,9 +1,13 @@
+# Vnix OS
+
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+
 [![Donate](http://img.shields.io/liberapay/receives/Architector1324.svg?logo=liberapay)](https://ru.liberapay.com/Architector1324/)
 
 
 ![](./doc/vnix_logo.png)
 
-This operating system is a proof of concept, i made it just for fun. Now it has a very draft kernel written in [Rust](https://www.rust-lang.org/).
+This operating system is a proof of concept, not [unix-like](https://ru.wikipedia.org/wiki/Unix), [NT](https://ru.wikipedia.org/wiki/Windows_NT) or anything you know. I made it just for fun as enthusiast for geeks.
 
 If you don't understand something on this page or see that some info in unclear, you can chat me by contacts below. Also I welcome any support.
 
@@ -17,7 +21,8 @@ Also [read](./doc/chatgpt.md) what **ChatGPT** is thinking about vnix.
 
 - Conceptual:
   - All information is wrapped into messages and it always has owner, protected by cryptography (see note below).
-  - Interact with OS and inside itself is provided by exchanging messages - no programming, no libraries or binaries at all.
+  - Interact with OS and inside itself is provided by exchanging messages - no programming, libraries or binaries at all.
+  - Everything is data, so user creates complex relationship between data instead code. It can be called data programming (see [data programming](#data-programming) section).
   - OS see no difference between single machine and compute cluster (see below).
 
 `Note:` This doesn't mean a lack of anonymity. Rather, the owner can always confirm his authorship (see below).
@@ -30,9 +35,10 @@ Also [read](./doc/chatgpt.md) what **ChatGPT** is thinking about vnix.
   - **Unit** is an minimal information unit, that represents some data, like numbers, strings, lists and etc.
   - **User** is an mathematical abstraction over pair of crypto-keys. Unlike in other systems, you create user once and use it on any device. Any message has a user's digital signature and every service is owned by some user.
 
+![](./doc/vnix_2023-04-04.png)
 
 ## Goals
-- Let user make the computer to do what he want in the easiest way. No programming - only writing messages.
+- Let user make the computer to do what he want in the simple way.
 - Provide a very simple and in the same time powerful operating system.
 - Once made software should work on any device, regardless of its architecture.
 - Connect all your devices to compute cluster with zero efforts.
@@ -92,8 +98,26 @@ poweriso convert out/vnix.img -o out/vnix.iso
 dd if=./out/vnix.img of=/dev/<usb> status=progress
 ```
 
+## Data programming
+```bash
+# send this message to `math.calc` service
+{
+    sum:[
+        {inp:`a:` prs:t nl:t}@io.term
+        {inp:`b:` prs:t nl:t}@io.term
+    ]
+}
+```
+```bash
+λ {sum:[{inp:`a:` prs:t nl:t}@io.term {inp:`b:` prs:t nl:t}@io.term]}@math.calc
+a: 1
+b: 2
+3
+```
+
+Comming soon ...
+
 ## FAQ
 - [Current progress](./PROGRESS.md).
-- Take a look at draft [messages cookbook](./doc/message-cookbook.md).
 
 Comming soon ...
