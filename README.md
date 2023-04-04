@@ -2,12 +2,12 @@
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 
-[![Donate](http://img.shields.io/liberapay/receives/Architector1324.svg?logo=liberapay)](https://ru.liberapay.com/Architector1324/)
+[![Donate](http://img.shields.io/liberapay/receives/Architector1324.svg?logo=liberapay)](https://en.liberapay.com/Architector1324/)
 
 
 ![](./doc/vnix_logo.png)
 
-This operating system is a proof of concept, not [unix-like](https://ru.wikipedia.org/wiki/Unix), [NT](https://ru.wikipedia.org/wiki/Windows_NT) or anything you know. I made it just for fun as enthusiast for geeks.
+This operating system is a proof of concept, not [unix-like](https://en.wikipedia.org/wiki/Unix), [NT](https://en.wikipedia.org/wiki/Windows_NT) or anything you know. I made it just for fun as enthusiast for geeks.
 
 If you don't understand something on this page or see that some info in unclear, you can chat me by contacts below. Also I welcome any support.
 
