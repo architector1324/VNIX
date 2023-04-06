@@ -92,6 +92,7 @@ pub enum UnitBin {
     PairUint8Uint24,
     PairUint16Uint24,
     PairUint24Uint24,
+    PairUint16Int32
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -671,7 +672,7 @@ impl UnitAsBytes for Unit {
                             0..=16777215 => return [UnitBin::PairUint24Uint24 as u8].into_iter().chain(u0_b.take(3)).chain(u1_b).collect(),
                             _ => ()
                         }
-                    } 
+                    }
                 }
 
                 [UnitBin::Pair as u8].into_iter()
@@ -742,6 +743,7 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
             _b if _b == UnitBin::PairUint8Uint24 as u8 => Self::parse_pair(it),
             _b if _b == UnitBin::PairUint16Uint24 as u8 => Self::parse_pair(it),
             _b if _b == UnitBin::PairUint24Uint24 as u8 => Self::parse_pair(it),
+            _b if _b == UnitBin::PairUint16Int32 as u8 => Self::parse_pair(it),
             _b if _b == UnitBin::List as u8 => Self::parse_list(it),
             _b if _b == UnitBin::List8 as u8 => Self::parse_list(it),
             _b if _b == UnitBin::List16 as u8 => Self::parse_list(it),
@@ -1117,6 +1119,24 @@ impl<'a> UnitParse<'a, u8, Iter<'a, u8>> for Unit {
                 ];
                 let u1 = <u32>::from_le_bytes(bytes);
                 Ok((Unit::pair(Unit::uint(u0), Unit::uint(u1)), it))
+            },
+            _b if _b == UnitBin::PairUint16Int32 as u8 => {
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    0,
+                    0
+                ];
+                let u0 = <u32>::from_le_bytes(bytes);
+
+                let bytes = [
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                    *it.next().ok_or(UnitParseErr::UnexpectedEnd)?,
+                ];
+                let u1 = <i32>::from_le_bytes(bytes);
+                Ok((Unit::pair(Unit::uint(u0), Unit::int(u1)), it))
             },
             _ => Err(UnitParseErr::NotPair)
         }

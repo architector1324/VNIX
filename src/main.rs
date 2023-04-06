@@ -131,7 +131,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         let mut kern = Kern::new(driver, term);
 
         // load store
-        writeln!(kern, "INFO vnix: load `super` storage").unwrap();
+        writeln!(kern, "INFO vnix: load `vnix.store` storage").unwrap();
 
         if let Some(store) = load_store(image, st.unsafe_clone()) {
             kern.ram_store.data = store;

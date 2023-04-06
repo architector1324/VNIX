@@ -66,55 +66,50 @@ def rle_diff(dat):
 
 
 def convert_to_bytes_diff(map):
-    lst = []
-
+    lst = [30]
     lst.extend(len(map).to_bytes(2, 'little'))
 
     for pos in map:
         id = map[pos]
 
+        lst.append(33)
         lst.extend(pos[0].to_bytes(2, 'little'))
-        lst.extend(pos[1].to_bytes(2, 'little'))
+        lst.extend(pos[1].to_bytes(3, 'little'))
 
+        lst.append(22)
         lst.extend(id.to_bytes(3, 'little'))
 
     return lst
 
-
 def convert_to_bytes_blocks(dat):
-    lst = []
+    lst = [14]
+    lst.extend(len(dat).to_bytes(4, 'little'))
 
-    lst.extend(len(dat).to_bytes(3, 'little'))
-
-    for block in dat:
-        lst.extend(len(block).to_bytes(2, 'little'))
-
-        for cnt, px in block:
-            lst.extend(cnt.to_bytes(2, 'little'))
-            lst.extend(px.to_bytes(3, 'little'))
-
+    for e in dat:
+        lst.extend(convert_to_bytes_block(e))
     return lst
 
+def convert_to_bytes_block(dat):
+    lst = [27]
+    lst.extend(len(dat).to_bytes(2, 'little'))
 
-def convert_to_bytes_colors(dat):
-    lst = []
-
-    lst.extend(len(dat).to_bytes(3, 'little'))
-
-    for dpx in dat:
+    for cnt, dpx in dat:
+        lst.append(35)
+        lst.extend(cnt.to_bytes(2, 'little'))
         lst.extend(dpx.to_bytes(4, 'little', signed=True))
 
     return lst
 
-def convert_diff(size, diff, zip, diff_blocks):
+
+def convert_diff(size, diff, zip, block_size, diff_blocks):
     map = {}
 
-    for block_y in range(size[1] // 16):
-        for block_x in range(size[0] // 16):
+    for block_y in range(size[1] // block_size):
+        for block_x in range(size[0] // block_size):
             tmp = []
-            for y in range(16):
-                for x in range(16):
-                    idx = (x + block_x * 16) + (y + block_y * 16) * size[0]
+            for y in range(block_size):
+                for x in range(block_size):
+                    idx = (x + block_x * block_size) + (y + block_y * block_size) * size[0]
                     tmp.append(diff[idx])
             tmp = rle_diff(tmp)
 
@@ -130,35 +125,28 @@ def convert_diff(size, diff, zip, diff_blocks):
             map[(block_x, block_y)] = diff_block_id
 
     if zip:
-        lst_s = zip_list(convert_to_bytes_diff(map))
+        lst_s = f'(unzip {zip_list(convert_to_bytes_diff(map))})@dat.proc'
     else:
         lst_s = f'{{{" ".join(f"({key[0]} {key[1]}):{map[key]}" for key in map)}}}'
 
     return lst_s
 
 
-def convert_blocks(map, colors, zip):
+def convert_blocks(map, zip):
     lst = [k for k, _ in sorted(map.items(), key=lambda item: item[1])]
-    lst = [[(cnt, colors[dpx]) for cnt, dpx in block] for block in lst]
+    lst = [[(cnt, dpx) for cnt, dpx in block] for block in lst]
 
     if zip:
-        lst_s = zip_list(convert_to_bytes_blocks(lst))
+        lst_b = [zip_list(convert_to_bytes_block(sub)) for sub in lst]
+        lst_s = f'[{" ".join(lst_b)}]'
+        # lst_s = zip_list(convert_to_bytes_blocks(lst))
+        # lst_s = f'(unzip {zip_list(convert_to_bytes_blocks(lst))})@dat.proc'
     else:
         blocks_s = [f'[{" ".join(f"({cnt} {px})" for cnt, px in block)}]' for block in lst]
-        lst_s = f'[{" ".join(s for s in blocks_s)}]'
+        lst_s = f'[{" ".join(blocks_s)}]'
 
     return lst_s
 
-
-def convert_colors(map, zip):
-    lst = [k for k, _ in sorted(map.items(), key=lambda item: item[1])]
-
-    if zip:
-        lst_s = zip_list(convert_to_bytes_colors(lst))
-    else:
-        lst_s = f'[{" ".join([str(e) for e in lst])}]'
-
-    return lst_s
 
 if __name__ == "__main__":
     # parse args
@@ -166,14 +154,16 @@ if __name__ == "__main__":
     parser.add_argument('vid', help='Video filename')
     parser.add_argument('-z', '--zip', action='store_true', help='Compress video with gunzip')
     parser.add_argument('-t', '--trc', action='store_true', help='Save codec trace output')
-
-    diff_blocks = {}
-    diff_colors = {}
+    parser.add_argument('-b', '--block', type=int, default=32, help='Block size')
 
     args = parser.parse_args()
 
+    diff_blocks = {}
+    block_size = args.block
+
     # process video
     cap = cv2.VideoCapture(args.vid)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
 
     # get first frame
     (w, h, _, dat) = read_frame(cap)
@@ -192,12 +182,7 @@ if __name__ == "__main__":
         (_, _, _, next_dat) = res
 
         diff = [img2unit.pack_pixel(next_dat[i]) - img2unit.pack_pixel(dat[i]) for i in range(0, len(dat))]
-
-        for px in diff:
-            if diff_colors.get(px) is None:
-                diff_colors[px] = len(diff_colors)
-
-        diff_s = convert_diff((w, h), diff, args.zip, diff_blocks)
+        diff_s = convert_diff((w, h), diff, args.zip, block_size, diff_blocks)
         dat = next_dat
 
         if args.trc:
@@ -207,12 +192,11 @@ if __name__ == "__main__":
         frames_diff.append(diff_s)
         last_frame += 1
 
-    blocks_s = convert_blocks(diff_blocks, diff_colors, args.zip)
-    colors_s = convert_colors(diff_colors, args.zip)
+    blocks_s = convert_blocks(diff_blocks, args.zip)
     frames_s = f'[{" ".join([s for s in frames_diff])}]'
 
     # final
-    vid_s = f'{{img:{img_s} pal:{colors_s} blk:{blocks_s} fms:{frames_s}}}'
+    vid_s = f'{{img:{img_s} fps:{fps} blk:{{size:{block_size} blk:{blocks_s}}} vid:{frames_s}}}'
     print(vid_s)
 
     cap.release()

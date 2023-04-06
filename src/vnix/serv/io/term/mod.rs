@@ -208,11 +208,11 @@ fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
                     (w, h)
                 } else if let Some(s) = res.as_str() {
                     match s.as_str() {
-                        "240p" => (Unit::uint(320), Unit::uint(240)),
-                        "360p" => (Unit::uint(480), Unit::uint(360)),
+                        "240p" => (Unit::uint(426), Unit::uint(240)),
+                        "360p" => (Unit::uint(640), Unit::uint(360)),
                         "720p" => (Unit::uint(1280), Unit::uint(720)),
                         "1080p" => (Unit::uint(1920), Unit::uint(1080)),
-                        "2k" => (Unit::uint(2048), Unit::uint(1080)),
+                        "2k" => (Unit::uint(2560), Unit::uint(1440)),
                         "4k" => (Unit::uint(3840), Unit::uint(2160)),
                         "8k" => (Unit::uint(7680), Unit::uint(4320)),
                         _ => return Ok(None)
@@ -294,7 +294,16 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // img command
-        if let Some(_ath) = thread_await!(media::img(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((_, _ath)) = thread_await!(media::img(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            if _ath != ath {
+                ath = _ath;
+                msg = kern.lock().msg(&ath, _msg)?;
+            }
+            return Ok(Some(msg))
+        }
+
+        // vid command
+        if let Some(_ath) = thread_await!(media::vid(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;

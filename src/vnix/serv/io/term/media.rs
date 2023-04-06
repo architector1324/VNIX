@@ -11,15 +11,20 @@ use alloc::string::String;
 use crate::vnix::utils;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
-use crate::vnix::core::driver::DrvErr;
+use crate::vnix::core::driver::{DrvErr, Duration};
 
-use crate::{thread, thread_await, as_async, maybe, as_map_find_as_async, as_map_find_async};
+use crate::{thread, thread_await, as_async, maybe, as_map_find_as_async, as_map_find_async, maybe_ok, read_async};
 
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitAs, UnitReadAsyncI};
 
 
-pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub struct Img {
+    dat: Vec<u32>,
+    size: (usize, usize)
+}
+
+pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Img, Rc<String>), KernErr>> {
     thread!({
         if let super::Mode::Text = kern.lock().term.lock().mode {
             return Ok(None)
@@ -77,6 +82,108 @@ pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         // draw
         kern.lock().drv.disp.blk((0, 0), (w as usize, h as usize), 0, &img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
         kern.lock().drv.disp.flush_blk((0, 0), (w as usize, h as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
-        return Ok(Some(ath))
+
+        let img = Img {
+            dat: img.to_vec(),
+            size: (w as usize, h as usize)
+        };
+
+        Ok(Some((img, ath)))
+    })
+}
+
+pub fn vid(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        if let super::Mode::Text = kern.lock().term.lock().mode {
+            return Ok(None)
+        }
+
+        // parse
+        let (fms, ath) = maybe!(as_map_find_as_async!(msg, "vid", as_list, ath, orig, kern));
+        let (first, ath) = maybe!(as_map_find_async!(msg, "img", ath, orig, kern));
+        let (fps, ath) = as_map_find_as_async!(msg, "fps", as_uint, ath, orig, kern)?.unwrap_or((60, ath));
+
+        let (blk, ath) = maybe!(as_map_find_async!(msg, "blk", ath, orig, kern));
+        let (blk_size, ath) = as_map_find_as_async!(blk, "size", as_uint, ath, orig, kern)?.unwrap_or((32, ath));
+        let (blk, mut ath) = maybe!(as_map_find_as_async!(blk, "blk", as_list, ath, orig, kern));
+
+        // cache blocks
+        let mut blk_cache = Vec::with_capacity(blk.len());
+
+        for i in 0..blk.len() {
+            let mut blk_rle = Vec::with_capacity((blk_size * blk_size) as usize);
+
+            let _blk = blk[i].clone();
+            let (blk, _ath) = maybe!(read_async!(_blk, ath, orig, kern));
+            drop(_blk);
+            ath = _ath;
+
+            let it = if let Some(lst) = blk.clone().as_list() {
+                let it = Rc::unwrap_or_clone(lst).into_iter();
+                Box::new(it) as Box<dyn Iterator<Item = Unit>>
+            } else if let Some(s) = blk.as_str() {
+                // optimized units iterator from bytes
+                let it = maybe!(utils::unit_compressed_iterator(&s));
+                Box::new(it)
+            } else {
+                return Ok(None)
+            };
+
+            for dpx in it {
+                let ((cnt, dpx), _ath) = maybe!(as_async!(dpx, as_pair, ath, orig, kern));
+                let (cnt, _ath) = maybe!(as_async!(cnt, as_uint, _ath, orig, kern));
+                let (dpx, _ath) = maybe!(as_async!(dpx, as_int, _ath, orig, kern));
+                ath = _ath;
+
+                blk_rle.push((cnt as u16, dpx));
+                drop(dpx);
+            }
+
+            blk_cache.push(blk_rle);
+        }
+
+        // render first frame
+        let (mut last, mut ath) = maybe!(thread_await!(img(ath.clone(), orig.clone(), first, kern)));
+
+        // render frames
+        for frame in Rc::unwrap_or_clone(fms) {
+            let (frame, _ath) = maybe!(as_async!(frame, as_map, ath, orig, kern));
+            ath = _ath;
+
+            // find block
+            for (blk_pos, blk_id) in Rc::unwrap_or_clone(frame) {
+                let (blk_id, _ath) = maybe!(as_async!(blk_id, as_uint, ath, orig, kern));
+
+                let ((blk_x, blk_y), _ath) = maybe!(as_async!(blk_pos, as_pair, _ath, orig, kern));
+                let (blk_x, _ath) = maybe!(as_async!(blk_x, as_uint, _ath, orig, kern));
+                let (blk_y, _ath) = maybe!(as_async!(blk_y, as_uint, _ath, orig, kern)); 
+
+                // change image
+                let blk = maybe_ok!(blk_cache.get(blk_id as usize));
+
+                let mut idx = 0;
+                let mut blk_img = Vec::new();
+                for (cnt, dpx) in blk.iter() {
+                    for _ in 0..*cnt {
+                        let img_x = blk_x as usize * blk_size as usize + (idx % blk_size as usize);
+                        let img_y = blk_y as usize * blk_size as usize + idx / blk_size as usize;
+                        let px = maybe_ok!(last.dat.get_mut(img_x + last.size.0 * img_y));
+    
+                        *px = (*px as i64 + *dpx as i64) as u32;
+                        blk_img.push(*px);
+                        idx += 1;
+                    }
+                }
+
+                // render block
+                kern.lock().drv.disp.blk((blk_x as i32 * (blk_size as i32), blk_y as i32 * (blk_size as i32)), (blk_size as usize, blk_size as usize), 0x00ff00, &blk_img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+                kern.lock().drv.disp.flush_blk((blk_x as i32 * (blk_size as i32), blk_y as i32 * (blk_size as i32)), (blk_size as usize, blk_size as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+            }
+
+            // limit fps
+            let _ = thread_await!(kern.lock().drv.time.wait_async(Duration::Milli(700 / fps as usize)));
+        }
+
+        Ok(Some(ath))
     })
 }

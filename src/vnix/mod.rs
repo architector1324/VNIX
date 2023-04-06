@@ -45,64 +45,21 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
 
     writeln!(kern, "INFO vnix:kern: user `{}` registered", _super).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
 
-    // // test
-    // let s = "(load @task.test)@io.store";
-    // let s = "{task.sim:[a@test.dump b@test.dump]}";
-    // let s = "(task.sim [a@test.dump b@test.dump])";
-    // let s = "(task.stk [a b]@test.dump)";
-    // let s = "{task.que:[test@sys.usr a@test.dump b@test.dump]}";
-    // let s = "(task.loop a@test.dump)";
-    // let s = "{sum:(1 2) ath:test task:[sys.usr math.calc test.dump]}";
-    // let s = "{task.stk:[a b]@test.dump}";
+    // test
     // let s = "{
     //     task.stk:[
-    //         {inp:`λ ` prs:t nl:t}@io.term
-    //         nl
-    //     ]@io.term
-    // }";
-    // let s = "{
-    //     sum:[
-    //         {inp:`a:` prs:t nl:t}@io.term
-    //         {inp:`b:` prs:t nl:t}@io.term
-    //     ]
-    // }@math.calc";
-    // let s = "{
-    //     task.stk:[
-    //         (set.res.gfx `1080p`)
+    //         (set.res.gfx '720p')
     //         cls
-    //         (load @img.minecraft.grass)@io.store
-    //         inp.key
-    //         (load @img.vnix.logo)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.0)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.1)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.2)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.3)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.4)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.5)@io.store
-    //         inp.key
-    //         (load @img.wall.ai.6)@io.store
-    //         inp.key
-    //         (load @img.wall.elk)@io.store
-    //         inp.key
-    //         (load @img.wall.triangles)@io.store
-    //         inp.key
-    //         (load @img.wall.cubes)@io.store
-    //         inp.key
-    //         (load @img.wall.lines)@io.store
-    //         inp.key
-    //         (set.res.gfx (2304 1440))
-    //         (load @img.wall.spirals)@io.store
-    //         inp.key
-    //         (load @img.wall.green_blue)@io.store
+    //         (say `loading video..`)
+    //         (load @vid.vnix.logo.720p)@io.store
+    //         (set.res.gfx '1080p')
+    //         cls
+    //         (say `loading video..`)
+    //         (load @vid.vnix.logo.1080p)@io.store
     //         (say done)
-    //     ]@io.term
+    //     ]@io.term   
     // }";
+    // let s = "(task.stk [cls (load @vid.sonic)@io.store (say done)]@io.term)";
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run
