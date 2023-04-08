@@ -14,9 +14,9 @@ use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::driver::{TermKey, DrvErr};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, UnitTypeReadAsync};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, DisplayShort, UnitTypeReadAsync};
 
-use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, as_map_find_async, maybe_ok};
+use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, maybe_ok};
 
 use super::base;
 
@@ -53,22 +53,22 @@ pub fn nl(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
     })
 }
 
-pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub fn say(nl: bool, fmt: bool, shrt: Option<usize>, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
         if let Some((s, msg)) = msg.clone().as_pair() {
             if let Some((s, ath)) = as_async!(s, as_str, ath, orig, kern)? {
                 match s.as_str() {
                     // (say <unit>)
-                    "say" => return thread_await!(say(false, false, ath, orig, msg, kern)),
+                    "say" => return thread_await!(say(false, false, None, ath, orig, msg, kern)),
                     // (say.fmt [<unit> ..])
-                    "say.fmt" => return thread_await!(say(false, true, ath, orig, msg, kern)),
+                    "say.fmt" => return thread_await!(say(false, true, None, ath, orig, msg, kern)),
                     _ => ()
                 }
             }
         }
 
         // {say:<unit> nl:<t|f> shrt:<uint>}
-        if let Some((_msg, mut ath)) = as_map_find_async!(msg, "say", ath, orig, kern)? {
+        if let Some(_msg) = msg.clone().as_map_find("say") {
             let nl = if let Some((nl, _ath)) = as_map_find_as_async!(msg, "nl", as_bool, ath, orig, kern)? {
                 ath = _ath;
                 nl
@@ -76,15 +76,14 @@ pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern:
                 false
             };
 
-            // FIXME: implement short
-            let _shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
+            let shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
                 ath = _ath;
-                Some(shrt)
+                Some(shrt as usize)
             } else {
                 None
             };
 
-            return thread_await!(say(nl, false, ath, orig, _msg, kern))
+            return thread_await!(say(nl, false, shrt, ath, orig, _msg, kern))
         }
 
         // {say.fmt:[<unit> ..] nl:<t|f> shrt:<uint>}
@@ -96,15 +95,14 @@ pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern:
                 false
             };
 
-            // FIXME: implement short
-            let _shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
+            let shrt = if let Some((shrt, _ath)) = as_map_find_as_async!(msg, "shrt", as_uint, ath, orig, kern)? {
                 ath = _ath;
-                Some(shrt)
+                Some(shrt as usize)
             } else {
                 None
             };
 
-            return thread_await!(say(nl, true, ath, orig, Unit::list_share(lst), kern))
+            return thread_await!(say(nl, true, shrt, ath, orig, Unit::list_share(lst), kern))
         }
 
         // <unit>
@@ -116,14 +114,26 @@ pub fn say(nl: bool, fmt:bool, mut ath: Rc<String>, orig: Unit, msg: Unit, kern:
 
             for u in Rc::unwrap_or_clone(lst) {
                 let (u, _ath) = maybe!(read_async!(u, ath, orig, kern));
-                out.push(format!("{}", DisplayStr(u)));
+
+                let s = match shrt {
+                    Some(shrt) => format!("{}", DisplayShort(shrt, u)),
+                    None => format!("{}", DisplayStr(u))
+                };
+                out.push(s);
                 ath = _ath;
             }
             out.join("")
         } else {
-            let (msg, _ath) = maybe!(read_async!(msg, ath, orig, kern));
-            ath = _ath;
-            format!("{}", DisplayStr(msg))
+            if let Some((msg, _ath)) = read_async!(msg, ath, orig, kern)? {
+                ath = _ath;
+
+                match shrt {
+                    Some(shrt) => format!("{}", DisplayShort(shrt, msg)),
+                    None => format!("{}", DisplayStr(msg))
+                }
+            } else {
+                return Ok(Some(ath))
+            }
         };
 
         if nl {

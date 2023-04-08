@@ -198,6 +198,9 @@ pub trait UnitParse<'a, T: 'a, I> {
 #[derive(Debug, Clone)]
 pub struct DisplayStr(pub Unit);
 
+#[derive(Debug, Clone)]
+pub struct DisplayShort(pub usize, pub Unit);
+
 pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
 pub type UnitReadAsync<'a> = UnitTypeReadAsync<'a, Unit>;
 
@@ -501,6 +504,48 @@ impl Display for DisplayStr {
         match self.0.0.as_ref() {
             UnitType::Str(s) => write!(f, "{}", s.replace("\\n", "\n").replace("\\r", "\r")),
             _ => write!(f, "{}", self.0)
+        }
+    }
+}
+
+impl Display for DisplayShort {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.1.0.as_ref() {
+            UnitType::None => write!(f, "-"),
+            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitType::Int(v) => write!(f, "{}", self.shrt(format!("{}", v.0))),
+            UnitType::Dec(v) =>
+                match v.to_small() {
+                    Some(v) => write!(f, "{v}"),
+                    None => write!(f, "{}", self.shrt(format!("{}", v.0))) // FIXME: use `<i>.<i>` format
+                }
+            UnitType::Str(s) => {
+                if s.as_str().chars().all(char_no_quoted) {
+                    write!(f, "{}", self.shrt(Rc::unwrap_or_clone(s.clone())))
+                } else {
+                    write!(f, "`{}`", self.shrt(Rc::unwrap_or_clone(s.clone())))
+                }
+            },
+            UnitType::Ref(path) => write!(f, "@{}", self.shrt(path.join("."))),
+            UnitType::Stream(msg, serv, addr) => write!(f, "{}@{serv}:{addr}", DisplayShort(self.0, msg.clone())),
+            UnitType::Pair(u0, u1) => write!(f, "({} {})", DisplayShort(self.0, u0.clone()), DisplayShort(self.0, u1.clone())),
+            UnitType::List(lst) => {
+                let end = if lst.len() > self.0 {
+                    " .."
+                } else {
+                    ""
+                };
+                write!(f, "[{}{}]", lst.iter().map(|u| format!("{}", DisplayShort(self.0, u.clone()))).take(self.0).collect::<Vec<_>>().join(" "), end)
+            },
+            UnitType::Map(map) => {
+                let end = if map.len() > self.0 {
+                    " .."
+                } else {
+                    ""
+                };
+                write!(f, "{{{}{}}}", map.iter().map(|(u0, u1)| format!("{}:{}", DisplayShort(self.0, u0.clone()), DisplayShort(self.0, u1.clone()))).take(self.0).collect::<Vec<_>>().join(" "), end)
+            }
         }
     }
 }
@@ -1700,6 +1745,16 @@ impl Unit {
             MemSizeUnits::Kilo => size / 1024,
             MemSizeUnits::Mega => size / (1024 * 1024),
             MemSizeUnits::Giga => size / (1024 * 1024 * 1024)
+        }
+    }
+}
+
+impl DisplayShort {
+    fn shrt(&self, s: String) -> String {
+        if s.len() > self.0 {
+            format!("{}..", s.chars().take(self.0).collect::<String>())
+        } else {
+            s
         }
     }
 }
