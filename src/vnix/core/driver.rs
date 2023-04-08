@@ -27,7 +27,8 @@ pub enum DispErr {
 
 #[derive(Debug)]
 pub enum TimeErr {
-    Wait
+    Wait,
+    StartTimer,
 }
 
 #[derive(Debug)]
@@ -77,9 +78,24 @@ pub enum Duration {
     Seconds(usize)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum TimeUnit {
+    Micro,
+    Milli,
+    Second,
+    Minute,
+    Hour,
+    Day,
+    Week,
+    Month,
+    Year
+}
+
 pub trait Time {
+    fn start(&mut self) -> Result<(), TimeErr>;
     fn wait(&mut self, dur: Duration) -> Result<(), TimeErr>;
     fn wait_async(&self, dur: Duration) -> TimeAsync;
+    fn uptime(&self, units: TimeUnit) -> Result<u64, TimeErr>;
 }
 
 pub trait CLI: Write {

@@ -141,6 +141,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         }
 
         // run
+        kern.drv.time.start().unwrap();
         writeln!(kern, "INFO vnix: kernel running on `uefi` platform").unwrap();
 
         let mode = kern.term.lock().mode.clone();

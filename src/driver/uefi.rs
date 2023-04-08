@@ -1,8 +1,11 @@
 use core::fmt::Write;
+use core::ffi::c_void;
+use core::ptr::NonNull;
 
-use alloc::boxed::Box;
 use alloc::vec::Vec;
-use uefi::Handle;
+use alloc::boxed::Box;
+
+use uefi::{Handle, Event};
 use uefi::proto::console::gop::{GraphicsOutput, BltPixel, BltOp, BltRegion};
 use uefi::proto::console::pointer::Pointer;
 use uefi::proto::console::text::{Output,/* Input, */Key, ScanCode};
@@ -12,8 +15,8 @@ use uefi::table::boot::{OpenProtocolParams, OpenProtocolAttributes, MemoryType, 
 
 use crate::thread;
 
-use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, TimeAsync, Duration};
 use crate::vnix::utils::Maybe;
+use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, TimeAsync, Duration, TimeUnit};
 
 
 pub struct UefiCLI {
@@ -33,6 +36,7 @@ pub struct UefiDisp {
 
 pub struct UefiTime {
     st: SystemTable<Boot>,
+    ticks: u64 // 1 tick = 10 ms.
 }
 
 pub struct UefiRnd {
@@ -89,8 +93,18 @@ impl UefiDisp {
 impl UefiTime {
     pub fn new(st: SystemTable<Boot>) -> Result<UefiTime, DrvErr> {
         Ok(UefiTime {
-            st
+            st,
+            ticks: 0
         })
+    }
+
+    unsafe extern "efiapi" fn timer_callback(_e: Event, ctx: Option<NonNull<c_void>>) {
+        unsafe {
+            if let Some(ctx) = ctx {
+                let obj = core::mem::transmute::<*mut c_void, &mut Self>(ctx.as_ptr());
+                obj.ticks += 1;
+            }
+        }
     }
 }
 
@@ -345,6 +359,16 @@ impl Disp for UefiDisp {
 }
 
 impl Time for UefiTime {
+    fn start(&mut self) -> Result<(), TimeErr> {
+        let e = unsafe {
+            let p = NonNull::new(core::mem::transmute(self as *mut UefiTime)).ok_or(TimeErr::StartTimer)?;
+            self.st.boot_services().create_event(EventType::TIMER | EventType::NOTIFY_SIGNAL, Tpl::NOTIFY, Some(Self::timer_callback), Some(p)).map_err(|_| TimeErr::StartTimer)?
+        };
+
+        self.st.boot_services().set_timer(&e, TimerTrigger::Periodic(10 * 10000)).map_err(|_| TimeErr::StartTimer)?;
+        Ok(())
+    }
+
     fn wait(&mut self, dur: Duration) -> Result<(), TimeErr> {
         let mcs = match dur {
             Duration::Micro(mcs) => mcs,
@@ -380,6 +404,21 @@ impl Time for UefiTime {
                 }
             }
         })
+    }
+
+    fn uptime(&self, units: TimeUnit) -> Result<u64, TimeErr> {
+        let time = match units {
+            TimeUnit::Micro => self.ticks * 10 * 1000,
+            TimeUnit::Milli => self.ticks * 10,
+            TimeUnit::Second => self.ticks / 100,
+            TimeUnit::Minute => self.ticks / (60 * 100),
+            TimeUnit::Hour => self.ticks / (60 * 60 * 100),
+            TimeUnit::Day => self.ticks / (24 * 60 * 60 * 100),
+            TimeUnit::Week => self.ticks / (7 * 24 * 60 * 60 * 100),
+            TimeUnit::Month => self.ticks / (4 * 7 * 24 * 60 * 60 * 100),
+            TimeUnit::Year => self.ticks / (12 * 4 * 7 * 24 * 60 * 60 * 100)
+        };
+        Ok(time)
     }
 }
 
