@@ -177,8 +177,10 @@ pub fn vid(pos: (i32, i32), ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex
 
                 // render block
                 kern.lock().drv.disp.blk((blk_x as i32 * (blk_size as i32) + pos.0, blk_y as i32 * (blk_size as i32) + pos.1), (blk_size as usize, blk_size as usize), 0x00ff00, &blk_img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
-                kern.lock().drv.disp.flush_blk((blk_x as i32 * (blk_size as i32) + pos.0, blk_y as i32 * (blk_size as i32) + pos.1), (blk_size as usize, blk_size as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+                // kern.lock().drv.disp.flush_blk((blk_x as i32 * (blk_size as i32) + pos.0, blk_y as i32 * (blk_size as i32) + pos.1), (blk_size as usize, blk_size as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
             }
+
+            kern.lock().drv.disp.flush_blk(pos, last.size).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
 
             // limit fps
             let _ = thread_await!(kern.lock().drv.time.wait_async(Duration::Milli(700 / fps as usize)));
