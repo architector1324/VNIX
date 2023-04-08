@@ -65,6 +65,32 @@ fn _loop(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
     })
 }
 
+fn separate(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        let msg = if let Some(msg) = msg.clone().as_map_find("task.sep") {
+            msg
+        } else if let Some((s, msg)) = msg.clone().as_pair() {
+            let (s, _ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+            ath = _ath;
+
+            if s.as_str() != "task.sep" {
+                return Ok(None)
+            }
+            msg
+        } else {
+            return Ok(None)
+        };
+
+        // infinite
+        if let Some((_msg, serv, _)) = msg.as_stream() {
+            let run = TaskRun(_msg, serv);
+            kern.lock().reg_task(&ath, "sys.task", run)?;
+        }
+
+        Ok(Some(ath))
+    })
+}
+
 fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
         let (lst, mut ath) = maybe!(as_map_find_as_async!(msg, "task", as_list, ath, orig, kern));
@@ -181,6 +207,14 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
     thread!({
         // loop
         if let Some(_ath) = thread_await!(_loop(ath.clone(), msg.clone(), orig.clone(), kern))? {
+            if _ath != ath {
+                return Ok(Some((Some(msg), ath)))
+            }
+            return Ok(Some((None, ath)))
+        }
+
+        // separate
+        if let Some(_ath) = thread_await!(separate(ath.clone(), msg.clone(), orig.clone(), kern))? {
             if _ath != ath {
                 return Ok(Some((Some(msg), ath)))
             }
