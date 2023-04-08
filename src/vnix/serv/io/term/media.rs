@@ -16,7 +16,7 @@ use crate::vnix::core::driver::{DrvErr, Duration};
 use crate::{thread, thread_await, as_async, maybe, as_map_find_as_async, as_map_find_async, maybe_ok, read_async};
 
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::unit::{Unit, UnitAs, UnitReadAsyncI};
+use crate::vnix::core::unit::{Unit, UnitAs, UnitReadAsyncI, UnitTypeReadAsync};
 
 
 pub struct Img {
@@ -24,7 +24,7 @@ pub struct Img {
     size: (usize, usize)
 }
 
-pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Img, Rc<String>), KernErr>> {
+pub fn img(pos: (i32, i32), ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Img> {
     thread!({
         if let super::Mode::Text = kern.lock().term.lock().mode {
             return Ok(None)
@@ -80,8 +80,8 @@ pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         };
 
         // draw
-        kern.lock().drv.disp.blk((0, 0), (w as usize, h as usize), 0, &img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
-        kern.lock().drv.disp.flush_blk((0, 0), (w as usize, h as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+        kern.lock().drv.disp.blk(pos, (w as usize, h as usize), 0, &img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+        kern.lock().drv.disp.flush_blk(pos, (w as usize, h as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
 
         let img = Img {
             dat: img.to_vec(),
@@ -92,7 +92,7 @@ pub fn img(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
     })
 }
 
-pub fn vid(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub fn vid(pos: (i32, i32), ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
         if let super::Mode::Text = kern.lock().term.lock().mode {
             return Ok(None)
@@ -143,7 +143,7 @@ pub fn vid(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         }
 
         // render first frame
-        let (mut last, mut ath) = maybe!(thread_await!(img(ath.clone(), orig.clone(), first, kern)));
+        let (mut last, mut ath) = maybe!(thread_await!(img(pos, ath.clone(), orig.clone(), first, kern)));
 
         // render frames
         for frame in Rc::unwrap_or_clone(fms) {
@@ -176,8 +176,8 @@ pub fn vid(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
                 }
 
                 // render block
-                kern.lock().drv.disp.blk((blk_x as i32 * (blk_size as i32), blk_y as i32 * (blk_size as i32)), (blk_size as usize, blk_size as usize), 0x00ff00, &blk_img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
-                kern.lock().drv.disp.flush_blk((blk_x as i32 * (blk_size as i32), blk_y as i32 * (blk_size as i32)), (blk_size as usize, blk_size as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+                kern.lock().drv.disp.blk((blk_x as i32 * (blk_size as i32) + pos.0, blk_y as i32 * (blk_size as i32) + pos.1), (blk_size as usize, blk_size as usize), 0x00ff00, &blk_img).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+                kern.lock().drv.disp.flush_blk((blk_x as i32 * (blk_size as i32) + pos.0, blk_y as i32 * (blk_size as i32) + pos.1), (blk_size as usize, blk_size as usize)).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
             }
 
             // limit fps
@@ -185,5 +185,59 @@ pub fn vid(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
         }
 
         Ok(Some(ath))
+    })
+}
+
+pub fn spr(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+    thread!({
+        if let super::Mode::Text = kern.lock().term.lock().mode {
+            return Ok(None)
+        }
+
+        // get pos
+        let (pos, mut ath) = maybe!(as_map_find_async!(msg, "spr", ath, orig, kern));
+
+        let pos = if let Some((x, y)) = pos.clone().as_pair() {
+            let (x, _ath) = maybe!(as_async!(x, as_int, ath, orig, kern));
+            let (y, _ath) = maybe!(as_async!(y, as_int, _ath, orig, kern));
+            ath = _ath;
+            (x, y)
+        } else if let Some(s) = pos.as_str() {
+            match s.as_str() {
+                "center" => {
+                    let (w, h) = kern.lock().drv.disp.res().map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
+                    (w as i32 / 2, h as i32 / 2)
+                },
+                _ => return Ok(None)
+            }
+        } else {
+            return Ok(None)
+        };
+
+        // render video
+        if let Some((_vid, ath)) = as_map_find_async!(msg, "vid", ath, orig, kern)? {
+            let (img, ath) = maybe!(as_map_find_async!(_vid, "img", ath, orig, kern));
+            let ((w, h), ath) = maybe!(as_map_find_as_async!(img, "size", as_pair, ath, orig, kern));
+            let (w, ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
+            let (h, ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
+
+            let vid_pos = (pos.0 - w as i32 / 2, pos.1 - h as i32 / 2);
+
+            return thread_await!(vid(vid_pos, ath, orig, _vid, kern))
+        }
+
+        // render image
+        if let Some((_img, ath)) = as_map_find_async!(msg, "img", ath, orig, kern)? {
+            let ((w, h), ath) = maybe!(as_map_find_as_async!(_img, "size", as_pair, ath, orig, kern));
+            let (w, ath) = maybe!(as_async!(w, as_uint, ath, orig, kern));
+            let (h, ath) = maybe!(as_async!(h, as_uint, ath, orig, kern));
+
+            let img_pos = (pos.0 - w as i32 / 2, pos.1 - h as i32 / 2);
+
+            let (_, ath) = maybe!(thread_await!(img(img_pos, ath, orig, _img, kern)));
+            return Ok(Some(ath))
+        }
+
+        Ok(None)
     })
 }

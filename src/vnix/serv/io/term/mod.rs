@@ -293,8 +293,8 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             return Ok(Some(msg))
         }
 
-        // img command
-        if let Some((_, _ath)) = thread_await!(media::img(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        // image command
+        if let Some((_, _ath)) = thread_await!(media::img((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -302,8 +302,17 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             return Ok(Some(msg))
         }
 
-        // vid command
-        if let Some(_ath) = thread_await!(media::vid(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        // video command
+        if let Some(_ath) = thread_await!(media::vid((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            if _ath != ath {
+                ath = _ath;
+                msg = kern.lock().msg(&ath, _msg)?;
+            }
+            return Ok(Some(msg))
+        }
+
+        // sprite command
+        if let Some(_ath) = thread_await!(media::spr(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
