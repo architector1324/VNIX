@@ -51,6 +51,17 @@ fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
 
 fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
+        // load
+        if let Some(s) = msg.clone().as_str() {
+            if s.as_str() != "load" {
+                return Ok(None)
+            }
+
+            let u = kern.lock().ram_store.data.clone();
+            return Ok(Some((u, ath)))
+        }
+
+        // (load <path>)
         let (u, path) = maybe_ok!(msg.as_pair().into_iter().find_map(|(u0, u1)| Some((u0, u1.as_path()?))));
         let (s, ath) = maybe!(as_async!(u, as_str, ath, orig, kern));
 
