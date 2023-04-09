@@ -169,7 +169,7 @@ num:5
 ```
 
 #### Lambda shell
-Also, lambda shell application is just this message sended to `sys.task` service:
+Lambda shell application is just a message sended to `sys.task` service:
 ```bash
 {
     load:{
@@ -180,16 +180,19 @@ Also, lambda shell application is just this message sended to `sys.task` service
       ]
     }
     task.loop:{
-      task.stk:[
-          {
-            say:(dser.str (inp `λ `)@io.term)@dat.proc@sys.task
-            shrt:32
-            nl:t
-          }
-      ]@io.term
-    }@sys.task
+      say:(dser.str (inp `λ `)@io.term)@dat.proc@sys.task
+      shrt:32
+      nl:t
+    }@io.term
 }
 ```
+
+It will be loaded by **init** application from vnix storage (on disk) like this:
+```bash
+(load @task.lambda.load)@io.store@sys.task
+```
+
+You can check it out in `vxmn.store` vnix storage file.
 
 Comming soon ...
 
