@@ -178,8 +178,10 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
         if let Some(s) = msg.clone().as_str() {
             return match s.as_str() {
                 "inp" => {
-                    let inp = base::Term::input(term, false, false, None, kern);
+                    let inp = base::Term::input(term.clone(), false, None, kern);
                     let res = thread_await!(inp)?;
+                    term.lock().print_ch('\n', &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
+
                     Ok(Some((res, ath)))
                 },
                 _ => Ok(None)
@@ -195,8 +197,10 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
                     let (pmt, ath) = maybe!(as_async!(pmt, as_str, ath, orig, kern));
                     term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
-                    let inp = base::Term::input(term, false, false, None, kern);
+                    let inp = base::Term::input(term.clone(), false, None, kern);
                     let res = thread_await!(inp)?;
+                    term.lock().print_ch('\n', &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
+
                     Ok(Some((res, ath)))
                 },
                 _ => Ok(None)
@@ -205,18 +209,11 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
 
         // {inp:<pmt> prs:<t|f> nl:<t|f>}
         if let Some((pmt, mut ath)) = as_map_find_as_async!(msg, "inp", as_str, ath, orig, kern)? {
-            let prs = if let Some((prs, _ath)) = as_map_find_as_async!(msg, "prs", as_bool, ath, orig, kern)? {
-                ath = _ath;
-                prs
-            } else {
-                false
-            };
-
             let nl = if let Some((nl, _ath)) = as_map_find_as_async!(msg, "nl", as_bool, ath, orig, kern)? {
                 ath = _ath;
                 nl
             } else {
-                false
+                true
             };
 
             let sct = if let Some((sct, _ath)) = as_map_find_as_async!(msg, "sct", as_bool, ath, orig, kern)? {
@@ -235,7 +232,7 @@ pub fn input(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
 
             term.lock().print(&pmt, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
-            let inp = base::Term::input(term.clone(), sct, prs, lim, kern);
+            let inp = base::Term::input(term.clone(), sct, lim, kern);
             let res = thread_await!(inp)?;
 
             if nl {

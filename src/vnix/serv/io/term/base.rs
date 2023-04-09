@@ -11,7 +11,7 @@ use crate::vnix::core::task::ThreadAsync;
 use crate::thread;
 
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitParse};
+use crate::vnix::core::unit::{Unit, UnitNew};
 
 
 #[derive(Debug)]
@@ -105,7 +105,7 @@ impl Term {
         Ok(())
     }
 
-    pub fn input(term: Rc<Mutex<Self>>, secret:bool, parse: bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
+    pub fn input(term: Rc<Mutex<Self>>, secret:bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
         thread!({
             let save_pos = term.lock().pos.clone();
 
@@ -162,12 +162,6 @@ impl Term {
 
             if s.is_empty() {
                 return Ok(None)
-            }
-
-            // parse string
-            if parse {
-                let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-                return Ok(Some(u))
             }
             return Ok(Some(Unit::str(&s)))
         })

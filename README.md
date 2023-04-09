@@ -99,20 +99,60 @@ dd if=./out/vnix.img of=/dev/<usb> status=progress
 ```
 
 ## Data programming
+Let's write an application (that is just regular message) that takes an integer number from console input and displays it's negative value.
+
+For this purpose we will create network of these 3 services:
+* `math.calc` - math computation service.
+* `io.term` - I/O terminal service.
+* `dat.proc` - common data processing service.
+
+By default, services will accept pair or map **units** like this:
 ```bash
-# send this message to `math.calc` service
-{
-    sum:[
-        {inp:`a:` prs:t nl:t}@io.term
-        {inp:`b:` prs:t nl:t}@io.term
-    ]
-}
+(com dat)
+{com:dat ..}
 ```
+
+So, to send message to service from **lambda shell** you can use stream unit:
 ```bash
-λ {sum:[{inp:`a:` prs:t nl:t}@io.term {inp:`b:` prs:t nl:t}@io.term]}@math.calc
-a: 1
-b: 2
-3
+λ unit@some.serv
+res
+```
+
+But also we can use stream in any place instead, so because it's just a regular unit. All services can handle it:
+```bash
+(com unit@some.serv)
+(unit@some.serv dat)
+(unit@some.serv unit@some.serv)
+```
+
+Okay, let's solve out task:
+
+1. We can negative integer numbers with `neg` command sended to `math.calc` service:
+```bash
+(neg 5) # -5
+{neg:-3} # 3
+```
+
+2. We can get string from console input with `inp` command sended to `io.term` service:
+```bash
+# send this message to `io.term` service
+(inp `num:`)
+{inp:`num:`}
+```
+
+3. We can deserialize string to **unit** with `dser.str` command sended to `dat.proc` service:
+```bash
+# send this message to `dat.proc` service
+(dser.str `{a:b}`) # {a:b}
+{dser.str:`123`} # 123
+```
+
+4. Let's put all together:
+
+```bash
+λ {neg:(dser.str (inp `num:`)@io.term)@dat.proc}@math.calc
+num:5
+-5
 ```
 
 Comming soon ...
