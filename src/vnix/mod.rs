@@ -22,6 +22,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
         // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         (dat::proc::SERV_PATH, dat::proc::SERV_HELP, Box::new(dat::proc::proc_hlr) as Box<ServHlr>),
+        (dat::gen::SERV_PATH, dat::gen::SERV_HELP, Box::new(dat::gen::gen_hlr) as Box<ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         (math::calc::SERV_PATH, math::calc::SERV_HELP, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
