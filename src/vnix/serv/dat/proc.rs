@@ -402,11 +402,27 @@ fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
                 let s = format!("{dat}");
                 (Unit::str(&s), ath)
             },
+            "dser.str" => {
+                let (s, ath) = maybe!(as_async!(dat, as_str, ath, orig, kern));
+                let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+                (u, ath)
+            },
             "ser.bytes" => {
                 let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
                 let b = dat.as_bytes().into_iter().map(|b| Unit::byte(b)).collect::<Vec<_>>();
                 (Unit::list(&b), ath)
-            }
+            },
+            "dser.bytes" => {
+                let (dat, mut ath) = maybe!(as_async!(dat, as_list, ath, orig, kern));
+                let mut lst = Vec::with_capacity(dat.len());
+                for u in Rc::unwrap_or_clone(dat) {
+                    let (u, _ath) = maybe!(as_async!(u, as_byte, ath, orig, kern));
+                    lst.push(u);
+                    ath = _ath;
+                }
+                let u = Unit::parse(lst.iter()).map_err(|e| KernErr::ParseErr(e))?.0;
+                (u, ath)
+            },
             _ => return Ok(None)
         };
         return Ok(Some((u, ath)))
