@@ -99,9 +99,10 @@ dd if=./out/vnix.img of=/dev/<usb> status=progress
 ```
 
 ## Data programming
-Let's write an application (that is just regular message) that takes an integer number from console input and displays it's negative value.
+#### Intro
+Let's write an application that takes an integer from console input and displays its negative value. Application is just regular **message** presented as **unit** in **vxmn** notation.
 
-For this purpose we will create network of these 3 services:
+For this purpose we will create network of these 3 services (see below):
 * `math.calc` - math computation service.
 * `io.term` - I/O terminal service.
 * `dat.proc` - common data processing service.
@@ -109,42 +110,54 @@ For this purpose we will create network of these 3 services:
 By default, services will accept pair or map **units** like this:
 ```bash
 (com dat)
-{com:dat ..}
+{com:dat ..} # service just will ignore any unknown fields 
 ```
 
-So, to send message to service from **lambda shell** you can use stream unit:
+So, to send message to service from [**lambda shell**](#lambda-shell) you can use stream unit:
 ```bash
 λ unit@some.serv
 res
 ```
 
-But also we can use stream in any place instead, so because it's just a regular unit. All services can handle it:
+```bash
+λ unit@some.serv:ipv6
+res
+```
+
+But also we can use stream in any place in message instead, so because it's just a regular unit. All services can handle it:
 ```bash
 (com unit@some.serv)
 (unit@some.serv dat)
 (unit@some.serv unit@some.serv)
 ```
 
+#### App
 Okay, let's solve out task:
 
 1. We can negative integer numbers with `neg` command sended to `math.calc` service:
 ```bash
-(neg 5) # -5
-{neg:-3} # 3
+λ (neg 5)@math.calc
+-5
+λ {neg:-3 my:field}@math.calc
+3
 ```
 
 2. We can get string from console input with `inp` command sended to `io.term` service:
 ```bash
-# send this message to `io.term` service
-(inp `num:`)
-{inp:`num:`}
+λ (inp `prompt: `)@io.term
+prompt: hello!
+`hello!`
+λ {inp:`prompt: `}@io.term
+prompt: abc
+abc
 ```
 
 3. We can deserialize string to **unit** with `dser.str` command sended to `dat.proc` service:
 ```bash
-# send this message to `dat.proc` service
-(dser.str `{a:b}`) # {a:b}
-{dser.str:`123`} # 123
+λ (dser.str `{a:b}`)@dat.proc
+{a:b}
+λ {dser.str:`123`}@dat.proc
+123
 ```
 
 4. Let's put all together:
@@ -153,6 +166,29 @@ Okay, let's solve out task:
 λ {neg:(dser.str (inp `num:`)@io.term)@dat.proc}@math.calc
 num:5
 -5
+```
+
+#### Lambda shell
+Also, lambda shell application is just this message sended to `sys.task` service:
+```bash
+{
+    load:{
+      task.que:[
+          {spr:center img:(load @img.vnix.logo)@io.store}@io.term
+          {say:`Welcome to lambda shell!\nTry enter: (say info@io.term)@io.term` nl:t}@io.term
+          (load @task.lambda)@io.store@sys.task
+      ]
+    }
+    task.loop:{
+      task.stk:[
+          {
+            say:(dser.str (inp `λ `)@io.term)@dat.proc@sys.task
+            shrt:32
+            nl:t
+          }
+      ]@io.term
+    }@sys.task
+}
 ```
 
 Comming soon ...
