@@ -11,7 +11,7 @@ use alloc::string::String;
 use crate::vnix::utils;
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
-use crate::vnix::core::driver::{DrvErr, Duration};
+use crate::vnix::core::driver::{DrvErr, Duration, TimeUnit};
 
 use crate::{thread, thread_await, as_async, maybe, as_map_find_as_async, as_map_find_async, maybe_ok, read_async};
 
@@ -147,6 +147,8 @@ pub fn vid(pos: (i32, i32), ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex
 
         // render frames
         for frame in Rc::unwrap_or_clone(fms) {
+            let start = kern.lock().drv.time.uptime(TimeUnit::Milli).map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
+
             let (frame, _ath) = maybe!(as_async!(frame, as_map, ath, orig, kern));
             ath = _ath;
 
@@ -182,8 +184,13 @@ pub fn vid(pos: (i32, i32), ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex
 
             kern.lock().drv.disp.flush_blk(pos, last.size).map_err(|e| KernErr::DrvErr(DrvErr::Disp(e)))?;
 
+            let end = kern.lock().drv.time.uptime(TimeUnit::Milli).map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
+            let elapsed = (end - start) as usize;
+
             // limit fps
-            let _ = thread_await!(kern.lock().drv.time.wait_async(Duration::Milli(700 / fps as usize)));
+            if elapsed < 900 / fps as usize {
+                let _ = thread_await!(kern.lock().drv.time.wait_async(Duration::Milli(900 / fps as usize - elapsed)));
+            }
         }
 
         Ok(Some(ath))
