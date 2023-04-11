@@ -153,11 +153,19 @@ fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
                 let (a, ath) = maybe!(as_async!(a, as_list, ath, orig, kern));
                 let (b, ath) = maybe!(as_async!(b, as_list, ath, orig, kern));
 
-                if a.len() != b.len() {
-                    return Ok(None)
-                }
+                let lst = if a.len() == b.len() {
+                    let a_it = a.iter().cloned();
+                    let b_it = b.iter().cloned();
 
-                let lst = a.iter().cloned().zip(b.iter().cloned()).map(|(a, b)| Unit::pair(a, b)).collect::<Vec<_>>();
+                    a_it.zip(b_it).map(|(a, b)| Unit::pair(a, b)).collect::<Vec<_>>()
+                } else {
+                    let max_len = a.len().max(b.len());
+                    
+                    let a_it = a.iter().chain(a.iter().cycle().take(max_len - a.len())).cloned();
+                    let b_it = b.iter().chain(b.iter().cycle().take(max_len - b.len())).cloned();
+
+                    a_it.zip(b_it).map(|(a, b)| Unit::pair(a, b)).collect::<Vec<_>>()
+                };
                 Ok(Some((Unit::list(&lst), ath)))
             },
             _ => Ok(None)
