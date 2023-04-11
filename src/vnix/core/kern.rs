@@ -2,7 +2,6 @@ use core::pin::Pin;
 use core::fmt::{Display, Write};
 use core::ops::{Generator, GeneratorState};
 
-use alloc::vec;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -347,12 +346,12 @@ impl Kern {
         self.task_result.drain_filter(|(i, _)| *i == id).next().map(|(_, msg)| msg)
     }
 
-    pub fn msg(&self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
+    pub fn msg(&mut self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
         let usr = self.get_usr(ath)?;
-        Msg::new(usr, u)
+        Msg::new(usr, self.new_unit(u))
     }
 
-    fn help_serv(&self, ath: &str) -> Result<Msg, KernErr> {
+    fn help_serv(&mut self, ath: &str) -> Result<Msg, KernErr> {
         let serv = self.services.iter().map(|serv| Unit::str(&serv.info.name)).collect::<Vec<_>>();
         let u = Unit::map(&[(
             Unit::str("msg"),
@@ -368,13 +367,12 @@ impl Kern {
         usr.verify(msg.msg.clone(), &msg.sign, &msg.hash)?;
 
         // prepare msg
-        let tmp = mtx.lock();
-        let serv = tmp.get_serv(serv.as_str())?;
+        let help_s = mtx.lock().get_serv(serv.as_str())?.help.clone();
 
         let help_msg = Unit::map(&[
-            (Unit::str("msg"), Unit::str(&serv.help))
+            (Unit::str("msg"), Unit::str(&help_s))
         ]);
-        let help_msg = tmp.msg(&msg.ath, help_msg)?;
+        let help_msg = mtx.lock().msg(&msg.ath, help_msg)?;
 
         // check help
         let topic = if let Some(topic) = msg.msg.clone().as_map_find("help").map(|u| u.as_str()).flatten() {
@@ -401,6 +399,8 @@ impl Kern {
         }
 
         // send
+        let tmp = mtx.lock();
+        let serv = tmp.get_serv(serv.as_str())?;
         let inst = (serv.hlr)(msg, serv.info.clone(), mtx);
         Ok(Some(inst))
     }
