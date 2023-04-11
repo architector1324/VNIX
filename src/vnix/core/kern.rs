@@ -147,119 +147,119 @@ impl KernDataPool {
         let found = self.base.iter().find(|b| b.as_ref().eq(base));
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
             let rc = Rc::new(base.clone());
             self.base.push(rc.clone());
-            return rc
+            rc
         }
     }
 
-    fn new_or_find_str(&mut self, s: &String) -> Rc<String> {
+    fn new_or_find_str(&mut self, s: Rc<String>) -> Rc<String> {
         let found = self.strings.iter().find(|_s| _s.as_str() == s.as_str());
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
-            let rc = Rc::new(s.clone());
-            self.strings.push(rc.clone());
-            return rc
+            self.strings.push(s.clone());
+            s
         }
     }
 
-    fn new_or_find_path(&mut self, path: &Vec<String>) -> Rc<Vec<String>> {
-        let found = self.paths.iter().find(|p| p.as_ref() == path);
+    fn new_or_find_path(&mut self, path: Rc<Vec<String>>) -> Rc<Vec<String>> {
+        let found = self.paths.iter().find(|p| p.as_ref() == path.as_ref());
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
-            let rc = Rc::new(path.clone());
-            self.paths.push(rc.clone());
-            return rc
+            self.paths.push(path.clone());
+            path
         }
     }
 
-    fn new_or_find_addr(&mut self, addr: &Addr) -> Rc<Addr> {
-        let found = self.addrs.iter().find(|a| a.as_ref().eq(addr));
+    fn new_or_find_addr(&mut self, addr: Rc<Addr>) -> Rc<Addr> {
+        let found = self.addrs.iter().find(|a| a.as_ref().eq(addr.as_ref()));
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
-            let rc = Rc::new(addr.clone());
-            self.addrs.push(rc.clone());
-            return rc
+            self.addrs.push(addr.clone());
+            addr
         }
     }
 
-    fn new_or_find_int(&mut self, val: &BigInt) -> Rc<BigInt> {
-        let found = self.ints.iter().find(|v| v.as_ref().eq(val));
+    fn new_or_find_int(&mut self, val: Rc<BigInt>) -> Rc<BigInt> {
+        let found = self.ints.iter().find(|v| v.as_ref().eq(val.as_ref()));
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
-            let rc = Rc::new(val.clone());
-            self.ints.push(rc.clone());
-            return rc
+            self.ints.push(val.clone());
+            val
         }
     }
 
-    fn new_or_find_dec(&mut self, val: &BigRational) -> Rc<BigRational> {
-        let found = self.decs.iter().find(|v| v.as_ref().eq(val));
+    fn new_or_find_dec(&mut self, val: Rc<BigRational>) -> Rc<BigRational> {
+        let found = self.decs.iter().find(|v| v.as_ref().eq(val.as_ref()));
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
-            let rc = Rc::new(val.clone());
-            self.decs.push(rc.clone());
-            return rc
+            self.decs.push(val.clone());
+            val
         }
     }
 
-    fn new_or_find_list(&mut self, lst: &Vec<Unit>) -> Rc<Vec<Unit>> {
-        let found = self.lists.iter().find(|l| l.as_ref() == lst);
+    fn new_or_find_list(&mut self, lst: Rc<Vec<Unit>>) -> Rc<Vec<Unit>> {
+        let found = self.lists.iter().find(|l| l.as_ref() == lst.as_ref());
 
         if let Some(found) = found {
-            return found.clone()
+            found.clone()
         } else {
             let lst = lst.iter().map(|u| self.new_or_get(u.clone())).collect::<Vec<_>>();
             let rc = Rc::new(lst);
             self.lists.push(rc.clone());
-            return rc
+            rc
         }
     }
 
-    fn new_or_find_map(&mut self, map: &Vec<(Unit, Unit)>) -> Rc<Vec<(Unit, Unit)>> {
-        let found = self.maps.iter().find(|m| m.as_ref() == map);
+    fn new_or_find_map(&mut self, map: Rc<Vec<(Unit, Unit)>>) -> Rc<Vec<(Unit, Unit)>> {
+        let found = self.maps.iter().find(|m| m.as_ref() == map.as_ref());
 
         if let Some(found) = found {
-            return found.clone();
+            found.clone()
         } else {
             let map = map.iter().map(|(u0, u1)| (self.new_or_get(u0.clone()), self.new_or_get(u1.clone()))).collect::<Vec<_>>();
             let rc = Rc::new(map);
             self.maps.push(rc.clone());
-            return rc
+            rc
         }
     }
 
     fn new_or_get(&mut self, u: Unit) -> Unit {
         let u_b = u.get_base();
 
+        let found = self.base.iter().find(|_u| _u.as_ref() == u_b.as_ref());
+        if let Some(..) = found {
+            return u;
+        }
+
         let base = match u_b.as_ref() {
             UnitBase::None | UnitBase::Bool(..) | UnitBase::Byte(..) => Rc::unwrap_or_clone(u_b),
-            UnitBase::Str(s) => UnitBase::Str(self.new_or_find_str(&s)),
-            UnitBase::Ref(path) => UnitBase::Ref(self.new_or_find_path(&path)),
+            UnitBase::Str(s) => UnitBase::Str(self.new_or_find_str(s.clone())),
+            UnitBase::Ref(path) => UnitBase::Ref(self.new_or_find_path(path.clone())),
             UnitBase::Stream(msg, serv, addr) => {
                 let msg = self.new_or_get(msg.clone());
-                let serv = self.new_or_find_str(&serv);
-                let addr = self.new_or_find_addr(&addr);
+                let serv = self.new_or_find_str(serv.clone());
+                let addr = self.new_or_find_addr(addr.clone());
 
                 UnitBase::Stream(msg, serv, addr)
             },
-            UnitBase::Int(v) => UnitBase::Int(Int(self.new_or_find_int(&v.0))),
-            UnitBase::Dec(v) => UnitBase::Dec(Dec(self.new_or_find_dec(&v.0))),
+            UnitBase::Int(v) => UnitBase::Int(Int(self.new_or_find_int(v.0.clone()))),
+            UnitBase::Dec(v) => UnitBase::Dec(Dec(self.new_or_find_dec(v.0.clone()))),
             UnitBase::Pair(u0, u1) => UnitBase::Pair(self.new_or_get(u0.clone()), self.new_or_get(u1.clone())),
-            UnitBase::List(lst) => UnitBase::List(self.new_or_find_list(&lst)),
-            UnitBase::Map(map) => UnitBase::Map(self.new_or_find_map(&map))
+            UnitBase::List(lst) => UnitBase::List(self.new_or_find_list(lst.clone())),
+            UnitBase::Map(map) => UnitBase::Map(self.new_or_find_map(map.clone()))
         };
         Unit::share(self.new_or_find_ub(&base))
     }
