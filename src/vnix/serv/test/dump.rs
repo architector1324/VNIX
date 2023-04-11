@@ -1,26 +1,32 @@
 use spin::Mutex;
-
 use alloc::boxed::Box;
-use core::fmt::Write;
 
-use crate::{thread, maybe_ok};
-
-use crate::vnix::core::driver::{CLIErr, DrvErr};
+use crate::thread;
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::{Kern, KernErr};
+use crate::vnix::core::kern::Kern;
+use crate::vnix::core::unit::{Unit, UnitNew};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 
 
 pub const SERV_PATH: &'static str = "test.dump";
-pub const SERV_HELP: &'static str = "Test print service\nExample: abc@test.dump";
+pub const SERV_HELP: &'static str = "Dump message to unit service\nExample: abc@test.dump";
 
 pub fn dump_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let task_id = maybe_ok!(kern.lock().get_task_running()).id;
-        writeln!(kern.lock(), "dump {task_id}: {msg}").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Clear)))?;
+        let u = Unit::map(&[
+            (Unit::str("ath"), Unit::str(&msg.ath)),
+            (Unit::str("size"), Unit::uint(msg.size as u32)),
+            (Unit::str("msg"), msg.msg.clone()),
+            (Unit::str("hash"), Unit::str(&msg.hash)),
+            (Unit::str("sign"), Unit::str(&msg.sign)),
+        ]);
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), u)
+        ]);
         yield;
 
-        Ok(Some(msg))
+        return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })    
 }

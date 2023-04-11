@@ -573,7 +573,7 @@ impl Display for DisplayNice {
                 }
             },
             UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
-            UnitType::Stream(msg, serv, addr) => write!(f, "{msg}@{serv}:{addr}"),
+            UnitType::Stream(msg, serv, addr) => write!(f, "{}@{serv}:{addr}", DisplayNice(self.0, self.1, msg.clone())),
             UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
             UnitType::List(lst) => write!(f, "[\n{}\n{}]", lst.iter().map(|u| format!("{}{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
             UnitType::Map(map) => write!(f, "{{\n{}\n{}}}", map.iter().map(|(u0, u1)| format!("{}{}:{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u0.clone()), DisplayNice(self.0 + 1, self.1, u1.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
