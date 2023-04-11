@@ -209,10 +209,10 @@ fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
                     match s.as_str() {
                         "240p" => (Unit::uint(426), Unit::uint(240)),
                         "360p" => (Unit::uint(640), Unit::uint(360)),
-                        "720p" => (Unit::uint(1280), Unit::uint(720)),
-                        "1080p" => (Unit::uint(1920), Unit::uint(1080)),
-                        "2k" => (Unit::uint(2560), Unit::uint(1440)),
-                        "4k" => (Unit::uint(3840), Unit::uint(2160)),
+                        "720p" | "hd" => (Unit::uint(1280), Unit::uint(720)),
+                        "1080p" | "fhd" => (Unit::uint(1920), Unit::uint(1080)),
+                        "2k" | "qhd" => (Unit::uint(2560), Unit::uint(1440)),
+                        "4k" | "uhd" => (Unit::uint(3840), Unit::uint(2160)),
                         "8k" => (Unit::uint(7680), Unit::uint(4320)),
                         _ => return Ok(None)
                     }
