@@ -358,16 +358,19 @@ fn keys(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
 
 fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
-        let (path, src) = maybe_ok!(msg.as_pair());
-        let path = maybe_ok!(path.as_path());
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
-        if maybe_ok!(path.get(0)).as_str() != "get" {
+        if s.as_str() != "get" {
             return Ok(None)
         }
 
+        let ((path, src), ath) = maybe!(as_async!(dat, as_pair, ath, orig, kern));
+
+        let path = maybe_ok!(path.as_path());
         let (src, ath) = maybe!(read_async!(src, ath, orig, kern));
 
-        let u = maybe_ok!(src.find(path.iter().skip(1).map(|s| s.as_str())));
+        let u = maybe_ok!(src.find(path.iter().map(|s| s.as_str())));
         Ok(Some((u, ath)))
     })
 }
