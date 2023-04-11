@@ -108,10 +108,10 @@ fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
             let run = TaskRun(_msg, Rc::unwrap_or_clone(serv));
             let id = kern.lock().reg_task(&_ath, "sys.task", run)?;
 
-            let __msg = maybe_ok!(task_result!(id, kern)?);
+            let u = maybe_ok!(task_result!(id, kern)?);
 
-            _msg = prev.merge_with(__msg.msg);
-            ath = Rc::new(__msg.ath);
+            _msg = prev.merge_with(u.msg);
+            ath = Rc::new(u.ath);
         }
         return Ok(Some((_msg, ath)))
     })
@@ -260,7 +260,51 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
     })
 }
 
-pub fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let info = {
+            let task = maybe_ok!(kern.lock().get_task_running());
+
+            let task_lst = kern.lock().get_tasks_running().into_iter().map(|t| {
+                Unit::map(&[
+                    (Unit::str("id"), Unit::uint(t.id as u32)),
+                    (Unit::str("name"), Unit::str(&t.name)),
+                    (Unit::str("usr"), Unit::str(&t.usr)),
+                    (Unit::str("par.id"), Unit::uint(t.parent_id as u32))
+                ])
+            }).collect();
+
+            Unit::map(&[
+                (
+                    Unit::str("run"),
+                    Unit::map(&[
+                        (Unit::str("id"), Unit::uint(task.id as u32)),
+                        (Unit::str("name"), Unit::str(&task.name)),
+                        (Unit::str("usr"), Unit::str(&task.usr)),
+                        (Unit::str("par.id"), Unit::uint(task.parent_id as u32))
+                    ])
+                ),
+                (Unit::str("all"), Unit::list_share(Rc::new(task_lst))),
+                (Unit::str("tree"), Unit::none())
+            ])
+        };
+        yield;
+
+        // get
+        let s = maybe_ok!(msg.as_str());
+
+        let res = match s.as_str() {
+            "get" => info,
+            "get.run" => maybe_ok!(info.find(["run"].into_iter())),
+            "get.all" => maybe_ok!(info.find(["all"].into_iter())),
+            "get.tree" => maybe_ok!(info.find(["tree"].into_iter())),
+            _ => return Ok(None)
+        };
+        Ok(Some((res, ath)))
+    })
+}
+
+fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
         let (sig, id) = maybe_ok!(msg.as_pair());
 
@@ -282,8 +326,16 @@ pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         let (_msg, mut ath) = maybe!(read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern));
 
         // task
-        if let Some((__msg, ath)) = thread_await!(run(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
-            let msg = _msg.clone().merge_with(maybe_ok!(__msg));
+        if let Some((u, ath)) = thread_await!(run(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = _msg.clone().merge_with(maybe_ok!(u));
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // get
+        if let Some((u, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), u)
+            ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 

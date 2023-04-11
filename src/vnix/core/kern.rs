@@ -163,8 +163,8 @@ impl Kern {
         self.tasks_running.clone()
     }
 
-    pub fn get_task_running(&self) -> usize {
-        self.curr_task_id
+    pub fn get_task_running(&self) -> Option<Task> {
+        self.tasks_running.iter().find(|t| t.id == self.curr_task_id).map(|t| t.clone())
     }
 
     pub fn get_task_result(&mut self, id: usize) -> Option<Maybe<Msg, KernErr>> {

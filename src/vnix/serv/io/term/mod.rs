@@ -153,28 +153,27 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
         yield;
 
         // get
-        if let Some(s) = msg.as_str() {
-            let res = match s.as_str() {
-                "get" => info,
-                "get.mode" => maybe_ok!(info.find(["mode"].into_iter())),
-                "get.res" => maybe_ok!(info.find(["res"].into_iter())),
-                "get.res.txt" => maybe_ok!(info.find(["res", "txt"].into_iter())),
-                "get.res.gfx" => maybe_ok!(info.find(["res", "gfx"].into_iter())),
-                "get.res.min" => maybe_ok!(info.find(["res", "min"].into_iter())),
-                "get.res.min.txt" => maybe_ok!(info.find(["res", "min", "txt"].into_iter())),
-                "get.res.min.gfx" => maybe_ok!(info.find(["res", "min", "gfx"].into_iter())),
+        let s = maybe_ok!(msg.as_str());
 
-                "get.res.max" => maybe_ok!(info.find(["res", "max"].into_iter())),
-                "get.res.max.txt" => maybe_ok!(info.find(["res", "max", "txt"].into_iter())),
-                "get.res.max.gfx" => maybe_ok!(info.find(["res", "max", "gfx"].into_iter())),
-                "get.res.all" => maybe_ok!(info.find(["res", "all"].into_iter())),
-                "get.res.all.txt" => maybe_ok!(info.find(["res", "all", "txt"].into_iter())),
-                "get.res.all.gfx" => maybe_ok!(info.find(["res", "all", "gfx"].into_iter())),
-                _ => return Ok(None)
-            };
-            return Ok(Some((res, ath)))
-        }
-        Ok(None)
+        let res = match s.as_str() {
+            "get" => info,
+            "get.mode" => maybe_ok!(info.find(["mode"].into_iter())),
+            "get.res" => maybe_ok!(info.find(["res"].into_iter())),
+            "get.res.txt" => maybe_ok!(info.find(["res", "txt"].into_iter())),
+            "get.res.gfx" => maybe_ok!(info.find(["res", "gfx"].into_iter())),
+            "get.res.min" => maybe_ok!(info.find(["res", "min"].into_iter())),
+            "get.res.min.txt" => maybe_ok!(info.find(["res", "min", "txt"].into_iter())),
+            "get.res.min.gfx" => maybe_ok!(info.find(["res", "min", "gfx"].into_iter())),
+
+            "get.res.max" => maybe_ok!(info.find(["res", "max"].into_iter())),
+            "get.res.max.txt" => maybe_ok!(info.find(["res", "max", "txt"].into_iter())),
+            "get.res.max.gfx" => maybe_ok!(info.find(["res", "max", "gfx"].into_iter())),
+            "get.res.all" => maybe_ok!(info.find(["res", "all"].into_iter())),
+            "get.res.all.txt" => maybe_ok!(info.find(["res", "all", "txt"].into_iter())),
+            "get.res.all.gfx" => maybe_ok!(info.find(["res", "all", "gfx"].into_iter())),
+            _ => return Ok(None)
+        };
+        return Ok(Some((res, ath)))
     })
 }
 

@@ -3,7 +3,7 @@ use spin::Mutex;
 use alloc::boxed::Box;
 use core::fmt::Write;
 
-use crate::{thread};
+use crate::{thread, maybe_ok};
 
 use crate::vnix::core::driver::{CLIErr, DrvErr};
 
@@ -17,7 +17,7 @@ pub const SERV_HELP: &'static str = "Test print service\nExample: abc@test.dump"
 
 pub fn dump_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let task_id = kern.lock().get_task_running();
+        let task_id = maybe_ok!(kern.lock().get_task_running()).id;
         writeln!(kern.lock(), "dump {task_id}: {msg}").map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Clear)))?;
         yield;
 
