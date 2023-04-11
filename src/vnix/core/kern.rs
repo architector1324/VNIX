@@ -256,7 +256,7 @@ impl Kern {
                         if let Some(sig) = grd.tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
                             match sig {
                                 TaskSig::Kill => {
-                                    // writeln!(grd, "DEBG vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                                    writeln!(grd, "INFO vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
                                     grd.tasks_running.drain_filter(|t| t.id == task.id).next();
                                     grd.tasks_signals.drain_filter(|(id, _)| *id == task.id).next();
                                     *done = true

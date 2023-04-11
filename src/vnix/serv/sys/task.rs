@@ -1,9 +1,11 @@
 use core::pin::Pin;
+use core::slice::Iter;
 use core::ops::{Generator, GeneratorState};
 
 use spin::Mutex;
 
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
@@ -12,7 +14,7 @@ use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_f
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::task::{ThreadAsync, TaskRun, TaskSig};
+use crate::vnix::core::task::{ThreadAsync, TaskRun, TaskSig, Task};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
 use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitModify, UnitAs, UnitNew, UnitReadAsync, UnitTypeReadAsync};
 
@@ -262,10 +264,13 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
 
 fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
+        let s = maybe_ok!(msg.as_str());
+
         let info = {
             let task = maybe_ok!(kern.lock().get_task_running());
+            let tasks = kern.lock().get_tasks_running();
 
-            let task_lst = kern.lock().get_tasks_running().into_iter().map(|t| {
+            let task_lst = tasks.iter().map(|t| {
                 Unit::map(&[
                     (Unit::str("id"), Unit::uint(t.id as u32)),
                     (Unit::str("name"), Unit::str(&t.name)),
@@ -273,6 +278,36 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
                     (Unit::str("par.id"), Unit::uint(t.parent_id as u32))
                 ])
             }).collect();
+
+            let task_tree = {
+                fn get_childs(root: &Task, tasks: Iter<Task>) -> Unit {
+                    let childs = tasks.clone().filter_map(|t| {
+                        if t.id != root.id && t.id != root.parent_id && t.parent_id == root.id {
+                            return Some(Unit::map(&[
+                                (Unit::str("id"), Unit::uint(t.id as u32)),
+                                (Unit::str("name"), Unit::str(&t.name)),
+                                (Unit::str("usr"), Unit::str(&t.usr)),
+                                (Unit::str("child"), get_childs(t, tasks.clone()))
+                            ]))
+                        }
+                        None
+                    }).collect::<Vec<_>>();
+
+                    if childs.len() == 0 {
+                        Unit::none()
+                    } else {
+                        Unit::list_share(Rc::new(childs))
+                    }
+                }
+
+                let root = maybe_ok!(tasks.iter().min_by(|a, b| a.id.cmp(&b.id)));
+                Unit::map(&[
+                    (Unit::str("id"), Unit::uint(root.id as u32)),
+                    (Unit::str("name"), Unit::str(&root.name)),
+                    (Unit::str("usr"), Unit::str(&root.usr)),
+                    (Unit::str("child"), get_childs(root, tasks.iter()))
+                ])
+            };
 
             Unit::map(&[
                 (
@@ -285,14 +320,12 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
                     ])
                 ),
                 (Unit::str("all"), Unit::list_share(Rc::new(task_lst))),
-                (Unit::str("tree"), Unit::none())
+                (Unit::str("tree"), task_tree)
             ])
         };
         yield;
 
         // get
-        let s = maybe_ok!(msg.as_str());
-
         let res = match s.as_str() {
             "get" => info,
             "get.run" => maybe_ok!(info.find(["run"].into_iter())),

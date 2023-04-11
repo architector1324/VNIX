@@ -49,6 +49,8 @@ impl Display for Mode {
 
 fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
+        let s = maybe_ok!(msg.as_str());
+
         let info = {
             let mode = kern.lock().term.lock().mode.clone();
             let res_txt = kern.lock().drv.cli.res().map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
@@ -153,8 +155,6 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
         yield;
 
         // get
-        let s = maybe_ok!(msg.as_str());
-
         let res = match s.as_str() {
             "get" => info,
             "get.mode" => maybe_ok!(info.find(["mode"].into_iter())),
