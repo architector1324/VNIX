@@ -61,6 +61,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     //     ]@io.term   
     // }";
     // let s = "(task.stk [cls (load @vid.sonic)@io.store (say done)]@io.term)";
+    // let s = "{say:{a:[1 {b:c} 3] d:-} nice:4 nl:t}@io.term";
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     // run

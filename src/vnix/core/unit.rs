@@ -199,6 +199,9 @@ pub trait UnitParse<'a, T: 'a, I> {
 pub struct DisplayStr(pub Unit);
 
 #[derive(Debug, Clone)]
+pub struct DisplayNice(pub usize, pub usize, pub Unit);
+
+#[derive(Debug, Clone)]
 pub struct DisplayShort(pub usize, pub Unit);
 
 pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
@@ -546,6 +549,34 @@ impl Display for DisplayShort {
                 };
                 write!(f, "{{{}{}}}", map.iter().map(|(u0, u1)| format!("{}:{}", DisplayShort(self.0, u0.clone()), DisplayShort(self.0, u1.clone()))).take(self.0).collect::<Vec<_>>().join(" "), end)
             }
+        }
+    }
+}
+
+impl Display for DisplayNice {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.2.0.as_ref() {
+            UnitType::None => write!(f, "-"),
+            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitType::Int(v) => write!(f, "{}", v.0),
+            UnitType::Dec(v) =>
+                match v.to_small() {
+                    Some(v) => write!(f, "{v}"),
+                    None => write!(f, "{}", v.0) // FIXME: use `<i>.<i>` format
+                }
+            UnitType::Str(s) => {
+                if s.as_str().chars().all(char_no_quoted) {
+                    write!(f, "{}", s.replace("\n", "\\n").replace("\r", "\\r"))
+                } else {
+                    write!(f, "`{}`", s.replace("\n", "\\n").replace("\r", "\\r"))
+                }
+            },
+            UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
+            UnitType::Stream(msg, serv, addr) => write!(f, "{msg}@{serv}:{addr}"),
+            UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
+            UnitType::List(lst) => write!(f, "[\n{}\n{}]", lst.iter().map(|u| format!("{}{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
+            UnitType::Map(map) => write!(f, "{{\n{}\n{}}}", map.iter().map(|(u0, u1)| format!("{}{}:{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u0.clone()), DisplayNice(self.0 + 1, self.1, u1.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
         }
     }
 }

@@ -320,7 +320,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // say command
-        if let Some(_ath) = thread_await!(text::say(false, false, None, ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = thread_await!(text::say(false, false, None, None, ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;

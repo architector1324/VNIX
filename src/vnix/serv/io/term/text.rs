@@ -14,7 +14,7 @@ use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::driver::{TermKey, DrvErr};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, DisplayShort, UnitTypeReadAsync};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, DisplayShort, DisplayNice, UnitTypeReadAsync};
 
 use crate::{thread, thread_await, as_async, maybe, read_async, as_map_find_as_async, maybe_ok};
 
@@ -53,15 +53,15 @@ pub fn nl(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thread
     })
 }
 
-pub fn say(nl: bool, fmt: bool, shrt: Option<usize>, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
+pub fn say(nl: bool, fmt: bool, shrt: Option<usize>, nice: Option<usize>, mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
     thread!({
         if let Some((s, msg)) = msg.clone().as_pair() {
             if let Some((s, ath)) = as_async!(s, as_str, ath, orig, kern)? {
                 match s.as_str() {
                     // (say <unit>)
-                    "say" => return thread_await!(say(false, false, None, ath, orig, msg, kern)),
+                    "say" => return thread_await!(say(false, false, None, None, ath, orig, msg, kern)),
                     // (say.fmt [<unit> ..])
-                    "say.fmt" => return thread_await!(say(false, true, None, ath, orig, msg, kern)),
+                    "say.fmt" => return thread_await!(say(false, true, None, None, ath, orig, msg, kern)),
                     _ => ()
                 }
             }
@@ -83,7 +83,14 @@ pub fn say(nl: bool, fmt: bool, shrt: Option<usize>, mut ath: Rc<String>, orig: 
                 None
             };
 
-            return thread_await!(say(nl, false, shrt, ath, orig, _msg, kern))
+            let nice = if let Some((nice, _ath)) = as_map_find_as_async!(msg, "nice", as_uint, ath, orig, kern)? {
+                ath = _ath;
+                Some(nice as usize)
+            } else {
+                None
+            };
+
+            return thread_await!(say(nl, false, shrt, nice, ath, orig, _msg, kern))
         }
 
         // {say.fmt:[<unit> ..] nl:<t|f> shrt:<uint>}
@@ -102,7 +109,14 @@ pub fn say(nl: bool, fmt: bool, shrt: Option<usize>, mut ath: Rc<String>, orig: 
                 None
             };
 
-            return thread_await!(say(nl, true, shrt, ath, orig, Unit::list_share(lst), kern))
+            let nice = if let Some((nice, _ath)) = as_map_find_as_async!(msg, "nice", as_uint, ath, orig, kern)? {
+                ath = _ath;
+                Some(nice as usize)
+            } else {
+                None
+            };
+
+            return thread_await!(say(nl, true, shrt, nice, ath, orig, Unit::list_share(lst), kern))
         }
 
         // <unit>
@@ -129,7 +143,11 @@ pub fn say(nl: bool, fmt: bool, shrt: Option<usize>, mut ath: Rc<String>, orig: 
 
                 match shrt {
                     Some(shrt) => format!("{}", DisplayShort(shrt, msg)),
-                    None => format!("{}", DisplayStr(msg))
+                    None =>
+                        match nice {
+                            Some(nice) => format!("{}", DisplayNice(0, nice, msg)),
+                            None => format!("{}", DisplayStr(msg))
+                    }
                 }
             } else {
                 return Ok(Some(ath))
