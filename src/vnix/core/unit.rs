@@ -36,7 +36,7 @@ pub struct Dec(pub Rc<BigRational>);
 pub type Path = Vec<String>;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum UnitType {
+pub enum UnitBase {
     None,
     Bool(bool),
     Byte(u8),
@@ -51,7 +51,7 @@ pub enum UnitType {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Unit(Rc<UnitType>);
+pub struct Unit(Rc<UnitBase>);
 
 #[derive(Debug, Clone)]
 pub enum UnitBin {
@@ -268,15 +268,15 @@ pub trait UnitModify {
 
 impl UnitNew for Unit {
     fn none() -> Unit {
-        Unit::new(UnitType::None)
+        Unit::new(UnitBase::None)
     }
 
     fn bool(v: bool) -> Unit {
-        Unit::new(UnitType::Bool(v))
+        Unit::new(UnitBase::Bool(v))
     }
 
     fn byte(v: u8) -> Unit {
-        Unit::new(UnitType::Byte(v))
+        Unit::new(UnitBase::Byte(v))
     }
 
     fn int(v: i32) -> Unit {
@@ -292,7 +292,7 @@ impl UnitNew for Unit {
     }
 
     fn int_share(v: Rc<BigInt>) -> Unit {
-        Unit::new(UnitType::Int(Int(v)))
+        Unit::new(UnitBase::Int(Int(v)))
     }
 
     fn dec(v: f32) -> Unit {
@@ -305,74 +305,74 @@ impl UnitNew for Unit {
     }
 
     fn dec_share(v: Rc<BigRational>) -> Unit {
-        Unit::new(UnitType::Dec(Dec(v)))
+        Unit::new(UnitBase::Dec(Dec(v)))
     }
 
     fn str(s: &str) -> Unit {
-        Unit::new(UnitType::Str(Rc::new(s.into())))
+        Unit::new(UnitBase::Str(Rc::new(s.into())))
     }
 
     fn str_share(s: Rc<String>) -> Unit {
-        Unit::new(UnitType::Str(s))
+        Unit::new(UnitBase::Str(s))
     }
 
     fn path(path: &[&str]) -> Unit {
-        Unit::new(UnitType::Ref(Rc::new(path.into_iter().cloned().map(|s| format!("{s}")).collect())))
+        Unit::new(UnitBase::Ref(Rc::new(path.into_iter().cloned().map(|s| format!("{s}")).collect())))
     }
 
     fn path_share(path: Rc<Vec<String>>) -> Unit {
-        Unit::new(UnitType::Ref(path))
+        Unit::new(UnitBase::Ref(path))
     }
 
     fn stream_loc(u: Unit, serv: &str) -> Unit {
-        Unit::new(UnitType::Stream(u, Rc::new(serv.into()), Rc::new(Addr::Local)))
+        Unit::new(UnitBase::Stream(u, Rc::new(serv.into()), Rc::new(Addr::Local)))
     }
 
     fn stream(u: Unit, serv: &str, addr: Addr) -> Unit {
-        Unit::new(UnitType::Stream(u, Rc::new(serv.into()), Rc::new(addr)))
+        Unit::new(UnitBase::Stream(u, Rc::new(serv.into()), Rc::new(addr)))
     }
 
     fn pair(u0: Unit, u1: Unit) -> Unit {
-        Unit::new(UnitType::Pair(u0, u1))
+        Unit::new(UnitBase::Pair(u0, u1))
     }
 
     fn list(lst: &[Unit]) -> Unit {
-        Unit::new(UnitType::List(Rc::new(lst.to_vec())))
+        Unit::new(UnitBase::List(Rc::new(lst.to_vec())))
     }
 
     fn list_share(lst: Rc<Vec<Unit>>) -> Unit {
-        Unit::new(UnitType::List(lst))
+        Unit::new(UnitBase::List(lst))
     }
 
     fn map(map: &[(Unit, Unit)]) -> Unit {
-        Unit::new(UnitType::Map(Rc::new(map.to_vec())))
+        Unit::new(UnitBase::Map(Rc::new(map.to_vec())))
     }
 }
 
 impl UnitAs for Unit {
     fn as_none(self) -> Option<()> {
-        if let UnitType::None = self.0.as_ref() {
+        if let UnitBase::None = self.0.as_ref() {
             return Some(())
         }
         None
     }
 
     fn as_bool(self) -> Option<bool> {
-        if let UnitType::Bool(v) = self.0.as_ref() {
+        if let UnitBase::Bool(v) = self.0.as_ref() {
             return Some(*v)
         }
         None
     }
 
     fn as_byte(self) -> Option<u8> {
-        if let UnitType::Byte(v) = self.0.as_ref() {
+        if let UnitBase::Byte(v) = self.0.as_ref() {
             return Some(*v)
         }
         None
     }
 
     fn as_int(self) -> Option<i32> {
-        if let UnitType::Int(v) = self.0.as_ref() {
+        if let UnitBase::Int(v) = self.0.as_ref() {
             if let Some(v) = v.to_small() {
                 return Some(v)
             }
@@ -381,7 +381,7 @@ impl UnitAs for Unit {
     }
 
     fn as_uint(self) -> Option<u32> {
-        if let UnitType::Int(v) = self.0.as_ref() {
+        if let UnitBase::Int(v) = self.0.as_ref() {
             if let Some(v) = v.to_nat() {
                 return Some(v)
             }
@@ -390,14 +390,14 @@ impl UnitAs for Unit {
     }
 
     fn as_int_big(self) -> Option<Rc<BigInt>> {
-        if let UnitType::Int(v) = self.0.as_ref() {
+        if let UnitBase::Int(v) = self.0.as_ref() {
             return Some(v.0.clone())
         }
         None
     }
 
     fn as_dec(self) -> Option<f32> {
-        if let UnitType::Dec(v) = self.0.as_ref() {
+        if let UnitBase::Dec(v) = self.0.as_ref() {
             if let Some(v) = v.to_small() {
                 return Some(v)
             }
@@ -406,56 +406,56 @@ impl UnitAs for Unit {
     }
 
     fn as_dec_big(self) -> Option<Rc<BigRational>> {
-        if let UnitType::Dec(v) = self.0.as_ref() {
+        if let UnitBase::Dec(v) = self.0.as_ref() {
             return Some(v.0.clone())
         }
         None
     }
 
     fn as_str(self) -> Option<Rc<String>> {
-        if let UnitType::Str(s) = self.0.as_ref() {
+        if let UnitBase::Str(s) = self.0.as_ref() {
             return Some(s.clone())
         }
         None
     }
 
     fn as_path(self) -> Option<Rc<Path>> {
-        if let UnitType::Ref(path) = self.0.as_ref() {
+        if let UnitBase::Ref(path) = self.0.as_ref() {
             return Some(path.clone())
         }
         None
     }
 
     fn as_stream(self) -> Option<(Unit, String, Addr)> {
-        if let UnitType::Stream(u, serv, addr) = self.0.as_ref() {
+        if let UnitBase::Stream(u, serv, addr) = self.0.as_ref() {
             return Some((u.clone(), Rc::unwrap_or_clone(serv.clone()), Rc::unwrap_or_clone(addr.clone())))
         }
         None
     }
 
     fn as_pair(self) -> Option<(Unit, Unit)> {
-        if let UnitType::Pair(u0, u1) = self.0.as_ref() {
+        if let UnitBase::Pair(u0, u1) = self.0.as_ref() {
             return Some((u0.clone(), u1.clone()))
         }
         None
     }
 
     fn as_list(self) -> Option<Rc<Vec<Unit>>> {
-        if let UnitType::List(lst) = self.0.as_ref() {
+        if let UnitBase::List(lst) = self.0.as_ref() {
             return Some(lst.clone())
         }
         None
     }
 
     fn as_map(self) -> Option<Rc<Vec<(Unit, Unit)>>> {
-        if let UnitType::Map(map) = self.0.as_ref() {
+        if let UnitBase::Map(map) = self.0.as_ref() {
             return Some(map.clone())
         }
         None
     }
 
     fn as_map_find(self, sch: &str) -> Option<Unit> {
-        if let UnitType::Map(map) = self.0.as_ref() {
+        if let UnitBase::Map(map) = self.0.as_ref() {
             return map.iter()
                 .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
                 .find_map(|(s, u)| {
@@ -473,8 +473,8 @@ impl UnitReadAsyncI for Unit {
     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
         thread!({
             match self.0.as_ref() {
-                UnitType::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
-                UnitType::Stream(msg, serv, _addr) => {
+                UnitBase::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
+                UnitBase::Stream(msg, serv, _addr) => {
                     let run = TaskRun(msg.clone(), Rc::unwrap_or_clone(serv.clone()));
                     let id = kern.lock().reg_task(&ath, "unit.read", run)?;
 
@@ -505,7 +505,7 @@ fn char_no_quoted(c: char) -> bool {
 impl Display for DisplayStr {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.0.0.as_ref() {
-            UnitType::Str(s) => write!(f, "{}", s.replace("\\n", "\n").replace("\\r", "\r")),
+            UnitBase::Str(s) => write!(f, "{}", s.replace("\\n", "\n").replace("\\r", "\r")),
             _ => write!(f, "{}", self.0)
         }
     }
@@ -514,26 +514,26 @@ impl Display for DisplayStr {
 impl Display for DisplayShort {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.1.0.as_ref() {
-            UnitType::None => write!(f, "-"),
-            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
-            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
-            UnitType::Int(v) => write!(f, "{}", self.shrt(format!("{}", v.0))),
-            UnitType::Dec(v) =>
+            UnitBase::None => write!(f, "-"),
+            UnitBase::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitBase::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitBase::Int(v) => write!(f, "{}", self.shrt(format!("{}", v.0))),
+            UnitBase::Dec(v) =>
                 match v.to_small() {
                     Some(v) => write!(f, "{v}"),
                     None => write!(f, "{}", self.shrt(format!("{}", v.0))) // FIXME: use `<i>.<i>` format
                 }
-            UnitType::Str(s) => {
+            UnitBase::Str(s) => {
                 if s.as_str().chars().all(char_no_quoted) {
                     write!(f, "{}", self.shrt(Rc::unwrap_or_clone(s.clone())))
                 } else {
                     write!(f, "`{}`", self.shrt(Rc::unwrap_or_clone(s.clone())))
                 }
             },
-            UnitType::Ref(path) => write!(f, "@{}", self.shrt(path.join("."))),
-            UnitType::Stream(msg, serv, addr) => write!(f, "{}@{serv}:{addr}", DisplayShort(self.0, msg.clone())),
-            UnitType::Pair(u0, u1) => write!(f, "({} {})", DisplayShort(self.0, u0.clone()), DisplayShort(self.0, u1.clone())),
-            UnitType::List(lst) => {
+            UnitBase::Ref(path) => write!(f, "@{}", self.shrt(path.join("."))),
+            UnitBase::Stream(msg, serv, addr) => write!(f, "{}@{serv}:{addr}", DisplayShort(self.0, msg.clone())),
+            UnitBase::Pair(u0, u1) => write!(f, "({} {})", DisplayShort(self.0, u0.clone()), DisplayShort(self.0, u1.clone())),
+            UnitBase::List(lst) => {
                 let end = if lst.len() > self.0 {
                     " .."
                 } else {
@@ -541,7 +541,7 @@ impl Display for DisplayShort {
                 };
                 write!(f, "[{}{}]", lst.iter().map(|u| format!("{}", DisplayShort(self.0, u.clone()))).take(self.0).collect::<Vec<_>>().join(" "), end)
             },
-            UnitType::Map(map) => {
+            UnitBase::Map(map) => {
                 let end = if map.len() > self.0 {
                     " .."
                 } else {
@@ -556,27 +556,27 @@ impl Display for DisplayShort {
 impl Display for DisplayNice {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.2.0.as_ref() {
-            UnitType::None => write!(f, "-"),
-            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
-            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
-            UnitType::Int(v) => write!(f, "{}", v.0),
-            UnitType::Dec(v) =>
+            UnitBase::None => write!(f, "-"),
+            UnitBase::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitBase::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitBase::Int(v) => write!(f, "{}", v.0),
+            UnitBase::Dec(v) =>
                 match v.to_small() {
                     Some(v) => write!(f, "{v}"),
                     None => write!(f, "{}", v.0) // FIXME: use `<i>.<i>` format
                 }
-            UnitType::Str(s) => {
+            UnitBase::Str(s) => {
                 if s.as_str().chars().all(char_no_quoted) {
                     write!(f, "{}", s.replace("\n", "\\n").replace("\r", "\\r"))
                 } else {
                     write!(f, "`{}`", s.replace("\n", "\\n").replace("\r", "\\r"))
                 }
             },
-            UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
-            UnitType::Stream(msg, serv, addr) => write!(f, "{}@{serv}:{addr}", DisplayNice(self.0, self.1, msg.clone())),
-            UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
-            UnitType::List(lst) => write!(f, "[\n{}\n{}]", lst.iter().map(|u| format!("{}{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
-            UnitType::Map(map) => write!(f, "{{\n{}\n{}}}", map.iter().map(|(u0, u1)| format!("{}{}:{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u0.clone()), DisplayNice(self.0 + 1, self.1, u1.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
+            UnitBase::Ref(path) => write!(f, "@{}", path.join(".")),
+            UnitBase::Stream(msg, serv, addr) => write!(f, "{}@{serv}:{addr}", DisplayNice(self.0, self.1, msg.clone())),
+            UnitBase::Pair(u0, u1) => write!(f, "({u0} {u1})"),
+            UnitBase::List(lst) => write!(f, "[\n{}\n{}]", lst.iter().map(|u| format!("{}{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
+            UnitBase::Map(map) => write!(f, "{{\n{}\n{}}}", map.iter().map(|(u0, u1)| format!("{}{}:{}", " ".repeat(self.1 * (self.0 + 1)), DisplayNice(self.0 + 1, self.1, u0.clone()), DisplayNice(self.0 + 1, self.1, u1.clone()))).collect::<Vec<_>>().join("\n"), " ".repeat(self.1 * (self.0))),
         }
     }
 }
@@ -584,27 +584,27 @@ impl Display for DisplayNice {
 impl Display for Unit {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.0.as_ref() {
-            UnitType::None => write!(f, "-"),
-            UnitType::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
-            UnitType::Byte(v) => write!(f, "{:#02x}", *v),
-            UnitType::Int(v) => write!(f, "{}", v.0),
-            UnitType::Dec(v) =>
+            UnitBase::None => write!(f, "-"),
+            UnitBase::Bool(v) => write!(f, "{}", if *v {"t"} else {"f"}),
+            UnitBase::Byte(v) => write!(f, "{:#02x}", *v),
+            UnitBase::Int(v) => write!(f, "{}", v.0),
+            UnitBase::Dec(v) =>
                 match v.to_small() {
                     Some(v) => write!(f, "{v}"),
                     None => write!(f, "{}", v.0) // FIXME: use `<i>.<i>` format
                 }
-            UnitType::Str(s) => {
+            UnitBase::Str(s) => {
                 if s.as_str().chars().all(char_no_quoted) {
                     write!(f, "{}", s.replace("\n", "\\n").replace("\r", "\\r"))
                 } else {
                     write!(f, "`{}`", s.replace("\n", "\\n").replace("\r", "\\r"))
                 }
             },
-            UnitType::Ref(path) => write!(f, "@{}", path.join(".")),
-            UnitType::Stream(msg, serv, addr) => write!(f, "{msg}@{serv}:{addr}"),
-            UnitType::Pair(u0, u1) => write!(f, "({u0} {u1})"),
-            UnitType::List(lst) => write!(f, "[{}]", lst.iter().map(|u| format!("{u}")).collect::<Vec<_>>().join(" ")),
-            UnitType::Map(map) => write!(f, "{{{}}}", map.iter().map(|(u0, u1)| format!("{u0}:{u1}")).collect::<Vec<_>>().join(" ")),
+            UnitBase::Ref(path) => write!(f, "@{}", path.join(".")),
+            UnitBase::Stream(msg, serv, addr) => write!(f, "{msg}@{serv}:{addr}"),
+            UnitBase::Pair(u0, u1) => write!(f, "({u0} {u1})"),
+            UnitBase::List(lst) => write!(f, "[{}]", lst.iter().map(|u| format!("{u}")).collect::<Vec<_>>().join(" ")),
+            UnitBase::Map(map) => write!(f, "{{{}}}", map.iter().map(|(u0, u1)| format!("{u0}:{u1}")).collect::<Vec<_>>().join(" ")),
         }
     }
 }
@@ -612,31 +612,31 @@ impl Display for Unit {
 impl PartialOrd for Unit {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         match self.0.as_ref() {
-            UnitType::Bool(a) =>
+            UnitBase::Bool(a) =>
                 match other.0.as_ref() {
-                    UnitType::Bool(b) => a.partial_cmp(b),
+                    UnitBase::Bool(b) => a.partial_cmp(b),
                     _ => None
                 },
-            UnitType::Byte(a) =>
+            UnitBase::Byte(a) =>
                 match other.0.as_ref() {
-                    UnitType::Byte(b) => a.partial_cmp(b),
+                    UnitBase::Byte(b) => a.partial_cmp(b),
                     _ => None
                 },
-            UnitType::Int(a) =>
+            UnitBase::Int(a) =>
                 match other.0.as_ref() {
-                    UnitType::Int(b) => a.partial_cmp(b),
-                    UnitType::Dec(b) => a.0.as_ref().partial_cmp(&b.0.to_integer()),
+                    UnitBase::Int(b) => a.partial_cmp(b),
+                    UnitBase::Dec(b) => a.0.as_ref().partial_cmp(&b.0.to_integer()),
                     _ => None
                 },
-            UnitType::Dec(a) =>
+            UnitBase::Dec(a) =>
             match other.0.as_ref() {
-                UnitType::Dec(b) => a.partial_cmp(b),
-                UnitType::Int(b) => a.0.to_integer().partial_cmp(b.0.as_ref()),
+                UnitBase::Dec(b) => a.partial_cmp(b),
+                UnitBase::Int(b) => a.0.to_integer().partial_cmp(b.0.as_ref()),
                 _ => None
             },
-            UnitType::Str(a) =>
+            UnitBase::Str(a) =>
                 match other.0.as_ref() {
-                    UnitType::Str(b) => {
+                    UnitBase::Str(b) => {
                         let a = a.chars().next()?;
                         let b = b.chars().next()?;
                         a.partial_cmp(&b)
@@ -651,10 +651,10 @@ impl PartialOrd for Unit {
 impl UnitAsBytes for Unit {
     fn as_bytes(self) -> Vec<u8> {
         match self.0.as_ref() {
-            UnitType::None => vec![UnitBin::None as u8],
-            UnitType::Bool(v) => vec![UnitBin::Bool as u8, if *v {1} else {0}],
-            UnitType::Byte(v) => vec![UnitBin::Byte as u8, *v],
-            UnitType::Int(v) => {
+            UnitBase::None => vec![UnitBin::None as u8],
+            UnitBase::Bool(v) => vec![UnitBin::Bool as u8, if *v {1} else {0}],
+            UnitBase::Byte(v) => vec![UnitBin::Byte as u8, *v],
+            UnitBase::Int(v) => {
                 if v.0.is_zero() {
                     return vec![UnitBin::Zero as u8]
                 }
@@ -687,7 +687,7 @@ impl UnitAsBytes for Unit {
                     .chain(b)
                     .collect()
             },
-            UnitType::Dec(v) =>
+            UnitBase::Dec(v) =>
                 match v.to_small() {
                     Some(v) => [UnitBin::Dec as u8].into_iter().chain(v.to_le_bytes()).collect(),
                     None => {
@@ -706,7 +706,7 @@ impl UnitAsBytes for Unit {
                             .collect()
                     }
                 },
-            UnitType::Str(s) => {
+            UnitBase::Str(s) => {
                 let len = s.len();
                 let len_b = (s.len() as u32).to_le_bytes();
 
@@ -721,7 +721,7 @@ impl UnitAsBytes for Unit {
                 .chain(s.as_bytes().into_iter().cloned())
                 .collect()
             },
-            UnitType::Ref(path) => {
+            UnitBase::Ref(path) => {
                 let s = path.join(".");
 
                 [UnitBin::Ref as u8].into_iter()
@@ -729,7 +729,7 @@ impl UnitAsBytes for Unit {
                 .chain(s.as_bytes().into_iter().cloned())
                 .collect()
             },
-            UnitType::Stream(msg, serv, addr) => [UnitBin::Stream as u8].into_iter()
+            UnitBase::Stream(msg, serv, addr) => [UnitBin::Stream as u8].into_iter()
                 .chain(msg.clone().as_bytes())
                 .chain((serv.len() as u32).to_le_bytes())
                 .chain(serv.as_bytes().into_iter().cloned())
@@ -737,7 +737,7 @@ impl UnitAsBytes for Unit {
                     Addr::Local => vec![UnitBin::AddrLoc as u8],
                     Addr::Remote(addr) => [UnitBin::AddrRemote as u8].into_iter().chain(addr.into_iter().flat_map(|e| e.to_le_bytes())).collect::<Vec<u8>>()
                 }).collect(),
-            UnitType::Pair(u0, u1) => {
+            UnitBase::Pair(u0, u1) => {
                 if let Some((u0, u1)) = u0.clone().as_uint().and_then(|u0| Some((u0, u1.clone().as_uint()?))) {
                     if u1 <= 16777215 {
                         let u0_b = u0.to_le_bytes().into_iter();
@@ -756,7 +756,7 @@ impl UnitAsBytes for Unit {
                 .chain(u1.clone().as_bytes())
                 .collect()
             }
-            UnitType::List(lst) => {
+            UnitBase::List(lst) => {
                 let len = lst.len();
                 let len_b = (lst.len() as u32).to_le_bytes();
 
@@ -771,7 +771,7 @@ impl UnitAsBytes for Unit {
                 .chain(lst.iter().flat_map(|u| u.clone().as_bytes()))
                 .collect()
             },
-            UnitType::Map(map) => {
+            UnitBase::Map(map) => {
                 let len = map.len();
                 let len_b = (map.len() as u32).to_le_bytes();
 
@@ -1583,17 +1583,17 @@ impl UnitModify for Unit {
         };
 
         match self.0.as_ref() {
-            UnitType::Pair(u0, u1) =>
+            UnitBase::Pair(u0, u1) =>
                 match step.parse::<usize>().ok()? {
                     0 => u0.find(path),
                     1 => u1.find(path),
                     _ => None
                 },
-            UnitType::List(lst) => {
+            UnitBase::List(lst) => {
                 let idx = step.parse::<usize>().ok()?;
                 lst.get(idx).map(|u| u.find(path)).flatten()
             },
-            UnitType::Map(map) => map.iter()
+            UnitBase::Map(map) => map.iter()
                 .filter_map(|(u0, u1)| Some((u0.clone().as_str()?, u1.clone())))
                 .find_map(|(s, u)| {
                     if s.as_str() == step {
@@ -1613,13 +1613,13 @@ impl UnitModify for Unit {
         };
 
         match self.0.as_ref() {
-            UnitType::Pair(u0, u1) =>
+            UnitBase::Pair(u0, u1) =>
                 match step.parse::<usize>().ok()? {
                     0 => Some(Unit::pair(u0.clone().replace(path, what)?, u1.clone())),
                     1 => Some(Unit::pair(u0.clone(), u1.clone().replace(path, what)?)),
                     _ => None
                 },
-            UnitType::List(lst) => {
+            UnitBase::List(lst) => {
                 let idx = step.parse::<usize>().ok()?;
                 if idx >= lst.len() {
                     return None;
@@ -1633,7 +1633,7 @@ impl UnitModify for Unit {
                 }).collect::<Option<Vec<_>>>()?;
                 Some(Unit::list(&lst))
             },
-            UnitType::Map(map) => {
+            UnitBase::Map(map) => {
                 if let None = map.iter().filter_map(|(u0, _)| u0.clone().as_str()).find(|s| Rc::unwrap_or_clone(s.clone()) == step) {
                     return None
                 }
@@ -1669,9 +1669,9 @@ impl UnitModify for Unit {
         }
 
         match self.0.as_ref() {
-            UnitType::List(lst) => {
+            UnitBase::List(lst) => {
                 let lst = match what.0.as_ref() {
-                    UnitType::List(w_lst) => {
+                    UnitBase::List(w_lst) => {
                         let mut lst = Rc::unwrap_or_clone(lst.clone());
                         lst.extend(Rc::unwrap_or_clone(w_lst.clone()));
                         lst
@@ -1684,14 +1684,14 @@ impl UnitModify for Unit {
                 };
                 Unit::list(&lst)
             },
-            UnitType::Map(map) => {
+            UnitBase::Map(map) => {
                 let map = match what.0.as_ref() {
-                    UnitType::Pair(u0, u1) => {
+                    UnitBase::Pair(u0, u1) => {
                         let mut map = Rc::unwrap_or_clone(map.clone());
                         map.push((u0.clone(), u1.clone()));
                         map
                     },
-                    UnitType::Map(w_map) => {
+                    UnitBase::Map(w_map) => {
                         let mut w_map = Rc::unwrap_or_clone(w_map.clone());
                         let mut map = Rc::unwrap_or_clone(map.clone()).into_iter()
                             .map(|(u0, u1)| {
@@ -1750,25 +1750,33 @@ impl Dec {
 }
 
 impl Unit {
-    fn new(t: UnitType) -> Unit {
+    fn new(t: UnitBase) -> Unit {
         Unit(Rc::new(t))
     }
 
-    pub fn as_ptr(&self) -> *const UnitType {
+    pub fn share(t: Rc<UnitBase>) -> Unit {
+        Unit(t)
+    }
+
+    pub fn get_base(&self) -> Rc<UnitBase> {
+        self.0.clone()
+    }
+
+    pub fn as_ptr(&self) -> *const UnitBase {
         Rc::as_ptr(&self.0)
     }
 
     pub fn size(&self, units: MemSizeUnits) -> usize {
-        let size = core::mem::size_of::<UnitType>() + match self.0.as_ref() {
-            UnitType::None | UnitType::Bool(..) | UnitType::Byte(..) => 0,
-            UnitType::Int(v) => v.0.to_bytes_le().1.len(),
-            UnitType::Dec(v) => v.0.numer().to_bytes_le().1.len() + v.0.denom().to_bytes_le().1.len(),
-            UnitType::Str(s) => s.len(),
-            UnitType::Ref(path) => path.iter().fold(0, |prev, s| prev + s.len()),
-            UnitType::Stream(msg, serv, _addr) => msg.size(MemSizeUnits::Bytes) + serv.len(),
-            UnitType::Pair(u0, u1) => u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes),
-            UnitType::List(lst) => lst.iter().fold(0, |prev, u| prev + u.size(MemSizeUnits::Bytes)),
-            UnitType::Map(map) => map.iter().fold(0, |prev, (u0, u1)| prev + u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes))
+        let size = core::mem::size_of::<UnitBase>() + match self.0.as_ref() {
+            UnitBase::None | UnitBase::Bool(..) | UnitBase::Byte(..) => 0,
+            UnitBase::Int(v) => v.0.to_bytes_le().1.len(),
+            UnitBase::Dec(v) => v.0.numer().to_bytes_le().1.len() + v.0.denom().to_bytes_le().1.len(),
+            UnitBase::Str(s) => s.len(),
+            UnitBase::Ref(path) => path.iter().fold(0, |prev, s| prev + s.len()),
+            UnitBase::Stream(msg, serv, _addr) => msg.size(MemSizeUnits::Bytes) + serv.len(),
+            UnitBase::Pair(u0, u1) => u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes),
+            UnitBase::List(lst) => lst.iter().fold(0, |prev, u| prev + u.size(MemSizeUnits::Bytes)),
+            UnitBase::Map(map) => map.iter().fold(0, |prev, (u0, u1)| prev + u0.size(MemSizeUnits::Bytes) + u1.size(MemSizeUnits::Bytes))
         };
 
         match units {

@@ -134,7 +134,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         writeln!(kern, "INFO vnix: load `vnix.store` storage").unwrap();
 
         if let Some(store) = load_store(image, st.unsafe_clone()) {
-            kern.ram_store.data = store;
+            kern.ram_store.data = kern.new_unit(store);
         } else {
             println!("ERR loader: store not available");
             return Status::ABORTED;
