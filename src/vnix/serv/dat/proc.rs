@@ -383,6 +383,42 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
     })
 }
 
+fn first_last(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        let (u, ath) = match s.as_str() {
+            "fst" => {
+                let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
+                let u = if let Some(lst) = dat.clone().as_list() {
+                    maybe_ok!(lst.get(0).cloned())
+                } else if let Some((a, _)) = dat.as_pair() {
+                    a
+                } else {
+                    return Ok(None)
+                };
+                (u, ath)
+            },
+            "last" => {
+                let (dat, ath) = maybe!(read_async!(dat, ath, orig, kern));
+
+                let u = if let Some(lst) = dat.clone().as_list() {
+                    maybe_ok!(lst.iter().last().cloned())
+                } else if let Some((_, b)) = dat.as_pair() {
+                    b
+                } else {
+                    return Ok(None)
+                };
+                (u, ath)
+            },
+            _ => return Ok(None)
+        };
+        Ok(Some((u, ath)))
+    })
+}
+
 fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Rc<String>> {
     thread!({
         let (s, dat) = maybe_ok!(msg.as_pair());
@@ -619,6 +655,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // get
         if let Some((msg, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // first/last
+        if let Some((msg, ath)) = thread_await!(first_last(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
