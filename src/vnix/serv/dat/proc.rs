@@ -419,6 +419,24 @@ fn first_last(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Uni
     })
 }
 
+fn take(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Unit>> {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "take" {
+            return Ok(None)
+        }
+
+        let ((count, lst), ath) = maybe!(as_async!(dat, as_pair, ath, orig, kern));
+        let (count, ath) = maybe!(as_async!(count, as_uint, ath, orig, kern));
+        let (lst, ath) = maybe!(as_async!(lst, as_list, ath, orig, kern));
+
+        let res = lst.iter().take(count as usize).cloned().collect::<Vec<_>>();
+        Ok(Some((res, ath)))
+    })
+}
+
 fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Rc<String>> {
     thread!({
         let (s, dat) = maybe_ok!(msg.as_pair());
@@ -649,6 +667,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((keys, ath)) = thread_await!(keys(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::list(&keys))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // take
+        if let Some((res, ath)) = thread_await!(take(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), Unit::list(&res))
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
