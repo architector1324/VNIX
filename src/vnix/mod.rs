@@ -31,6 +31,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
         (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
         (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::echo_hlr) as Box<ServHlr>),
+        (test::void::SERV_PATH, test::void::SERV_HELP, Box::new(test::void::void_hlr) as Box<ServHlr>)
     ];
 
     for (name, help, hlr) in services {
