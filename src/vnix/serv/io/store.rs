@@ -16,7 +16,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeReadAsync, UnitReadAsync};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitParse, UnitModify, UnitReadAsyncI, UnitTypeReadAsync, UnitReadAsync};
 
 
 pub const SERV_PATH: &'static str = "io.store";
@@ -83,20 +83,74 @@ fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Disk units storage service\nExample: {save:`Some beautiful text` out:@txt.doc}@io.store # save text to `txt.doc` path\n(load @txt.doc)@io.store")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+
+        let help_s = "{
+            name:io.store
+            info:`Service for managing units disk storage`
+            tut:[
+                {
+                    info:`Load unit from storage`
+                    com:(load @txt.hello)@io.store
+                    res:`Hello, vnix!`
+                }
+                {
+                    info:`Load whole storage as unit`
+                    com:load@io.store
+                    res:`are u serious? :)`
+                }
+                {
+                    info:`Save text to storage`
+                    com:{save:abc out:@txt.test}@io.store
+                }
+                {
+                    info:`Get unit size in kb. from storage`
+                    com:(get.size.kb @img.vnix.logo)@io.store
+                    res:6
+                }
+            ]
+            man:{
+                load:{
+                    info:`Load unit from storage`
+                    schm:[
+                        load
+                        (load @path)
+                    ]
+                    tut:[@tut.0 @tut.1]
+                }
+                save:{
+                    info:`Save unit to storage`
+                    schm:[
+                        (save (unit @path))
+                        {save:unit out:@path}
+                    ]
+                    tut:@tut.2
+                }
+                get.size:{
+                    info:`Get unit size in bytes from storage`
+                    units:[kb mb gb]
+                    schm:[
+                        `get.size.<units>`
+                        (`get.size.<units>` @path)
+                    ]
+                    tut:@tut.3
+                }
+            }
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
