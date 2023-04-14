@@ -152,18 +152,18 @@ prompt: abc
 abc
 ```
 
-3. We can deserialize string to **unit** with `dser.str` command sended to `dat.proc` service:
+3. We can deserialize string to **unit** with `prs.str` command sended to `dat.proc` service:
 ```bash
-λ (dser.str `{a:b}`)@dat.proc
+λ (prs.str `{a:b}`)@dat.proc
 {a:b}
-λ {dser.str:`123`}@dat.proc
+λ {prs.str:`123`}@dat.proc
 123
 ```
 
 4. Let's put all together:
 
 ```bash
-λ {neg:(dser.str (inp `num:`)@io.term)@dat.proc}@math.calc
+λ {neg:(prs.str (inp `num:`)@io.term)@dat.proc}@math.calc
 num:5
 -5
 ```
@@ -180,7 +180,7 @@ Lambda shell application is just a message sended to `sys.task` service:
       ]
     }
     task.loop:{
-      say:(dser.str (inp `λ `)@io.term)@dat.proc@sys.task
+      say:(prs.str (inp `λ `)@io.term)@dat.proc@sys.task
       shrt:32
       nl:t
     }@io.term
