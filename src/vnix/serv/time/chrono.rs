@@ -13,7 +13,7 @@ use crate::{thread, thread_await, as_map_find_as_async, as_async, read_async, ma
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, UnitNew};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitParse, UnitModify, UnitTypeReadAsync, UnitNew};
 
 
 pub const SERV_PATH: &'static str = "time.chrono";
@@ -110,20 +110,81 @@ fn get_up(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTy
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Service for time control\nExample: {wait.ms:500}@time.chrono # wait for 0.5 sec.")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+
+        let help_s = "{
+            name:time.chrono
+            info:`Service for time managment`
+            tut:[
+                {
+                    info:`Pause task for specified duration`
+                    com:[
+                        (wait 1)@time.chrono
+                        (wait.ms 500)@time.chrono
+                        (wait.mcs 2000000)@time.chrono
+                    ]
+                }
+                {
+                    info:`Get system uptime in minutes`
+                    com:get.up.min@time.chrono
+                    res:5
+                }
+                {
+                    info:`Measure unit read time in seconds`
+                    com:[
+                        (bch {fac:123456}@math.calc)@time.chrono
+                        (bch.sec {fac:123456}@math.calc)@time.chrono
+                    ]
+                    res:4
+                }
+            ]
+            man:{
+                wait:{
+                    info:`Pause task for specified duration`
+                    units:[mcs ms sec min hour day week mnh year]
+                    schm:[
+                        uint
+                        (wait uint)
+                        (`wait.<units>` uint)
+                        {wait:uint}
+                        {`wait.<units>`:uint}
+                    ]
+                    tut:@tut.0
+                }
+                get.up:{
+                    info:`Get system uptime`
+                    units:[mcs ms sec min hour day week mnh year]
+                    schm:[
+                        get.up
+                        `get.up.<units>`
+                    ]
+                    tut:@tut.1
+                }
+                bch:{
+                    info:`Measure unit read time`
+                    units:[mcs ms sec min hour day week mnh year]
+                    schm:[
+                        (bch unit)
+                        (`bch.<units>` unit)
+                    ]
+                    tut:@tut.2
+                }
+            }
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })

@@ -44,19 +44,18 @@ pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
             tut:[
                 {
                     info:`Get free RAM space`
-                    com:[
-                        get.mem.free@sys.hw
-                        get.mem.free.kb@sys.hw
-                        get.mem.free.mb@sys.hw
-                        get.mem.free.gb@sys.hw
-                    ]
+                    com:get.mem.free.mb@sys.hw
                     res:512
                 }
             ]
             man:{
                 get.mem.free:{
                     info:`Get free RAM space`
-                    schm:`get.mem.free.<size>`
+                    size:[kb mb gb]
+                    schm:[
+                        get.mem.free
+                        `get.mem.free.<size>`
+                    ]
                     tut:@tut.0
                 }
             }
