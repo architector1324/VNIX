@@ -47,9 +47,12 @@ impl Term {
     }
 
     pub fn print_ch(&mut self, ch: char, kern: &mut Kern) -> Result<(), DrvErr> {
-        let w = match self.mode {
-            super::Mode::Text => kern.drv.cli.res().map_err(|e| DrvErr::CLI(e))?.0,
-            super::Mode::Gfx => kern.drv.disp.res().map_err(|e| DrvErr::Disp(e))?.0 / 8
+        let (w, h) = match self.mode {
+            super::Mode::Text => kern.drv.cli.res().map_err(|e| DrvErr::CLI(e))?,
+            super::Mode::Gfx => {
+                let res = kern.drv.disp.res().map_err(|e| DrvErr::Disp(e))?;
+                (res.0 / 8, res.1 / 16)
+            }
         };
 
         // display char
@@ -93,6 +96,14 @@ impl Term {
             if self.pos.0 == w {
                 self.pos.0 = 0;
                 self.pos.1 += 1;
+            }
+        }
+
+        // workaround for scrolling in gfx mode
+        if let super::Mode::Gfx = self.mode {
+            if self.pos.1 >= h {
+                self.clear(kern)?;
+                self.flush(kern)?;
             }
         }
         Ok(())
