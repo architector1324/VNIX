@@ -5,8 +5,8 @@ use crate::{thread, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::Kern;
-use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitAs};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitAs};
 
 
 pub const SERV_PATH: &'static str = "test.void";
