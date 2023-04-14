@@ -15,7 +15,7 @@ use crate::{thread, thread_await, as_async, maybe_ok, maybe, read_async, as_map_
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeReadAsync};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitParse, UnitModify, UnitReadAsyncI, UnitTypeReadAsync};
 
 
 pub const SERV_PATH: &'static str = "gfx.2d";
@@ -68,20 +68,72 @@ fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Service for rendering 2d graphics\nExample: #ff0000@gfx.2d # fill screen with red color")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+
+        let help_s = "{
+            name:gfx.2d
+            info:`Service for rendering 2d graphics to image, create video from image sequence, apply filters, effects etc.`
+            tut:[
+                {
+                    info:`Create image filled some color.`
+                    com:[
+                        #ff0000@gfx.2d
+                        (fill #ff0000)@gfx.2d
+                        {
+                            fill:#ff0000
+                        }@gfx.2d
+                    ]
+                    res:{
+                        size:(1280 800)
+                        fmt:rgb.rle
+                        img:[(1024000 16711680)]
+                    }
+                }
+                {
+                    info:`Create image with specified size with filled some color.`
+                    com:{
+                        fill:#ff0000
+                        size:(320 240)
+                    }@gfx.2d
+                    res:{
+                        size:(320 240)
+                        fmt:rgb.rle
+                        img:[(76800 16711680)]
+                    }
+                }
+            ]
+            man:{
+                fill:{
+                    info:`Create image with specified size with filled some color.`
+                    schm:[
+                        `str: #<r8><g8><b8>`
+                        (fill `str: #<r8><g8><b8>`)
+                        {
+                            fill:`str: #<r8><g8><b8>`
+                            size:(uint uint)
+                        }
+                    ]
+                    tut:[
+                        @tut.0
+                        @tut.1
+                    ]
+                }
+            }
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
