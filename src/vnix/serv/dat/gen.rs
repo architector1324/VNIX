@@ -11,9 +11,9 @@ use alloc::string::String;
 use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::Kern;
+use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitNew, UnitReadAsync};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitNew, UnitParse, UnitModify, UnitReadAsync};
 
 
 pub const SERV_PATH: &'static str = "dat.gen";
@@ -58,20 +58,66 @@ fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Common data generation service\nExample: (lin.int (1 5))@dat.gen # generate list [1 2 3 4 5]")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+
+        let help_s = "{
+            name:dat.gen
+            info:`Common data generation service`
+            tut:[
+                {
+                    info:`Generate list with integers sequence`
+                    com:(lin.int (1 5))@dat.gen
+                    res:[1 2 3 4 5]
+                }
+                {
+                    info:`Generate list with bytes sequence`
+                    com:(lin.byte (0x01 0x04))@dat.gen
+                    res:[0x01 0x02 0x03 0x04]
+                }
+                {
+                    info:`Generate random integer`
+                    com:(rnd.int (1 5))@dat.gen
+                    res:3
+                }
+                {
+                    info:`Generate random byte`
+                    com:(rnd.byte (0x1a 0xff))@dat.gen
+                    res:0x2c
+                }
+            ]
+            man:{
+                lin:{
+                    info:`Generate list with data sequence`
+                    schm:[
+                        (lin.int (int int))
+                        (lin.byte (byte byte))
+                    ]
+                    tut:[@tut.0 @tut.1]
+                }
+                rnd:{
+                    info:`Generate random data`
+                    schm:[
+                        (rnd.int (int int))
+                        (rnd.byte (byte byte))
+                    ]
+                    tut:[@tut.2 @tut.3]
+                }
+            }
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
