@@ -11,14 +11,14 @@ use alloc::string::String;
 use crate::vnix::core::driver::{DrvErr, CLIErr};
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, as_async, as_map_find_as_async, maybe};
+use crate::{thread, thread_await, as_async, as_map_find_as_async, maybe, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::user::Usr;
 use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs, UnitParse};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs, UnitModify, UnitParse};
 
 
 pub const SERV_PATH: &'static str = "sys.usr";
@@ -50,20 +50,66 @@ fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+
+        let help_s = "{
+            name:sys.usr
+            info:`Users management service`
+            tut:[
+                {
+                    info:`Register new 'test' user`
+                    com:[
+                        test@sys.hw
+                        {ath:test}@sys.hw
+                    ]
+                    res:{
+                        ath:test
+                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                        priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
+                    }
+                }
+                {
+                    info:`Login 'test' guest user.\\nServices will not able to create new messages, read-only.`
+                    com:{
+                        ath:test
+                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                    }@sys.usr
+                    res:{
+                        ath:test
+                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                        priv:-
+                    }
+                }
+                {
+                    info:`Login 'test' user`
+                    com:{
+                        ath:test
+                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                        priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
+                    }@sys.usr
+                    res:{
+                        ath:test
+                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                        priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
+                    }
+                }
+            ]
+            man:-
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
