@@ -351,14 +351,17 @@ impl Kern {
         Msg::new(usr, self.new_unit(u))
     }
 
-    fn help_serv(&mut self, ath: &str) -> Result<Msg, KernErr> {
-        let serv = self.services.iter().map(|serv| Unit::str(&serv.info.name)).collect::<Vec<_>>();
-        let u = Unit::map(&[(
-            Unit::str("msg"),
-            Unit::list(&serv)
-        )]);
+    fn help_serv(kern: &Mutex<Self>, ath: String) -> ServHlrAsync {
+        thread!({
+            let serv = kern.lock().services.iter().map(|serv| Unit::str(&serv.info.name)).collect::<Vec<_>>();
+            yield;
 
-        self.msg(ath, u)
+            let u = Unit::map(&[(
+                Unit::str("msg"),
+                Unit::list(&serv)
+            )]);    
+            kern.lock().msg(&ath, u).map(|m| Some(m))
+        })
     }
 
     pub fn send<'a>(mtx: &'a Mutex<Self>, serv: String, msg: Msg) -> Maybe<ServHlrAsync<'a>, KernErr> {
@@ -366,35 +369,16 @@ impl Kern {
         let usr = mtx.lock().get_usr(&msg.ath)?;
         usr.verify(msg.msg.clone(), &msg.sign, &msg.hash)?;
 
-        // prepare msg
-        let help_s = mtx.lock().get_serv(serv.as_str())?.help.clone();
-
-        let help_msg = Unit::map(&[
-            (Unit::str("msg"), Unit::str(&help_s))
-        ]);
-        let help_msg = mtx.lock().msg(&msg.ath, help_msg)?;
-
         // check help
-        let topic = if let Some(topic) = msg.msg.clone().as_map_find("help").map(|u| u.as_str()).flatten() {
-            Some(topic)
-        } else if let Some(topic) = msg.msg.clone().as_str() {
-            Some(topic)
-        } else {
-            None
-        };
-
-        if let Some(topic) = topic {
-            match topic.as_str() {
-                "info" | "help" => return Ok(Some(thread!({
-                    yield;
-                    Ok(Some(help_msg))
-                }))),
-                "serv" => return Ok(Some(thread!({
-                    let out = mtx.lock().help_serv(&msg.ath).map(|m| Some(m));
-                    yield;
-                    out
-                }))),
-                _ => ()
+        if let Some(s) = msg.msg.clone().as_str() {
+            match s.as_str() {
+                "serv" => return Ok(Some(Self::help_serv(mtx, msg.ath.clone()))),
+                _ => if s.starts_with("help") {
+                    let tmp = mtx.lock();
+                    let serv = tmp.get_serv(serv.as_str())?;
+                    let inst = (serv.help_hlr)(msg, serv.info.clone(), mtx);
+                    return Ok(Some(inst))
+                }
             }
         }
 

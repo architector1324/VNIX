@@ -18,20 +18,20 @@ use self::serv::{io, sys, math, gfx, dat, time, test};
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
-        (io::term::SERV_PATH, io::term::SERV_HELP, Box::new(io::term::term_hlr) as Box<ServHlr>),
-        (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::store_hlr) as Box<ServHlr>),
-        // ("etc.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
-        (dat::proc::SERV_PATH, dat::proc::SERV_HELP, Box::new(dat::proc::proc_hlr) as Box<ServHlr>),
-        (dat::gen::SERV_PATH, dat::gen::SERV_HELP, Box::new(dat::gen::gen_hlr) as Box<ServHlr>),
-        (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
-        (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
-        (math::calc::SERV_PATH, math::calc::SERV_HELP, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
-        (sys::task::SERV_PATH, sys::task::SERV_HELP, Box::new(sys::task::task_hlr) as Box<ServHlr>),
-        (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
-        (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
-        (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
-        (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::echo_hlr) as Box<ServHlr>),
-        (test::void::SERV_PATH, test::void::SERV_HELP, Box::new(test::void::void_hlr) as Box<ServHlr>)
+        (io::term::SERV_PATH, Box::new(io::term::help_hlr) as Box<ServHlr>, Box::new(io::term::term_hlr) as Box<ServHlr>),
+        (io::store::SERV_PATH, Box::new(io::store::help_hlr) as Box<ServHlr>, Box::new(io::store::store_hlr) as Box<ServHlr>),
+        // ("auto.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
+        (dat::proc::SERV_PATH, Box::new(dat::proc::help_hlr) as Box<ServHlr>, Box::new(dat::proc::proc_hlr) as Box<ServHlr>),
+        (dat::gen::SERV_PATH, Box::new(dat::gen::help_hlr) as Box<ServHlr>, Box::new(dat::gen::gen_hlr) as Box<ServHlr>),
+        (time::chrono::SERV_PATH, Box::new(time::chrono::help_hlr) as Box<ServHlr>, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
+        (gfx::gfx2d::SERV_PATH, Box::new(gfx::gfx2d::help_hlr) as Box<ServHlr>, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
+        (math::calc::SERV_PATH,  Box::new(math::calc::help_hlr) as Box<ServHlr>, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
+        (sys::task::SERV_PATH, Box::new(sys::task::help_hlr) as Box<ServHlr>, Box::new(sys::task::task_hlr) as Box<ServHlr>),
+        (sys::usr::SERV_PATH, Box::new(sys::usr::help_hlr) as Box<ServHlr>, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
+        (sys::hw::SERV_PATH, Box::new(sys::hw::help_hlr) as Box<ServHlr>, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
+        (test::dump::SERV_PATH, Box::new(test::dump::help_hlr) as Box<ServHlr>, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
+        (test::echo::SERV_PATH, Box::new(test::echo::help_hlr) as Box<ServHlr>, Box::new(test::echo::echo_hlr) as Box<ServHlr>),
+        (test::void::SERV_PATH, Box::new(test::void::help_hlr) as Box<ServHlr>, Box::new(test::void::void_hlr) as Box<ServHlr>)
     ];
 
     for (name, help, hlr) in services {

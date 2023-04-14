@@ -17,8 +17,6 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, U
 
 
 pub const SERV_PATH: &'static str = "time.chrono";
-pub const SERV_HELP: &'static str = "Service for time control\nExample: {wait.ms:500}@time.chrono # wait for 0.5 sec.";
-
 
 fn wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Duration> {
     thread!({
@@ -107,6 +105,27 @@ fn get_up(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTy
         yield;
 
         Ok(Some((up as usize, ath)))
+    })
+}
+
+pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let help = Unit::map(&[
+            (
+                Unit::str("name"),
+                Unit::str(SERV_PATH)
+            ),
+            (
+                Unit::str("info"),
+                Unit::str("Service for time control\nExample: {wait.ms:500}@time.chrono # wait for 0.5 sec.")
+            )
+        ]);
+        yield;
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), help)
+        ]);
+        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
 }
 

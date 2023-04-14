@@ -26,7 +26,6 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, U
 
 
 pub const SERV_PATH: &'static str = "dat.proc";
-pub const SERV_HELP: &'static str = "Common data processing service\nExample: (len [1 2 3])@dat.proc # count list length";
 
 fn len(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
     thread!({
@@ -657,6 +656,27 @@ fn enumerate(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
             return Ok(Some((Unit::list(&lst), ath)))
         }
         Ok(None)
+    })
+}
+
+pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let help = Unit::map(&[
+            (
+                Unit::str("name"),
+                Unit::str(SERV_PATH)
+            ),
+            (
+                Unit::str("info"),
+                Unit::str("Common data processing service\nExample: (len [1 2 3])@dat.proc # count list length")
+            )
+        ]);
+        yield;
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), help)
+        ]);
+        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
 }
 

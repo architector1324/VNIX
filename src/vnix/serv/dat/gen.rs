@@ -17,7 +17,6 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitNew, UnitReadAsy
 
 
 pub const SERV_PATH: &'static str = "dat.gen";
-pub const SERV_HELP: &'static str = "Common data generation service\nExample: (lin.int (1 5))@dat.gen # generate list [1 2 3 4 5]";
 
 fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
@@ -54,6 +53,27 @@ fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             _ => return Ok(None)
         };
         Ok(Some((u, ath)))
+    })
+}
+
+pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let help = Unit::map(&[
+            (
+                Unit::str("name"),
+                Unit::str(SERV_PATH)
+            ),
+            (
+                Unit::str("info"),
+                Unit::str("Common data generation service\nExample: (lin.int (1 5))@dat.gen # generate list [1 2 3 4 5]")
+            )
+        ]);
+        yield;
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), help)
+        ]);
+        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
 }
 

@@ -19,8 +19,6 @@ use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeRea
 
 
 pub const SERV_PATH: &'static str = "gfx.2d";
-pub const SERV_HELP: &'static str = "Service for rendering 2d graphics\nExample: #ff0000@gfx.2d # fill screen with red color";
-
 
 fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<((usize, usize), u32)> {
     thread!({
@@ -65,6 +63,27 @@ fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
             return Ok(Some(((res, col), ath)))
         }
         Ok(None)
+    })
+}
+
+pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let help = Unit::map(&[
+            (
+                Unit::str("name"),
+                Unit::str(SERV_PATH)
+            ),
+            (
+                Unit::str("info"),
+                Unit::str("Service for rendering 2d graphics\nExample: #ff0000@gfx.2d # fill screen with red color")
+            )
+        ]);
+        yield;
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), help)
+        ]);
+        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
 }
 

@@ -22,7 +22,6 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs, UnitParse};
 
 
 pub const SERV_PATH: &'static str = "sys.usr";
-pub const SERV_HELP: &'static str = "Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr";
 
 
 fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Usr, Option<String>), KernErr>> {
@@ -46,6 +45,27 @@ fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
 
         // {ath:test}
         return Usr::new(&_ath, &mut kern.lock()).map(|(usr, out)| Some((usr, Some(out))))
+    })
+}
+
+pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let help = Unit::map(&[
+            (
+                Unit::str("name"),
+                Unit::str(SERV_PATH)
+            ),
+            (
+                Unit::str("info"),
+                Unit::str("Users management service\nExample: {ath:test}@sys.usr # register new user with name `test`\nOr just: test@sys.usr")
+            )
+        ]);
+        yield;
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), help)
+        ]);
+        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
 }
 

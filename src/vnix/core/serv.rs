@@ -26,18 +26,18 @@ pub struct ServInfo {
 
 pub struct Serv {
     pub info: ServInfo,
-    pub help: String,
+    pub help_hlr: Box<ServHlr>,
     pub hlr: Box<ServHlr>
 }
 
 
 impl Serv {
-    pub fn new(name: &str, help: &str, hlr: Box<ServHlr>) -> Self {
+    pub fn new(name: &str, help: Box<ServHlr>, hlr: Box<ServHlr>) -> Self {
         Serv {
             info: ServInfo {
                 name: name.into(),
             },
-            help: help.into(),
+            help_hlr: help,
             hlr
         }
     }

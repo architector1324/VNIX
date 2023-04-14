@@ -30,7 +30,6 @@ use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify,
 
 
 pub const SERV_PATH: &'static str = "io.term";
-pub const SERV_HELP: &'static str = "Terminal I/O service\nExample: hello@io.term";
 
 #[derive(Debug, Clone)]
 pub enum Mode {
@@ -230,6 +229,27 @@ fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
             _ => Ok(None)
         }
         
+    })
+}
+
+pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
+    thread!({
+        let help = Unit::map(&[
+            (
+                Unit::str("name"),
+                Unit::str(SERV_PATH)
+            ),
+            (
+                Unit::str("info"),
+                Unit::str("Terminal I/O service\nExample: hello@io.term")
+            )
+        ]);
+        yield;
+
+        let _msg = Unit::map(&[
+            (Unit::str("msg"), help)
+        ]);
+        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
 }
 
