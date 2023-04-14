@@ -4,9 +4,9 @@ use alloc::boxed::Box;
 use crate::{thread, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::Kern;
+use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitAs};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitParse, UnitAs};
 
 
 pub const SERV_PATH: &'static str = "test.echo";
@@ -15,25 +15,17 @@ pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
 
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Test echo service")
-            ),
-            (
-                Unit::str("tut"),
-                Unit::map(&[
-                    (Unit::str("info"), Unit::str("Echo message")),
-                    (Unit::str("com"), Unit::stream_loc(Unit::str("a"), "test.echo")),
-                    (Unit::str("res"), Unit::str("a"))
-                ])
-            ),
-            (Unit::str("man"), Unit::none())
-        ]);
+        let help_s = "{
+            name:test.echo
+            info:`Test echo service`
+            tut:{
+                info:`Echo message`
+                com:a@test.echo
+                res:a
+            }
+            man:-
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {

@@ -4,9 +4,9 @@ use alloc::boxed::Box;
 use crate::{thread, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::Kern;
+use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitAs};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitParse, UnitAs};
 
 
 pub const SERV_PATH: &'static str = "test.void";
@@ -15,24 +15,16 @@ pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
 
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("'Black hole' service")
-            ),
-            (
-                Unit::str("tut"),
-                Unit::map(&[
-                    (Unit::str("info"), Unit::str("Destroy message")),
-                    (Unit::str("com"), Unit::stream_loc(Unit::str("a"), "test.void"))
-                ])
-            ),
-            (Unit::str("man"), Unit::none())
-        ]);
+        let help_s = "{
+            name:test.void
+            info:`'Black hole' service`
+            tut:{
+                info:`Destroy message`
+                com:a@test.void
+            }
+            man:-
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {
