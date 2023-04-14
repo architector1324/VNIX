@@ -536,6 +536,44 @@ fn take(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
     })
 }
 
+fn group(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "grp" {
+            return Ok(None)
+        }
+
+        let ((count, lst), ath) = maybe!(as_async!(dat, as_pair, ath, orig, kern));
+        let (count, ath) = maybe!(as_async!(count, as_uint, ath, orig, kern));
+        let (lst, ath) = maybe!(as_async!(lst, as_list, ath, orig, kern));
+
+        if lst.len() % count as usize != 0 {
+            return Ok(None)
+        }
+
+        let grp_count = lst.len() / count as usize;
+
+        let mut res = Vec::with_capacity(grp_count);
+        let mut it = lst.iter();
+
+        for _ in 0..grp_count {
+            if count == 2 {
+                let p = Unit::pair(maybe_ok!(it.next()).clone(), maybe_ok!(it.next()).clone());
+                res.push(p);
+            } else {
+                let mut tmp = Vec::with_capacity(count as usize);
+                for _ in 0..count {
+                    tmp.push(maybe_ok!(it.next()).clone())
+                }
+                res.push(Unit::list(&tmp))
+            }
+        }
+        Ok(Some((Unit::list(&res), ath)))
+    })
+}
+
 fn cut(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Unit>> {
     thread!({
         let (s, dat) = maybe_ok!(msg.as_pair());
@@ -829,6 +867,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         if let Some((res, ath)) = thread_await!(take(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::list(&res))
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // group
+        if let Some((msg, ath)) = thread_await!(group(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
