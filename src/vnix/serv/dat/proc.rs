@@ -9,6 +9,7 @@ use base64ct::{Base64, Encoding};
 use spin::Mutex;
 use alloc::rc::Rc;
 
+use alloc::vec;
 use alloc::format;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -170,6 +171,40 @@ fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             },
             _ => Ok(None)
         }
+    })
+}
+
+fn product(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "prod" {
+            return Ok(None)
+        }
+
+        let ((dat0, dat1), ath) = maybe!(as_async!(dat, as_pair, ath, orig, kern));
+        let (dat0, ath) = maybe!(read_async!(dat0, ath, orig, kern));
+        let (dat1, ath) = maybe!(read_async!(dat1, ath, orig, kern));
+
+        let lst0 = if let Some(lst) = dat0.clone().as_list() {
+            lst
+        } else if let Some((a, b)) = dat0.as_pair() {
+            Rc::new(vec![a, b])
+        } else {
+            return Ok(None)
+        };
+
+        let lst1 = if let Some(lst) = dat1.clone().as_list() {
+            lst
+        } else if let Some((a, b)) = dat1.as_pair() {
+            Rc::new(vec![a, b])
+        } else {
+            return Ok(None)
+        };
+
+        let res = lst0.iter().cloned().flat_map(|u0| core::iter::repeat(u0).zip(lst1.iter().cloned()).map(|(u0, u1)| Unit::pair(u0, u1)).collect::<Vec<_>>()).collect::<Vec<_>>();
+        Ok(Some((Unit::list(&res), ath)))
     })
 }
 
@@ -688,6 +723,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // concatenate
         if let Some((msg, ath)) = thread_await!(cat(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // product
+        if let Some((msg, ath)) = thread_await!(product(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
