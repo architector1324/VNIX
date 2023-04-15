@@ -574,6 +574,35 @@ fn group(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
     })
 }
 
+fn flatten(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
+    thread!({
+        let (s, dat) = maybe_ok!(msg.as_pair());
+        let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
+
+        if s.as_str() != "flat" {
+            return Ok(None)
+        }
+
+        let (lst, mut ath) = maybe!(as_async!(dat, as_list, ath, orig, kern));
+
+        let mut res = Vec::new();
+        for u in Rc::unwrap_or_clone(lst) {
+            let (u, _ath) = maybe!(read_async!(u, ath, orig, kern));
+            ath = _ath;
+
+            if let Some((a, b)) = u.clone().as_pair() {
+                res.push(a);
+                res.push(b);
+            } else if let Some(sub) = u.clone().as_list() {
+                sub.iter().for_each(|u| res.push(u.clone()));
+            } else {
+                res.push(u);
+            }
+        }
+        Ok(Some((Unit::list(&res), ath)))
+    })
+}
+
 fn cut(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Unit>> {
     thread!({
         let (s, dat) = maybe_ok!(msg.as_pair());
@@ -873,6 +902,14 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
 
         // group
         if let Some((msg, ath)) = thread_await!(group(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+            let msg = Unit::map(&[
+                (Unit::str("msg"), msg)
+            ]);
+            return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
+        }
+
+        // flatten
+        if let Some((msg, ath)) = thread_await!(flatten(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
