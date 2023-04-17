@@ -16,7 +16,7 @@ use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::task::{ThreadAsync, TaskRun, TaskSig, Task};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitModify, UnitAs, UnitNew, UnitReadAsync, UnitTypeReadAsync};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitParse, UnitModify, UnitAs, UnitNew, UnitReadAsync, UnitTypeReadAsync};
 
 
 pub const SERV_PATH: &'static str = "sys.task";
@@ -353,20 +353,351 @@ fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadA
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Service for run task from message\nExample: (load @task.hello)@io.store@sys.task")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+
+        let help_s = "{
+            name:sys.task
+            info:`Service for task management`
+            tut:[
+                {
+                    info:`Run task from stream`
+                    com:{sum:[1 2 3]}@math.calc@sys.task
+                    res:6
+                }
+                {
+                    info:`Run infinite loop task from stream`
+                    com:(task.loop (say a)@io.term)@sys.task
+                }
+                {
+                    info:`Run loop task from stream`
+                    com:(task.loop (5 (say a)@io.term))@sys.task
+                }
+                {
+                    info:`Run parallel task`
+                    com:(task.sep a@io.term)@sys.task
+                }
+                {
+                    info:`Run task chain with current message`
+                    com:{sum:[1 2 3] task:[math.calc io.term]}@sys.task
+                }
+                {
+                    info:`Run several parallel tasks`
+                    com:(task.sim [a@io.term b@io.term])@sys.task
+                }
+                {
+                    info:`Run sequence of tasks`
+                    com:(task.que [a@io.term b@io.term])@sys.task
+                }
+                {
+                    info:`Create sequence of tasks with messages sended to service`
+                    com:(task.stk [a b]@io.term)@sys.task
+                    alt:(task.que [a@io.term b@io.term])@sys.task
+                }
+                {
+                    info:`Get information about running tasks`
+                    com:get@sys.task
+                    res:{
+                        run:{
+                            id:37
+                            name:unit.read
+                            usr:super
+                            par.id:36
+                        }
+                        all:[
+                            {
+                                id:0
+                                name:init.load
+                                usr:super
+                                par.id:0
+                            }
+                            {
+                                id:9
+                                name:unit.read
+                                usr:super
+                                par.id:0
+                            }
+                            {
+                                id:15
+                                name:unit.read
+                                usr:super
+                                par.id:9
+                            }
+                            {
+                                id:32
+                                name:unit.read
+                                usr:super
+                                par.id:15
+                            }
+                            {
+                                id:33
+                                name:unit.read
+                                usr:super
+                                par.id:32
+                            }
+                            {
+                                id:36
+                                name:unit.read
+                                usr:super
+                                par.id:33
+                            }
+                            {
+                                id:37
+                                name:unit.read
+                                usr:super
+                                par.id:36
+                            }
+                        ]
+                        tree:{
+                            id:0
+                            name:init.load
+                            usr:super
+                            child:[
+                                {
+                                    id:9
+                                    name:unit.read
+                                    usr:super
+                                    child:[
+                                        {
+                                            id:15
+                                            name:unit.read
+                                            usr:super
+                                            child:[
+                                                {
+                                                    id:32
+                                                    name:unit.read
+                                                    usr:super
+                                                    child:[
+                                                        {
+                                                            id:33
+                                                            name:unit.read
+                                                            usr:super
+                                                            child:[
+                                                                {
+                                                                    id:36
+                                                                    name:unit.read
+                                                                    usr:super
+                                                                    child:[
+                                                                        {
+                                                                            id:37
+                                                                            name:unit.read
+                                                                            usr:super
+                                                                            child:-
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+                {
+                    info:`Get information about current running task`
+                    com:get.run@sys.task
+                    res:{
+                        id:71
+                        name:unit.read
+                        usr:super
+                        par.id:70
+                    }
+                }
+                {
+                    info:`Get list of running tasks`
+                    com:get.all@sys.task
+                    res:[
+                        {
+                            id:0
+                            name:init.load
+                            usr:super
+                            par.id:0
+                        }
+                        {
+                            id:9
+                            name:unit.read
+                            usr:super
+                            par.id:0
+                        }
+                        {
+                            id:15
+                            name:unit.read
+                            usr:super
+                            par.id:9
+                        }
+                        {
+                            id:100
+                            name:unit.read
+                            usr:super
+                            par.id:15
+                        }
+                        {
+                            id:101
+                            name:unit.read
+                            usr:super
+                            par.id:100
+                        }
+                        {
+                            id:104
+                            name:unit.read
+                            usr:super
+                            par.id:101
+                        }
+                        {
+                            id:105
+                            name:unit.read
+                            usr:super
+                            par.id:104
+                        }
+                    ]
+                }
+                {
+                    info:`Get tree of running tasks`
+                    com:get.tree@sys.task
+                    res:{
+                        id:0
+                        name:init.load
+                        usr:super
+                        child:[
+                            {
+                                id:9
+                                name:unit.read
+                                usr:super
+                                child:[
+                                    {
+                                        id:15
+                                        name:unit.read
+                                        usr:super
+                                        child:[
+                                            {
+                                                id:134
+                                                name:unit.read
+                                                usr:super
+                                                child:[
+                                                    {
+                                                        id:135
+                                                        name:unit.read
+                                                        usr:super
+                                                        child:[
+                                                            {
+                                                                id:138
+                                                                name:unit.read
+                                                                usr:super
+                                                                child:[
+                                                                    {
+                                                                        id:139
+                                                                        name:unit.read
+                                                                        usr:super
+                                                                        child:-
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+                {
+                    info:`Kill task by id`
+                    com:(kill 2)@sys.task
+                }
+            ]
+            man:{
+                task:{
+                    loop:{
+                        info:`Run loop task from stream`
+                        schm:[
+                            (task.loop stream)
+                            (task.loop (uint stream))
+                            {task.loop:stream}
+                            {task.loop:(uint stream)}
+                        ]
+                        tut:[@tut.1 @tut.2]
+                    }
+                    sep:{
+                        info:`Run parallel task`
+                        schm:[
+                            (task.sep stream)
+                            {task.sep:stream}
+                        ]
+                        tut:@tut.3
+                    }
+                    chain:{
+                        info:`Run task chain with current message`
+                        schm:{task:[serv]}
+                        tut:@tut.4
+                    }
+                    sim:{
+                        info:`Run several parallel tasks`
+                        schm:[
+                            (task.sim [unit@serv])
+                            {task.sim:[unit@serv]}
+                        ]
+                        tut:@tut.5
+                    }
+                    que:{
+                        info:`Run sequence of tasks`
+                        schm:[
+                            (task.que [unit@serv])
+                            {task.que:[unit@serv]}
+                        ]
+                        tut:@tut.6
+                    }
+                    stk:{
+                        info:`Create sequence of tasks with messages sended to service`
+                        schm:[
+                            (task.stk [unit]@serv)
+                            {task.stk:[unit]@serv}
+                        ]
+                        tut:@tut.7
+                    }
+                }
+                get:{
+                    info:`Get information about running tasks`
+                    schm:[
+                        get
+                        get.run
+                        get.all
+                        get.tree
+                    ]
+                    tut:[
+                        @tut.8
+                        @tut.9
+                        @tut.10
+                        @tut.11
+                    ]
+                }
+                kill:{
+                    info:`Kill task by id`
+                    schm:(kill uint)
+                    tut:@tut.12
+                }
+            }
+        }";
+        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
