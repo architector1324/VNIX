@@ -19,6 +19,56 @@ use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitParse, UnitModify, Unit
 
 
 pub const SERV_PATH: &'static str = "gfx.2d";
+const SERV_HELP: &'static str = "{
+    name:gfx.2d
+    info:`Service for rendering 2d graphics to image, create video from image sequence, apply filters, effects etc.`
+    tut:[
+        {
+            info:`Create image filled some color.`
+            com:[
+                #ff0000@gfx.2d
+                (fill #ff0000)@gfx.2d
+                {
+                    fill:#ff0000
+                }@gfx.2d
+            ]
+            res:{
+                size:(1280 800)
+                fmt:rgb.rle
+                img:[(1024000 16711680)]
+            }
+        }
+        {
+            info:`Create image with specified size with filled some color.`
+            com:{
+                fill:#ff0000
+                size:(320 240)
+            }@gfx.2d
+            res:{
+                size:(320 240)
+                fmt:rgb.rle
+                img:[(76800 16711680)]
+            }
+        }
+    ]
+    man:{
+        fill:{
+            info:`Create image with specified size with filled some color.`
+            schm:[
+                `str: #<r8><g8><b8>`
+                (fill `str: #<r8><g8><b8>`)
+                {
+                    fill:`str: #<r8><g8><b8>`
+                    size:(uint uint)
+                }
+            ]
+            tut:[
+                @tut.0
+                @tut.1
+            ]
+        }
+    }
+}";
 
 fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<((usize, usize), u32)> {
     thread!({
@@ -69,58 +119,7 @@ fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
-
-        let help_s = "{
-            name:gfx.2d
-            info:`Service for rendering 2d graphics to image, create video from image sequence, apply filters, effects etc.`
-            tut:[
-                {
-                    info:`Create image filled some color.`
-                    com:[
-                        #ff0000@gfx.2d
-                        (fill #ff0000)@gfx.2d
-                        {
-                            fill:#ff0000
-                        }@gfx.2d
-                    ]
-                    res:{
-                        size:(1280 800)
-                        fmt:rgb.rle
-                        img:[(1024000 16711680)]
-                    }
-                }
-                {
-                    info:`Create image with specified size with filled some color.`
-                    com:{
-                        fill:#ff0000
-                        size:(320 240)
-                    }@gfx.2d
-                    res:{
-                        size:(320 240)
-                        fmt:rgb.rle
-                        img:[(76800 16711680)]
-                    }
-                }
-            ]
-            man:{
-                fill:{
-                    info:`Create image with specified size with filled some color.`
-                    schm:[
-                        `str: #<r8><g8><b8>`
-                        (fill `str: #<r8><g8><b8>`)
-                        {
-                            fill:`str: #<r8><g8><b8>`
-                            size:(uint uint)
-                        }
-                    ]
-                    tut:[
-                        @tut.0
-                        @tut.1
-                    ]
-                }
-            }
-        }";
-        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {

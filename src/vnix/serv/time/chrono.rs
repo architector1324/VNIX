@@ -17,6 +17,65 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitParse, UnitModif
 
 
 pub const SERV_PATH: &'static str = "time.chrono";
+const SERV_HELP: &'static str = "{
+    name:time.chrono
+    info:`Service for time managment`
+    tut:[
+        {
+            info:`Pause task for specified duration`
+            com:[
+                (wait 1)@time.chrono
+                (wait.ms 500)@time.chrono
+                (wait.mcs 2000000)@time.chrono
+            ]
+        }
+        {
+            info:`Get system uptime in minutes`
+            com:get.up.min@time.chrono
+            res:5
+        }
+        {
+            info:`Measure unit read time in seconds`
+            com:[
+                (bch {fac:123456}@math.calc)@time.chrono
+                (bch.sec {fac:123456}@math.calc)@time.chrono
+            ]
+            res:4
+        }
+    ]
+    man:{
+        wait:{
+            info:`Pause task for specified duration`
+            units:[mcs ms sec min hour day week mnh year]
+            schm:[
+                uint
+                (wait uint)
+                (`wait.<units>` uint)
+                {wait:uint}
+                {`wait.<units>`:uint}
+            ]
+            tut:@tut.0
+        }
+        get.up:{
+            info:`Get system uptime`
+            units:[mcs ms sec min hour day week mnh year]
+            schm:[
+                get.up
+                `get.up.<units>`
+            ]
+            tut:@tut.1
+        }
+        bch:{
+            info:`Measure unit read time`
+            units:[mcs ms sec min hour day week mnh year]
+            schm:[
+                (bch unit)
+                (`bch.<units>` unit)
+            ]
+            tut:@tut.2
+        }
+    }
+}";
 
 fn wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Duration> {
     thread!({
@@ -111,67 +170,7 @@ fn get_up(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTy
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
-
-        let help_s = "{
-            name:time.chrono
-            info:`Service for time managment`
-            tut:[
-                {
-                    info:`Pause task for specified duration`
-                    com:[
-                        (wait 1)@time.chrono
-                        (wait.ms 500)@time.chrono
-                        (wait.mcs 2000000)@time.chrono
-                    ]
-                }
-                {
-                    info:`Get system uptime in minutes`
-                    com:get.up.min@time.chrono
-                    res:5
-                }
-                {
-                    info:`Measure unit read time in seconds`
-                    com:[
-                        (bch {fac:123456}@math.calc)@time.chrono
-                        (bch.sec {fac:123456}@math.calc)@time.chrono
-                    ]
-                    res:4
-                }
-            ]
-            man:{
-                wait:{
-                    info:`Pause task for specified duration`
-                    units:[mcs ms sec min hour day week mnh year]
-                    schm:[
-                        uint
-                        (wait uint)
-                        (`wait.<units>` uint)
-                        {wait:uint}
-                        {`wait.<units>`:uint}
-                    ]
-                    tut:@tut.0
-                }
-                get.up:{
-                    info:`Get system uptime`
-                    units:[mcs ms sec min hour day week mnh year]
-                    schm:[
-                        get.up
-                        `get.up.<units>`
-                    ]
-                    tut:@tut.1
-                }
-                bch:{
-                    info:`Measure unit read time`
-                    units:[mcs ms sec min hour day week mnh year]
-                    schm:[
-                        (bch unit)
-                        (`bch.<units>` unit)
-                    ]
-                    tut:@tut.2
-                }
-            }
-        }";
-        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {

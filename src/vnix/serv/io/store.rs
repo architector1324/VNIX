@@ -20,6 +20,58 @@ use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitParse, UnitModify, Unit
 
 
 pub const SERV_PATH: &'static str = "io.store";
+const SERV_HELP: &'static str = "{
+    name:io.store
+    info:`Service for managing units disk storage`
+    tut:[
+        {
+            info:`Load unit from storage`
+            com:(load @txt.hello)@io.store
+            res:`Hello, vnix!`
+        }
+        {
+            info:`Load whole storage as unit`
+            com:load@io.store
+            res:`are u serious? :)`
+        }
+        {
+            info:`Save text to storage`
+            com:{save:abc out:@txt.test}@io.store
+        }
+        {
+            info:`Get unit size in kb. from storage`
+            com:(get.size.kb @img.vnix.logo)@io.store
+            res:6
+        }
+    ]
+    man:{
+        load:{
+            info:`Load unit from storage`
+            schm:[
+                load
+                (load @path)
+            ]
+            tut:[@tut.0 @tut.1]
+        }
+        save:{
+            info:`Save unit to storage`
+            schm:[
+                (save (unit @path))
+                {save:unit out:@path}
+            ]
+            tut:@tut.2
+        }
+        get.size:{
+            info:`Get unit size in bytes from storage`
+            units:[kb mb gb]
+            schm:[
+                `get.size.<units>`
+                (`get.size.<units>` @path)
+            ]
+            tut:@tut.3
+        }
+    }
+}";
 
 fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
     thread!({
@@ -84,60 +136,7 @@ fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
-
-        let help_s = "{
-            name:io.store
-            info:`Service for managing units disk storage`
-            tut:[
-                {
-                    info:`Load unit from storage`
-                    com:(load @txt.hello)@io.store
-                    res:`Hello, vnix!`
-                }
-                {
-                    info:`Load whole storage as unit`
-                    com:load@io.store
-                    res:`are u serious? :)`
-                }
-                {
-                    info:`Save text to storage`
-                    com:{save:abc out:@txt.test}@io.store
-                }
-                {
-                    info:`Get unit size in kb. from storage`
-                    com:(get.size.kb @img.vnix.logo)@io.store
-                    res:6
-                }
-            ]
-            man:{
-                load:{
-                    info:`Load unit from storage`
-                    schm:[
-                        load
-                        (load @path)
-                    ]
-                    tut:[@tut.0 @tut.1]
-                }
-                save:{
-                    info:`Save unit to storage`
-                    schm:[
-                        (save (unit @path))
-                        {save:unit out:@path}
-                    ]
-                    tut:@tut.2
-                }
-                get.size:{
-                    info:`Get unit size in bytes from storage`
-                    units:[kb mb gb]
-                    schm:[
-                        `get.size.<units>`
-                        (`get.size.<units>` @path)
-                    ]
-                    tut:@tut.3
-                }
-            }
-        }";
-        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {

@@ -22,7 +22,50 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitNew, UnitAs, UnitModify,
 
 
 pub const SERV_PATH: &'static str = "sys.usr";
-
+const SERV_HELP: &'static str = "{
+    name:sys.usr
+    info:`Users management service`
+    tut:[
+        {
+            info:`Register new 'test' user`
+            com:[
+                test@sys.hw
+                {ath:test}@sys.hw
+            ]
+            res:{
+                ath:test
+                pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
+            }
+        }
+        {
+            info:`Login 'test' guest user.\\nServices will not able to create new messages, read-only.`
+            com:{
+                ath:test
+                pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+            }@sys.usr
+            res:{
+                ath:test
+                pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                priv:-
+            }
+        }
+        {
+            info:`Login 'test' user`
+            com:{
+                ath:test
+                pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
+            }@sys.usr
+            res:{
+                ath:test
+                pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
+                priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
+            }
+        }
+    ]
+    man:-
+}";
 
 fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(Usr, Option<String>), KernErr>> {
     thread!({
@@ -51,52 +94,7 @@ fn auth(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsy
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
-
-        let help_s = "{
-            name:sys.usr
-            info:`Users management service`
-            tut:[
-                {
-                    info:`Register new 'test' user`
-                    com:[
-                        test@sys.hw
-                        {ath:test}@sys.hw
-                    ]
-                    res:{
-                        ath:test
-                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
-                        priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
-                    }
-                }
-                {
-                    info:`Login 'test' guest user.\\nServices will not able to create new messages, read-only.`
-                    com:{
-                        ath:test
-                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
-                    }@sys.usr
-                    res:{
-                        ath:test
-                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
-                        priv:-
-                    }
-                }
-                {
-                    info:`Login 'test' user`
-                    com:{
-                        ath:test
-                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
-                        priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
-                    }@sys.usr
-                    res:{
-                        ath:test
-                        pub:`AiOte6qwiIcJTWzLjAyA+d6pwVs4eRTi7fEqdDFy2a6z`
-                        priv:`AYi2fBh4vQ/aQR2qU78XlTsx3huL0dIGzIsRHKYB+ls=`
-                    }
-                }
-            ]
-            man:-
-        }";
-        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {

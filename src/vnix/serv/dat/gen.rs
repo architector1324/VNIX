@@ -17,6 +17,50 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitNew, UnitParse, 
 
 
 pub const SERV_PATH: &'static str = "dat.gen";
+const SERV_HELP: &'static str = "{
+    name:dat.gen
+    info:`Common data generation service`
+    tut:[
+        {
+            info:`Generate list with integers sequence`
+            com:(lin.int (1 5))@dat.gen
+            res:[1 2 3 4 5]
+        }
+        {
+            info:`Generate list with bytes sequence`
+            com:(lin.byte (0x01 0x04))@dat.gen
+            res:[0x01 0x02 0x03 0x04]
+        }
+        {
+            info:`Generate random integer`
+            com:(rnd.int (1 5))@dat.gen
+            res:3
+        }
+        {
+            info:`Generate random byte`
+            com:(rnd.byte (0x1a 0xff))@dat.gen
+            res:0x2c
+        }
+    ]
+    man:{
+        lin:{
+            info:`Generate list with data sequence`
+            schm:[
+                (lin.int (int int))
+                (lin.byte (byte byte))
+            ]
+            tut:[@tut.0 @tut.1]
+        }
+        rnd:{
+            info:`Generate random data`
+            schm:[
+                (rnd.int (int int))
+                (rnd.byte (byte byte))
+            ]
+            tut:[@tut.2 @tut.3]
+        }
+    }
+}";
 
 fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
     thread!({
@@ -59,52 +103,7 @@ fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
         let s = maybe_ok!(msg.msg.clone().as_str());
-
-        let help_s = "{
-            name:dat.gen
-            info:`Common data generation service`
-            tut:[
-                {
-                    info:`Generate list with integers sequence`
-                    com:(lin.int (1 5))@dat.gen
-                    res:[1 2 3 4 5]
-                }
-                {
-                    info:`Generate list with bytes sequence`
-                    com:(lin.byte (0x01 0x04))@dat.gen
-                    res:[0x01 0x02 0x03 0x04]
-                }
-                {
-                    info:`Generate random integer`
-                    com:(rnd.int (1 5))@dat.gen
-                    res:3
-                }
-                {
-                    info:`Generate random byte`
-                    com:(rnd.byte (0x1a 0xff))@dat.gen
-                    res:0x2c
-                }
-            ]
-            man:{
-                lin:{
-                    info:`Generate list with data sequence`
-                    schm:[
-                        (lin.int (int int))
-                        (lin.byte (byte byte))
-                    ]
-                    tut:[@tut.0 @tut.1]
-                }
-                rnd:{
-                    info:`Generate random data`
-                    schm:[
-                        (rnd.int (int int))
-                        (rnd.byte (byte byte))
-                    ]
-                    tut:[@tut.2 @tut.3]
-                }
-            }
-        }";
-        let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
         let res = match s.as_str() {
