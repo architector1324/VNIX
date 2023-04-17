@@ -1,5 +1,6 @@
 pub mod base;
 
+mod help;
 mod text;
 mod media;
 
@@ -26,7 +27,7 @@ use crate::{thread, thread_await, maybe_ok, read_async, maybe, as_async};
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitModify, UnitReadAsync};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitModify, UnitParse, UnitReadAsyncI, UnitReadAsync};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -234,20 +235,21 @@ fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Terminal I/O service\nExample: hello@io.term")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+        let help = Unit::parse(help::SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
