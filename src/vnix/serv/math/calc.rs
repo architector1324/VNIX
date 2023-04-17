@@ -11,15 +11,239 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::{thread, thread_await, as_map_find_async, as_async, maybe};
+use crate::{thread, thread_await, as_map_find_async, as_async, maybe, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::Kern;
+use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, Int, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeReadAsync};
+use crate::vnix::core::unit::{Unit, Int, UnitNew, UnitAs, UnitParse, UnitModify, UnitReadAsyncI, UnitTypeReadAsync};
 
 
 pub const SERV_PATH: &'static str = "math.calc";
+const SERV_HELP: &'static str = "{
+    name:math.calc
+    info:`Service for integer mathematical computation`
+    tut:[
+        {
+            info:`Negate sign of number`
+            com:(neg 5)@math.calc
+            res:-5
+        }
+        {
+            info:`Absolute value of number`
+            com:(abs -3)@math.calc
+            res:3
+        }
+        {
+            info:`Increment number`
+            com:(inc 2)@math.calc
+            res:3
+        }
+        {
+            info:`Decrement number`
+            com:(dec 3)@math.calc
+            res:2
+        }
+        {
+            info:`Square number`
+            com:(sqr 2)@math.calc
+            res:4
+        }
+        {
+            info:`Integer part of number square root`
+            com:(sqrt 10)@math.calc
+            res:3
+        }
+        {
+            info:`Compute number factorial`
+            com:(fac 20)@math.calc
+            res:2432902008176640000
+        }
+        {
+            info:`Compute sum of two numbers`
+            com:(sum (1 2))@math.calc
+            res:3
+        }
+        {
+            info:`Compute sum of numbers list`
+            com:(sum [1 2 3])@math.calc
+            res:6
+        }
+        {
+            info:`Compute subtract of two numbers`
+            com:(sub (3 4))@math.calc
+            res:1
+        }
+        {
+            info:`Compute power of two numbers`
+            com:(pow (21 12))@math.calc
+            res:7355827511386641
+        }
+        {
+            info:`Compute multiplication of two numbers`
+            com:(mul (3 4))@math.calc
+            res:12
+        }
+        {
+            info:`Compute division of two numbers`
+            com:(div (12 4))@math.calc
+            res:3
+        }
+        {
+            info:`Compute euclidean division of two numbers`
+            com:(mod (5 2))@math.calc
+            res:1
+        }
+        {
+            info:`Find minimal number from presented`
+            com:(min (1 2))@math.calc
+            res:1
+        }
+        {
+            info:`Find maximum number from presented`
+            com:(max (1 2))@math.calc
+            res:2
+        }
+    ]
+    man:{
+        neg:{
+            info:`Negate sign of number`
+            schm:[
+                (neg int)
+                {neg:int}
+            ]
+            tut:@tut.0
+        }
+        abs:{
+            info:`Absolute value of number`
+            schm:[
+                (abs int)
+                {abs:int}
+            ]
+            tut:@tut.1
+        }
+        inc:{
+            info:`Increment number`
+            schm:[
+                (inc int)
+                {inc:int}
+            ]
+            tut:@tut.2
+        }
+        dec:{
+            info:`Decrement number`
+            schm:[
+                (dec int)
+                {dec:int}
+            ]
+            tut:@tut.3
+        }
+        sqr:{
+            info:`Square number`
+            schm:[
+                (sqr int)
+                {sqr:int}
+            ]
+            tut:@tut.4
+        }
+        sqrt:{
+            info:`Integer part of number square root`
+            schm:[
+                (sqrt int)
+                {sqrt:int}
+            ]
+            tut:@tut.5
+        }
+        fac:{
+            info:`Compute number factorial`
+            schm:[
+                (fac int)
+                {fac:int}
+            ]
+            tut:@tut.6
+        }
+        sum:{
+            info:`Compute sum of numbers`
+            schm:[
+                (sum (a b))
+                (sum [a b c])
+                {sum:(a b)}
+                {sum:[a b c]}
+            ]
+            tut:[@tut.7 @tut.8]
+        }
+        sub:{
+            info:`Compute subtract of numbers`
+            schm:[
+                (sub (a b))
+                (sub [a b c])
+                {sub:(a b)}
+                {sub:[a b c]}
+            ]
+            tut:@tut.9
+        }
+        pow:{
+            info:`Compute power of numbers`
+            schm:[
+                (pow (a b))
+                (pow [a b c])
+                {pow:(a b)}
+                {pow:[a b c]}
+            ]
+            tut:@tut.10
+        }
+        mul:{
+            info:`Compute multiplication of numbers`
+            schm:[
+                (mul (a b))
+                (mul [a b c])
+                {mul:(a b)}
+                {mul:[a b c]}
+            ]
+            tut:@tut.11
+        }
+        div:{
+            info:`Compute integer part of numbers division`
+            schm:[
+                (div (a b))
+                (div [a b c])
+                {div:(a b)}
+                {div:[a b c]}
+            ]
+            tut:@tut.12
+        }
+        mod:{
+            info:`Compute numbers Euclidean division`
+            schm:[
+                (mod (a b))
+                (mod [a b c])
+                {mod:(a b)}
+                {mod:[a b c]}
+            ]
+            tut:@tut.13
+        }
+        min:{
+            info:`Find minimal number from presented`
+            schm:[
+                (min (a b))
+                (min [a b c])
+                {min:(a b)}
+                {min:[a b c]}
+            ]
+            tut:@tut.14
+        }
+        max:{
+            info:`Find maximum number from presented`
+            schm:[
+                (max (a b))
+                (max [a b c])
+                {max:(a b)}
+                {max:[a b c]}
+            ]
+            tut:@tut.15
+        }
+    }
+}";
 
 fn calc_single_op_int(op: &str, v: Int) -> Option<Int> {
     let res = match op {
@@ -144,20 +368,21 @@ fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTyp
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Service for integer mathematical computation\nExample: {sum:[1 2 3]}@math.calc")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
