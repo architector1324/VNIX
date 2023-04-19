@@ -26,6 +26,422 @@ use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, U
 
 
 pub const SERV_PATH: &'static str = "dat.proc";
+const SERV_HELP: &'static str = "{
+    name:dat.proc
+    info:`Common data processing service`
+    tut:[
+        {
+            info:`Count string length`
+            com:(len 'Hello, vnix!')@dat.proc
+            res:12
+        }
+        {
+            info:`Count list length`
+            com:(len [1 2 3])@dat.proc
+            res:3
+        }
+        {
+            info:`Concatenate strings`
+            com:(cat (a b))@dat.proc
+            res:ab
+        }
+        {
+            info:`Concatenate lists`
+            com:(cat ([1 2] [3 4]))@dat.proc
+            res:[1 2 3 4]
+        }
+        {
+            info:`Group elements from two lists in pairs`
+            com:[
+                {
+                    com:(cat.zip ([1 2 3] [a b c]))@dat.proc
+                    res:[(1 a) (2 b) (3 c)]
+                }
+                {
+                    com:(cat.zip ([w] [a b c]))@dat.proc
+                    res:[(w a) (w b) (w c)]
+                }
+            ]
+        }
+        {
+            info:`Generate list with all possible combinations`
+            com:[
+                {
+                    com:(prod ((1 2) (a b)))@dat.proc
+                    res:[(1 a) (1 b) (2 a) (2 b)]
+                }
+                {
+                    com:(prod ([1 2 3] [a b c]))@dat.proc
+                    res:[(1 a) (1 b) (1 c) (2 a) (2 b) (2 c) (3 a) (3 b) (3 c)]
+                }
+            ]
+        }
+        {
+            info:`Split list of pairs to separate lists`
+            com:(split.uz [(0 a) (1 b)])@dat.proc
+            res:([0 1] [a b])
+        }
+        {
+            info:`Sort list of integers`
+            com:(sort [3 1 5])@dat.proc
+            res:[1 3 5]
+        }
+        {
+            info:`Sort pair of decimals`
+            com:(sort (3.14 2.71))@dat.proc
+            res:(2.71 3.14)
+        }
+        {
+            info:`Reverse pair`
+            com:(rev (1 2))@dat.proc
+            res:(2 1)
+        }
+        {
+            info:`Reverse list`
+            com:(rev [1 2 3])@dat.proc
+            res:[3 2 1]
+        }
+        {
+            info:`Enumerate pair`
+            com:(enum (a b))@dat.proc
+            res:[(0 a) (1 b)]
+        }
+        {
+            info:`Enumerate list`
+            com:(enum [a b c])@dat.proc
+            res:[(0 a) (1 b) (2 c)]
+        }
+        {
+            info:`Make pair from list`
+            com:(make (pair [a b]))@dat.proc
+            res:(a b)
+        }
+        {
+            info:`Make list from pair or map`
+            com:[
+                (make (lst (a b)))@dat.proc
+                (make (lst {a:b}))@dat.proc
+            ]
+            res:[a b]
+        }
+        {
+            info:`Make map from pair or list`
+            com:[
+                {
+                    com:(make (map (a b)))@dat.proc
+                    res:{a:b}
+                }
+                {
+                    com:(make (map [(a b) (c d)]))@dat.proc
+                    res:{a:b c:d}
+                }
+            ]
+        }
+        {
+            info:`Apply command to pair and construct the result by sending each to service`
+            com:(map (neg (1 2))@math.calc)@dat.proc
+            res:(-1 -2)
+        }
+        {
+            info:`Apply command to list and construct the result by sending each to service`
+            com:(map (sqr [1 2 3])@math.calc)@dat.proc
+            res:[1 4 9]
+        }
+        {
+            info:`Reduce list to compute sum`
+            com:(fold (sum [1 2 3])@math.calc)@dat.proc
+            res:6
+        }
+        {
+            info:`Reduce list to compute sum with save inter results`
+            com:(scn (sum [1 2 3])@math.calc)@dat.proc
+            res:[3 6]
+        }
+        {
+            info:`Generate list with duplicated unit`
+            com:(dup (3 a))@dat.proc
+            res:[a a a]
+        }
+        {
+            info:`Get map keys list`
+            com:(keys {a:b c:d})@dat.proc
+            res:[a c]
+        }
+        {
+            info:`Get first element of pair`
+            com:(fst (a b))@dat.proc
+            res:a
+        }
+        {
+            info:`Get first element of list`
+            com:(fst [1 2 3])@dat.proc
+            res:1
+        }
+        {
+            info:`Get last element of pair`
+            com:(fst (a b))@dat.proc
+            res:b
+        }
+        {
+            info:`Get last element of list`
+            com:(fst [1 2 3])@dat.proc
+            res:3
+        }
+        {
+            info:`Get data from unit by reference`
+            com:(get (@a {a:b}))@dat.proc
+            res:b
+        }
+        {
+            info:`Take 2 elements from list`
+            com:(take (2 [1 2 3]))@dat.proc
+            res:[1 2]
+        }
+        {
+            info:`Group 2 elements in list`
+            com:(grp (2 [1 2 3 4]))@dat.proc
+            res:[(1 2) (3 4)]
+        }
+        {
+            info:`Flat sublists or pairs of list`
+            com:(flat [[1 2 3] (4 5) 6])@dat.proc
+            res:[1 2 3 4 5 6]
+        }
+        {
+            info:`Cut first 2 elements of list`
+            com:(cut (2 [1 2 3 4]))@dat.proc
+            res:[3 4]
+        }
+        {
+            info:`Check if element is in pair`
+            com:(in (a (a b)))@dat.proc
+            res:t
+        }
+        {
+            info:`Check if element is in list`
+            com:(in (1 [1 2 3]))@dat.proc
+            res:t
+        }
+        {
+           info:`Compress unit`
+           com:(zip abc)@dat.proc
+           res:`H4sIAAAAAAAA/+NgZmBgSExKBgCRRkpNCAAAAA==`
+        }
+        {
+            info:`Decompress unit`
+            com:(unzip `H4sIAAAAAAAA/+NgZmBgSExKBgCRRkpNCAAAAA==`)@dat.proc
+            res:abc
+        }
+        {
+            info:`Compute unit hash`
+            com:(hash abc)@dat.proc
+            res:`Vpa958244h6LxhB+6Mt6cXFGvV3+xBiTKqGuCKtOjmc=`
+        }
+        {
+            info:`Serialize unit to string`
+            com:(ser.str {a:b})@dat.proc
+            res:`{a:b}`
+        }
+        {
+            info:`Parse string to unit`
+            com:(prs.str `{a:b}`)@dat.proc
+            res:{a:b}
+        }
+        {
+            info:`Serialize unit to bytes`
+            com:(ser.bytes {a:b})@dat.proc
+            res:[0x0f 0x01 0x00 0x00 0x00 0x08 0x01 0x00 0x00 0x00 0x61 0x08 0x01 0x00 0x00 0x00 0x62]
+        }
+        {
+            info:`Parse bytes to unit`
+            com:(prs.bytes [0x0f 0x01 0x00 0x00 0x00 0x08 0x01 0x00 0x00 0x00 0x61 0x08 0x01 0x00 0x00 0x00 0x62])@dat.proc
+            res:{a:b}
+        }
+        {
+            info:`Get unit size in memory`
+            com:(size abc)@dat.proc
+            res:59
+        }
+    ]
+    man:{
+        len:{
+            info:`Count string or list length`
+            schm:(len unit)
+            tut:[@tut.0 @tut.1]
+        }
+        cat:{
+            info:`Concatenate strings or lists`
+            schm:[
+                (cat (str str))
+                (cat ([unit] unit))
+                (cat ([unit] [unit]))
+            ]
+            tut:[@tut.2 @tut.3]
+        }
+        cat.zip:{
+            info:`Group elements from two lists in pairs`
+            schm:(cat.zip ([unit] [unit]))
+            tut:@tut.4
+        }
+        prod:{
+            info:`Generate list with all possible combinations`
+            schm:[
+                (prod ((unit unit) (unit unit)))
+                (prod ([unit] [unit]))
+            ]
+            tut:@tut.5
+        }
+        split.uz:{
+            info:`Split list of pairs to separate lists`
+            schm:(split.uz [(unit unit)])
+            tut:@tut.6
+        }
+        sort:{
+            info:`Sort pair or list of integers, decimals or strings (alphabetical)`
+            schm:[
+                (sort (unit unit))
+                (sort [unit])
+            ]
+            tut:[@tut.7 @tut.8]
+        }
+        rev:{
+            info:`Reverse pair or list`
+            schm:[
+                (rev (unit unit))
+                (rev [unit])
+            ]
+            tut:[@tut.9 @tut.10]
+        }
+        enum:{
+            info:`Enumerate pair or list`
+            schm:[
+                (enum (unit unit))
+                (enum [unit])
+            ]
+            tut:[@tut.11 @tut.12]
+        }
+        make:{
+            info:`Transform collection to another unit`
+            schm:[
+                (make (lst (unit unit)))
+                (make (pair [unit]))
+                (make (map (unit unit)))
+                (make (map [unit]))
+                (make (lst {unit:unit}))
+            ]
+            tut:[@tut.13 @tut.14 @tut.15]
+        }
+        map:{
+            info:`Apply command to pair or list and construct the result by sending each to service`
+            schm:[
+                (map (unit (unit unit)@serv))
+                (map (unit [unit]@serv))
+            ]
+            tut:[@tut.16 @tut.17]
+        }
+        fold:{
+            info:`Similar to @man.map, but reduce list by apply command to the list`
+            schm:(fold (unit [unit]@serv))
+            tut:@tut.18
+        }
+        scn:{
+            info:`Similar to @man.fold, but save internal results in list`
+            schm:(scn (unit [unit]@serv))
+            tut:@tut.19
+        }
+        dup:{
+            info:`Generate list with duplicated unit`
+            schm:(dup (uint unit))
+            tut:@tut.20
+        }
+        keys:{
+            info:`Get map keys list`
+            schm:(keys {unit:unit})
+            tut:@tut.21
+        }
+        fst:{
+            info:`Get first element of list/pair`
+            schm:[
+                (fst (unit unit))
+                (fst [unit])
+            ]
+            tut:[@tut.22 @tut.23]
+        }
+        last:{
+            info:`Get last element of list/pair`
+            schm:[
+                (last (unit unit))
+                (last [unit])
+            ]
+            tut:[@tut.24 @tut.25]
+        }
+        get:{
+            info:`Get data from unit by reference`
+            schm:(get (ref unit))
+            tut:@tut.26
+        }
+        take:{
+            info:`Take n elements from list`
+            schm:(take (uint [unit]))
+            tut:@tut.27
+        }
+        grp:{
+            info:`Group n elements in list`
+            schm:(grp (uint [unit]))
+            tut:@tut.28
+        }
+        flat:{
+            info:`Flat sublists or pairs of list`
+            schm:(flat [unit])
+            tut:@tut.29
+        }
+        cut:{
+            info:`Cut first n elements of list`
+            schm:(cut (uint [unit]))
+            tut:@tut.30
+        }
+        in:{
+            info:`Check if element is in list or pair`
+            schm:[
+                (in (unit (unit unit)))
+                (in (unit [unit]))
+            ]
+            tut:[@tut.31 @tut.32]
+        }
+        [zip unzip]:{
+            info:`Compress/decompress unit (gunzip)`
+            schm:[
+                (zip unit)
+                (unzip str)
+            ]
+            tut:[@tut.33 @tut.34]
+        }
+        hash:{
+            info:`Compute unit hash (sha3)`
+            schm:(hash unit)
+            tut:@tut.35
+        }
+        [ser prs]:{
+            info:`Unit serialization to string or bytes`
+            schm:[
+                (ser.str unit)
+                (ser.bytes unit)
+                (prs.str str)
+                (prs.bytes [byte])
+            ]
+            tut:[@tut.36 @tut.37 @tut.38 @tut.39]
+        }
+        size:{
+            info:`Get unit size in memory`
+            units:[kb mb gb]
+            schm:[
+                (size unit)
+                (`size.<units>` unit)
+            ]
+            tut:@tut.40
+        }
+    }
+}";
 
 fn len(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
     thread!({
@@ -764,20 +1180,21 @@ fn enumerate(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
 
 pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
     thread!({
-        let help = Unit::map(&[
-            (
-                Unit::str("name"),
-                Unit::str(SERV_PATH)
-            ),
-            (
-                Unit::str("info"),
-                Unit::str("Common data processing service\nExample: (len [1 2 3])@dat.proc # count list length")
-            )
-        ]);
+        let s = maybe_ok!(msg.msg.clone().as_str());
+        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
         yield;
 
+        let res = match s.as_str() {
+            "help" => help,
+            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
+            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
+            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
+            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
+            _ => return Ok(None)
+        };
+
         let _msg = Unit::map(&[
-            (Unit::str("msg"), help)
+            (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     })
