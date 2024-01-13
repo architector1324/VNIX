@@ -1,4 +1,4 @@
-use core::ops::Generator;
+use core::ops::Coroutine;
 use core::fmt::{Write, Display};
 
 use alloc::vec::Vec;
@@ -69,7 +69,7 @@ pub struct Mouse {
     pub click: (bool, bool)
 }
 
-pub type TimeAsync = Box<dyn Generator<Yield = (), Return = Result<(), TimeErr>>>;
+pub type TimeAsync = Box<dyn Coroutine<Yield = (), Return = Result<(), TimeErr>>>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Duration {

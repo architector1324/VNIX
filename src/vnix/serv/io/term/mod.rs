@@ -7,7 +7,7 @@ mod media;
 use core::fmt::Display;
 
 use core::pin::Pin;
-use core::ops::{Generator, GeneratorState};
+use core::ops::{Coroutine, CoroutineState};
 
 use spin::Mutex;
 

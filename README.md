@@ -53,10 +53,12 @@ cd vnix
 
 2. Build vnix kernel for target arch (using [UEFI](https://uefi.org/) now):
 ```bash
+rustup override set nightly
 rustup target add x86_64-unknown-uefi
 cargo build --release --target=x86_64-unknown-uefi
 ```
 ```bash
+rustup override set nightly
 rustup target add aarch64-unknown-uefi
 cargo build --release --target=aarch64-unknown-uefi
 ```

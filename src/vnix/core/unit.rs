@@ -8,7 +8,7 @@ use num::Zero;
 use core::pin::Pin;
 use core::slice::Iter;
 use core::fmt::Display;
-use core::ops::{Generator, GeneratorState};
+use core::ops::{Coroutine, CoroutineState};
 use core::cmp::PartialOrd;
 
 use spin::Mutex;
@@ -1695,7 +1695,7 @@ impl UnitModify for Unit {
                         let mut w_map = Rc::unwrap_or_clone(w_map.clone());
                         let mut map = Rc::unwrap_or_clone(map.clone()).into_iter()
                             .map(|(u0, u1)| {
-                                if let Some((_, u)) = w_map.drain_filter(|(u00, _)| u00.clone() == u0.clone()).next() {
+                                if let Some((_, u)) = w_map.extract_if(|(u00, _)| u00.clone() == u0.clone()).next() {
                                     return (u0.clone(), u1.merge_with(u))
                                 }
                                 (u0, u1)

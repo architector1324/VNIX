@@ -1,6 +1,6 @@
 use core::pin::Pin;
 use core::fmt::{Display, Write};
-use core::ops::{Generator, GeneratorState};
+use core::ops::{Coroutine, CoroutineState};
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
@@ -343,7 +343,7 @@ impl Kern {
     }
 
     pub fn get_task_result(&mut self, id: usize) -> Option<Maybe<Msg, KernErr>> {
-        self.task_result.drain_filter(|(i, _)| *i == id).next().map(|(_, msg)| msg)
+        self.task_result.extract_if(|(i, _)| *i == id).next().map(|(_, msg)| msg)
     }
 
     pub fn msg(&mut self, ath: &str, u: Unit) -> Result<Msg, KernErr> {
@@ -417,8 +417,8 @@ impl Kern {
                             match sig {
                                 TaskSig::Kill => {
                                     writeln!(grd, "INFO vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-                                    grd.tasks_running.drain_filter(|t| t.id == task.id).next();
-                                    grd.tasks_signals.drain_filter(|(id, _)| *id == task.id).next();
+                                    grd.tasks_running.extract_if(|t| t.id == task.id).next();
+                                    grd.tasks_signals.extract_if(|(id, _)| *id == task.id).next();
                                     *done = true
                                 }
                             }
@@ -432,7 +432,7 @@ impl Kern {
                     // run task
                     kern_mtx.lock().curr_task_id = task.id;
 
-                    if let GeneratorState::Complete(res) = Pin::new(run).resume(()) {
+                    if let CoroutineState::Complete(res) = Pin::new(run).resume(()) {
                         match &res {
                             Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
                             Err(e) => {
@@ -441,7 +441,7 @@ impl Kern {
                         };
 
                         kern_mtx.lock().task_result.push((task.id, res));
-                        kern_mtx.lock().tasks_running.drain_filter(|t| t.id == task.id).next();
+                        kern_mtx.lock().tasks_running.extract_if(|t| t.id == task.id).next();
                         *done = true;
                     }
                 }

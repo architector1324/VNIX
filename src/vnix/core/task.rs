@@ -1,4 +1,4 @@
-use core::ops::{Generator, GeneratorState};
+use core::ops::{Coroutine, CoroutineState};
 use core::pin::Pin;
 
 use alloc::boxed::Box;
@@ -29,8 +29,8 @@ pub enum TaskSig {
     Kill
 }
 
-pub type TaskRunAsync<'a> = impl Generator<Yield = (), Return = Maybe<Msg, KernErr>> + 'a;
-pub type ThreadAsync<'a, T> = Box<dyn Generator<Yield = (), Return = T> + 'a>;
+pub type TaskRunAsync<'a> = impl Coroutine<Yield = (), Return = Maybe<Msg, KernErr>> + 'a;
+pub type ThreadAsync<'a, T> = Box<dyn Coroutine<Yield = (), Return = T> + 'a>;
 
 #[macro_export]
 macro_rules! thread {
@@ -48,7 +48,7 @@ macro_rules! thread_await {
         {
             let mut gen = Box::into_pin($t);
             let res = loop {
-                if let GeneratorState::Complete(res) = Pin::new(&mut gen).resume(()) {
+                if let CoroutineState::Complete(res) = Pin::new(&mut gen).resume(()) {
                     break res;
                 }
                 yield;

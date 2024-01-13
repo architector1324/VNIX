@@ -1,6 +1,6 @@
 use core::pin::Pin;
 use core::fmt::Write;
-use core::ops::{Generator, GeneratorState};
+use core::ops::{Coroutine, CoroutineState};
 
 use spin::Mutex;
 

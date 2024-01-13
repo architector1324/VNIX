@@ -13,9 +13,9 @@ sha2 = {version = "0.10.6", default-features = false, features = ["force-soft"]}
 p256 = {version = "0.11.1", default-features = false, features=["ecdsa"]}
 rand = {version = "0.8.5", default-features = false, features = ["std_rng"]}
 sha3 = {version = "0.10.6", default-features = false}
+spin = "0.9.5"
 lazy_static = {version = "1.4.0", default-features = false, features = ["spin_no_std"]}
 compression = {version = "0.1.5", default-features = false, features = ["gzip"]}
 base64ct = {version = "1.5.3", default-features = false, features = ["alloc"]}
 libm = "0.2.6"
 num = {version = "0.4.0", default-features = false, features = ["num-bigint", "libm", "alloc"]}
-spin = "0.9.5"

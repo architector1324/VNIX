@@ -1,6 +1,6 @@
 use core::pin::Pin;
 use core::cmp::Ordering;
-use core::ops::{Generator, GeneratorState};
+use core::ops::{Coroutine, CoroutineState};
 
 use alloc::borrow::ToOwned;
 use sha3::{Digest, Sha3_256};
