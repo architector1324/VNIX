@@ -51,8 +51,8 @@ pub struct UefiMem {
 impl UefiCLI {
     pub fn new(st: SystemTable<Boot>) -> Result<UefiCLI, DrvErr> {
         let bt = st.boot_services();
-        let cli_out_hlr = bt.get_handle_for_protocol::<Output>().map_err(|_| DrvErr::HandleFault)?;
-        // let cli_in_hlr = bt.get_handle_for_protocol::<Input>().map_err(|_| DrvErr::HandleFault)?;
+        let cli_out_hlr = bt.get_handle_for_protocol::<Output>().map_err(|_| DrvErr::DriverFault)?;
+        // let cli_in_hlr = bt.get_handle_for_protocol::<Input>().map_err(|_| DrvErr::DriverFault)?;
 
         Ok(UefiCLI {
             st,
@@ -64,8 +64,8 @@ impl UefiCLI {
 
 impl UefiDisp {
     pub fn new(st: SystemTable<Boot>) -> Result<UefiDisp, DrvErr> {
-        let disp_hlr = st.boot_services().get_handle_for_protocol::<GraphicsOutput>().map_err(|_| DrvErr::HandleFault)?;
-        let mouse_hlr = st.boot_services().get_handle_for_protocol::<Pointer>().map_err(|_| DrvErr::HandleFault)?;
+        let disp_hlr = st.boot_services().get_handle_for_protocol::<GraphicsOutput>().map_err(|_| DrvErr::DriverFault)?;
+        let mouse_hlr = st.boot_services().get_handle_for_protocol::<Pointer>().map_err(|_| DrvErr::DriverFault)?;
 
         let res = unsafe {
             let disp = st.boot_services().open_protocol::<GraphicsOutput>(
@@ -110,7 +110,7 @@ impl UefiTime {
 
 impl UefiRnd {
     pub fn new(st: SystemTable<Boot>) -> Result<UefiRnd, DrvErr> {
-        let rnd_hlr = st.boot_services().get_handle_for_protocol::<Rng>().map_err(|_| DrvErr::HandleFault)?;
+        let rnd_hlr = st.boot_services().get_handle_for_protocol::<Rng>().map_err(|_| DrvErr::DriverFault)?;
         Ok(UefiRnd {
             st,
             rnd_hlr
@@ -174,7 +174,7 @@ impl CLI for UefiCLI {
         }
 
         let cli = self.st.stdin();
-        
+
         if let Some(key) = cli.read_key().map_err(|_| CLIErr::GetKey)? {
             match key {
                 Key::Special(scan) => match scan {
