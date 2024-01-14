@@ -6,6 +6,8 @@
 #![feature(iterator_try_reduce)]
 #![feature(iterator_try_collect)]
 #![feature(associated_type_defaults)]
+#![feature(slice_flatten)]
+#![feature(slice_as_chunks)]
 
 extern crate alloc;
 
@@ -102,7 +104,7 @@ fn main() {
 
     // run
     kern.drv.time.start().unwrap();
-    writeln!(kern, "INFO vnix: kernel running on `uefi` platform").unwrap();
+    writeln!(kern, "INFO vnix: kernel running on `linux` platform").unwrap();
 
     let mode = kern.term.lock().mode.clone();
     writeln!(kern, "INFO vnix:kern: `{}` console mode", mode).unwrap();

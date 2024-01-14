@@ -8,6 +8,7 @@ use rand::RngCore;
 
 use termion;
 use sysinfo;
+use linuxfb::Framebuffer;
 
 use termion::event::{Key, Event};
 use termion::input::TermRead;
@@ -23,7 +24,10 @@ pub struct LinuxCLI {
     cli_inp: termion::AsyncReader
 }
 
-pub struct LinuxDisp;
+pub struct LinuxDisp {
+    fb: Framebuffer,
+    buffer: Vec<[u8; 4]>
+}
 
 pub struct LinuxTime {
     uptime: Instant,
@@ -48,7 +52,12 @@ impl LinuxCLI {
 
 impl LinuxDisp {
     pub fn new() -> Result<Self, DrvErr> {
-        Err(DrvErr::DriverFault)
+        let fb = Framebuffer::new("/dev/fb0").map_err(|_| DrvErr::DriverFault)?;
+        let (w, h) = fb.get_size();
+
+        let buffer = vec![[0, 0, 0, 0]; w as usize * h as usize];
+
+        Ok(LinuxDisp {fb, buffer})
     }
 }
 
@@ -124,15 +133,17 @@ impl core::fmt::Write for LinuxCLI {
 
 impl Disp for LinuxDisp {
     fn res(&self) -> Result<(usize, usize), DispErr> {
-        todo!()
+        let (w, h) = self.fb.get_size();
+        Ok((w as usize, h as usize))
     }
 
     fn res_list(&self) -> Result<Vec<(usize, usize)>, DispErr> {
-        todo!()
+        let out = vec![self.res()?];
+        Ok(out)
     }
 
     fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr> {
-        todo!()
+        Err(DispErr::SetResolution)
     } 
 
     fn mouse(&mut self, block: bool) -> Maybe<Mouse, DispErr> {
@@ -140,23 +151,85 @@ impl Disp for LinuxDisp {
     }
 
     fn px(&mut self, px: u32, x: usize, y: usize) -> Result<(), DispErr> {
-        todo!()
+        let res = self.res()?;
+
+        if x + res.0 * y >= res.0 * res.1 {
+            return Err(DispErr::SetPixel)
+        }
+
+        if let Some(v) = self.buffer.get_mut(x + res.0 * y) {
+            *v = [(px >> 16) as u8, (px >> 8) as u8, px as u8, 0];
+        }
+
+        Ok(())
     }
 
     fn blk(&mut self, pos: (i32, i32), img_size: (usize, usize), src: u32, img: &[u32]) -> Result<(), DispErr> {
-        todo!()
+        let res = self.res()?;
+
+        for x in 0..img_size.0 {
+            for y in 0..img_size.1 {
+                if x as i32 + pos.0 >= res.0 as i32 || x as i32 + pos.0 < 0 || y as i32 + pos.1 >= res.1 as i32 || y as i32 + pos.1 < 0 {
+                    continue;
+                }
+
+                let offs = ((pos.0 + x as i32) + res.0 as i32 * (pos.1 + y as i32)) as usize;
+
+                if let Some(px) = img.get(x + img_size.0 * y) {
+                    if *px != src {
+                        if let Some(v) = self.buffer.get_mut(offs) {
+                            *v = [(*px >> 16) as u8, (*px >> 8) as u8, *px as u8, 0];
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn fill(&mut self, f: &dyn Fn(usize, usize) -> u32) -> Result<(), DispErr> {
-        todo!()
+        let res = self.res()?;
+
+        for x in 0..res.0 {
+            for y in 0..res.1 {
+                let px = f(x, y);
+                if let Some(v) = self.buffer.get_mut(x + res.0 * y) {
+                    *v = [(px >> 16) as u8, (px >> 8) as u8, px as u8, 0];
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn flush(&mut self) -> Result<(), DispErr> {
-        todo!()
+        let mut tmp = self.fb.map().map_err(|_| DispErr::Flush)?;
+        let mem = tmp.as_chunks_mut::<4>().0;
+
+        for (i, px) in mem.iter_mut().enumerate() {
+            *px = *self.buffer.get(i).ok_or(DispErr::Flush)?;
+        }
+        Ok(())
     }
 
-    fn flush_blk(&mut self, pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr> {
-        todo!()
+    fn flush_blk(&mut self, mut pos: (i32, i32), size: (usize, usize)) -> Result<(), DispErr> {
+        let (w, h) = self.fb.get_size();
+
+        pos.0 = pos.0.clamp(0, (w as usize - size.0) as i32);
+        pos.1 = pos.1.clamp(0, (h as usize - size.1) as i32);
+
+        let mut tmp = self.fb.map().map_err(|_| DispErr::Flush)?;
+        let mem = tmp.as_chunks_mut::<4>().0;
+
+        for y in (pos.1 as usize)..(pos.1 as usize + size.1) {
+            for x in (pos.0 as usize)..(pos.0 as usize + size.0) {
+                let offs = x + y * w as usize;
+                mem[offs] = self.buffer[offs]; 
+            }
+        }
+
+        Ok(())
     }
 }
 

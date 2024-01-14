@@ -20,3 +20,4 @@ num = {version = "0.4.0", default-features = false, features = ["num-bigint", "l
 termion = "3.0.0"
 sysinfo = "0.30.5"
 rand = "0.8.5"
+linuxfb = "0.3.1"
