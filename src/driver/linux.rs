@@ -1,4 +1,4 @@
-use std::io::{self, Stdout, Read};
+use std::io::stdout;
 use std::io::Write;
 
 use std::time::Instant;
@@ -6,13 +6,10 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::RngCore;
 
-use termion;
 use sysinfo;
 use linuxfb::Framebuffer;
 
-use termion::event::{Key, Event};
-use termion::input::TermRead;
-use termion::raw::{IntoRawMode, RawTerminal};
+use crossterm::{cursor, event, style, terminal, ExecutableCommand, QueueableCommand};
 
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, TimeAsync, Duration, TimeUnit};
@@ -20,8 +17,6 @@ use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Tim
 use crate::thread;
 
 pub struct LinuxCLI {
-    cli: RawTerminal<Stdout>,
-    cli_inp: termion::AsyncReader
 }
 
 pub struct LinuxDisp {
@@ -40,12 +35,7 @@ pub struct LinuxMem;
 
 impl LinuxCLI {
     pub fn new() -> Result<Self, DrvErr> {
-        let cli = io::stdout().into_raw_mode().map_err(|_| DrvErr::DriverFault)?;
-        cli.suspend_raw_mode().map_err(|_| DrvErr::DriverFault)?;
-
         Ok(LinuxCLI{
-            cli,
-            cli_inp: termion::async_stdin()
         })
     }
 }
@@ -56,6 +46,15 @@ impl LinuxDisp {
         let (w, h) = fb.get_size();
 
         let buffer = vec![[0, 0, 0, 0]; w as usize * h as usize];
+
+        stdout().queue(terminal::Clear(terminal::ClearType::All))
+                .map_err(|_| DrvErr::DriverFault)?
+                .queue(cursor::MoveTo(0, 0))
+                .map_err(|_| DrvErr::DriverFault)?
+                .queue(cursor::Hide)
+                .map_err(|_| DrvErr::DriverFault)?
+                .flush()
+                .map_err(|_| DrvErr::DriverFault)?;
 
         Ok(LinuxDisp {fb, buffer})
     }
@@ -71,7 +70,7 @@ impl LinuxTime {
 
 impl CLI for LinuxCLI {
     fn res(&self) -> Result<(usize, usize), CLIErr> {
-        let res = termion::terminal_size().map_err(|_| CLIErr::GetResolution)?;
+        let res = terminal::size().map_err(|_| CLIErr::GetResolution)?;
         Ok((res.0 as usize, res.1 as usize))
     }
 
@@ -80,54 +79,77 @@ impl CLI for LinuxCLI {
         Ok(out)
     }
 
-    fn set_res(&mut self, _: (usize, usize)) -> Result<(), CLIErr> {
-        Err(CLIErr::SetResolution)
+    fn set_res(&mut self, size: (usize, usize)) -> Result<(), CLIErr> {
+        stdout().execute(terminal::SetSize(size.0 as u16, size.1 as u16)).map_err(|_| CLIErr::SetResolution)?;
+        Ok(())
     }
 
     fn glyth(&mut self, ch: char, pos: (usize, usize)) -> Result<(), CLIErr> {
-        write!(self.cli, "{}{ch}", termion::cursor::Goto(pos.0 as u16, pos.1 as u16)).map_err(|_| CLIErr::Write)
+        stdout().queue(cursor::MoveTo(pos.0 as u16, pos.1 as u16))
+                .map_err(|_| CLIErr::Write)?
+                .queue(style::Print(ch.to_string()))
+                .map_err(|_| CLIErr::Write)?
+                .flush().map_err(|_| CLIErr::Write)?;
+
+        Ok(())
     }
 
     fn get_key(&mut self, block: bool) -> Maybe<TermKey, CLIErr> {
-        self.cli.activate_raw_mode().map_err(|_| CLIErr::GetKey)?;
-        self.cli.flush().map_err(|_| CLIErr::GetKey)?;
+        terminal::enable_raw_mode().map_err(|_| CLIErr::GetKey)?;
+        stdout().flush().map_err(|_| CLIErr::GetKey)?;
 
         let mut key = None;
 
-        for ev in self.cli_inp.by_ref().events() {
-            key = match ev.map_err(|_| CLIErr::GetKey)? {
-                Event::Key(key) => match key {
-                    Key::Esc => Some(TermKey::Esc),
-                    Key::Up => Some(TermKey::Up),
-                    Key::Down => Some(TermKey::Down),
-                    Key::Left => Some(TermKey::Left),
-                    Key::Right => Some(TermKey::Right),
-                    Key::Char(c) => Some(TermKey::Char(c)),
-                    Key::Backspace => Some(TermKey::Char('\u{8}')),
+        if block {
+            key = match event::read().map_err(|_| CLIErr::GetKey)? {
+                event::Event::Key(key) => match key.code {
+                    event::KeyCode::Esc => Some(TermKey::Esc),
+                    event::KeyCode::Up => Some(TermKey::Up),
+                    event::KeyCode::Down => Some(TermKey::Down),
+                    event::KeyCode::Left => Some(TermKey::Left),
+                    event::KeyCode::Right => Some(TermKey::Right),
+                    event::KeyCode::Char(c) => Some(TermKey::Char(c)),
+                    event::KeyCode::Backspace => Some(TermKey::Char('\u{8}')),
                     _ => Some(TermKey::Unknown),
-                },
-                _ => None,
-            };
-
-            if key.is_some() || !block {
-                break;
+                }
+                _ => None
+            }
+        } else if event::poll(std::time::Duration::from_millis(1)).map_err(|_| CLIErr::GetKey)? {
+            key = match event::read().map_err(|_| CLIErr::GetKey)? {
+                event::Event::Key(key) => match key.code {
+                    event::KeyCode::Esc => Some(TermKey::Esc),
+                    event::KeyCode::Up => Some(TermKey::Up),
+                    event::KeyCode::Down => Some(TermKey::Down),
+                    event::KeyCode::Left => Some(TermKey::Left),
+                    event::KeyCode::Right => Some(TermKey::Right),
+                    event::KeyCode::Enter => Some(TermKey::Char('\n')),
+                    event::KeyCode::Char(c) => Some(TermKey::Char(c)),
+                    event::KeyCode::Backspace => Some(TermKey::Char('\u{8}')),
+                    _ => Some(TermKey::Unknown),
+                }
+                _ => None
             }
         }
 
-        self.cli.suspend_raw_mode().map_err(|_| CLIErr::GetKey)?;
+        terminal::disable_raw_mode().map_err(|_| CLIErr::GetKey)?;
 
         Ok(key)
     }
 
     fn clear(&mut self) -> Result<(), CLIErr> {
-        write!(self.cli, "{}{}", termion::clear::All, termion::cursor::Goto(1, 1)).map_err(|_| CLIErr::Clear)?;
-        self.cli.flush().map_err(|_| CLIErr::Clear)
+        stdout().queue(terminal::Clear(terminal::ClearType::All))
+                .map_err(|_| CLIErr::Clear)?
+                .queue(cursor::MoveTo(0, 0))
+                .map_err(|_| CLIErr::Clear)?;
+
+        stdout().flush().map_err(|_| CLIErr::Clear)?;
+        Ok(())
     }
 }
 
 impl core::fmt::Write for LinuxCLI {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        write!(self.cli, "{}", s).map_err(|_| std::fmt::Error)
+        write!(stdout(), "{}", s.replace("\n", "\r\n")).map_err(|_| std::fmt::Error)
     }
 }
 
@@ -142,11 +164,11 @@ impl Disp for LinuxDisp {
         Ok(out)
     }
 
-    fn set_res(&mut self, res: (usize, usize)) -> Result<(), DispErr> {
+    fn set_res(&mut self, _res: (usize, usize)) -> Result<(), DispErr> {
         Err(DispErr::SetResolution)
     } 
 
-    fn mouse(&mut self, block: bool) -> Maybe<Mouse, DispErr> {
+    fn mouse(&mut self, _block: bool) -> Maybe<Mouse, DispErr> {
         todo!()
     }
 

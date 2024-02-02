@@ -22,6 +22,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use core::fmt::Write;
+
 use std::io::Read;
 use std::{thread, fs::File, time::Duration};
 
@@ -75,14 +76,15 @@ fn main() {
     // kernel console
     let term = Rc::new(Mutex::new(base::Term::new(&content::SYS_FONT)));
 
-    if disp.is_err() {
+    // if disp.is_err() {
         term.lock().mode = Mode::Text;
-    }
+    // }
 
     // drivers
     let driver = KernDrv::new(
         Box::new(cli),
-        disp.map(|p| Box::new(p) as Box<dyn Disp>).unwrap_or(Box::new(disp_stub) as Box<dyn Disp>),
+        // disp.map(|p| Box::new(p) as Box<dyn Disp>).unwrap_or(Box::new(disp_stub) as Box<dyn Disp>),
+        Box::new(disp_stub),
         Box::new(time),
         // rnd.map(|p| Box::new(p) as Box<dyn Rnd>).unwrap_or(Box::new(prng) as Box<dyn Rnd>),
         Box::new(rnd),
