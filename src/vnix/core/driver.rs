@@ -43,7 +43,7 @@ pub enum MemErr {
 
 #[derive(Debug)]
 pub enum DrvErr {
-    HandleFault,
+    DriverFault,
     CLI(CLIErr),
     Disp(DispErr),
     Time(TimeErr),
@@ -95,7 +95,7 @@ pub trait Time {
     fn start(&mut self) -> Result<(), TimeErr>;
     fn wait(&mut self, dur: Duration) -> Result<(), TimeErr>;
     fn wait_async(&self, dur: Duration) -> TimeAsync;
-    fn uptime(&self, units: TimeUnit) -> Result<u64, TimeErr>;
+    fn uptime(&self, units: TimeUnit) -> Result<u128, TimeErr>;
 }
 
 pub trait CLI: Write {

@@ -1,2 +1,2 @@
-pub mod uefi;
+pub mod linux;
 pub mod stub;

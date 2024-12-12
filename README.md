@@ -51,16 +51,16 @@ git clone https://github.com/architector1324/vnix
 cd vnix
 ```
 
-2. Build vnix kernel for target arch (using [UEFI](https://uefi.org/) now):
+2. Build vnix kernel for target arch (using [Linux musl](https://musl.libc.org/)):
 ```bash
 rustup override set nightly
-rustup target add x86_64-unknown-uefi
-cargo build --release --target=x86_64-unknown-uefi
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --target=x86_64-unknown-linux-musl
 ```
 ```bash
 rustup override set nightly
-rustup target add aarch64-unknown-uefi
-cargo build --release --target=aarch64-unknown-uefi
+rustup target add aarch64-unknown-linux-musl
+cargo build --release --target=aarch64-unknown-linux-musl
 ```
 
 ## Run on QEMU

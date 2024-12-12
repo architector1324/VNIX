@@ -29,8 +29,8 @@ const SERV_HELP: &'static str = "{
         {
             info:`Register new 'test' user`
             com:[
-                test@sys.hw
-                {ath:test}@sys.hw
+                test@sys.usr
+                {ath:test}@sys.usr
             ]
             res:{
                 ath:test
