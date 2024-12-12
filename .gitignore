@@ -1,8 +1,5 @@
-
-target/
-
-boot/
-
+target/*
+boot/*
+out/*
+content/*
 Cargo.lock
-
-out/
