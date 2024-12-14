@@ -36,8 +36,11 @@ impl Task {
         Task{usr, name, id, parent_id, run}
     }
 
-    pub async fn run(self, kern: &Mutex<Kern>) -> Maybe<Msg, KernErr> {
-        let msg = kern.lock().msg(&self.usr, self.run.0)?;
-        Kern::send(kern, self.run.1, msg).await
+    pub fn run(self, kern: &Mutex<Kern>) -> TaskRunAsync {
+        let f = async move || {
+            let msg = kern.lock().msg(&self.usr, self.run.0)?;
+            Kern::send(kern, self.run.1, msg).await
+        };
+        Box::pin(f())
     }
 }

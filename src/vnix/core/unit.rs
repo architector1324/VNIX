@@ -203,13 +203,13 @@ pub struct DisplayNice(pub usize, pub usize, pub Unit);
 #[derive(Debug, Clone)]
 pub struct DisplayShort(pub usize, pub Unit);
 
-pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
-pub type UnitReadAsync<'a> = UnitTypeReadAsync<'a, Unit>;
+// pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
+// pub type UnitReadAsync<'a> = UnitTypeReadAsync<'a, Unit>;
 
-pub trait UnitReadAsyncI {
-    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
-    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
-}
+// pub trait UnitReadAsyncI {
+//     fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+//     fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+// }
 
 // #[macro_export]
 // macro_rules! read_async {

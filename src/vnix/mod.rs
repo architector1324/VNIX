@@ -70,19 +70,12 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
     let s = "123";
-    let u = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    let msg = kern.msg("super", u)?;
+    let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let mut mtx = spin::mutex::Mutex::new(kern);
+    let run = TaskRun(msg, "test.echo".into());
+    kern.reg_task(&_super.name, "test", run)?;
 
-    if let Some(msg) = block_on(Kern::send(&mut mtx, "test.echo".into(), msg))? {
-        writeln!(mtx.lock(), "msg: {}", msg).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-    }
-
-    // let run = TaskRun(msg, "test.echo".into());
-    // kern.reg_task(&_super.name, "test", run)?;
-
-    // kern.run()
+    kern.run()
 
     // // run
     // let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
@@ -93,5 +86,4 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // kern.reg_task(&_super.name, "init.load", run)?;
 
     // kern.run()
-    Ok(())
 }

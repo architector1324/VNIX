@@ -1,6 +1,6 @@
 use core::fmt::{Display, Write};
 
-use futures::{future, pin_mut, select};
+use futures::future;
 use futures::executor::block_on;
 
 use alloc::rc::Rc;
@@ -429,18 +429,18 @@ impl Kern {
                         // run task
                         kern_mtx.lock().curr_task_id = task.id;
 
-                        // if let CoroutineState::Complete(res) = Pin::new(run).resume(()) {
-                        //     match &res {
-                        //         Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
-                        //         Err(e) => {
-                        //             writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-                        //         }
-                        //     };
+                        if let Some(res) = future::poll_immediate(run).await {
+                            match &res {
+                                Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
+                                Err(e) => {
+                                    writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                                }
+                            };
     
-                        //     kern_mtx.lock().task_result.push((task.id, res));
-                        //     kern_mtx.lock().tasks_running.extract_if(|t| t.id == task.id).next();
-                        //     *done = true;
-                        // }
+                            kern_mtx.lock().task_result.push((task.id, res));
+                            kern_mtx.lock().tasks_running.extract_if(|t| t.id == task.id).next();
+                            *done = true;
+                        }
                     }
     
                     // run new tasks

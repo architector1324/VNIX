@@ -26,7 +26,7 @@ use crate::vnix::utils::Maybe;
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::serv::{ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitModify, UnitParse, UnitReadAsyncI, UnitReadAsync};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitModify, UnitParse};
 
 
 pub const SERV_PATH: &'static str = "io.term";
