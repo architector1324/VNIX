@@ -14,6 +14,32 @@ use super::kern::{KernErr, Kern};
 pub type ThreadAsync<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 pub type TaskRunAsync<'a> = ThreadAsync<'a, Maybe<Msg, KernErr>>;
 
+
+#[macro_export]
+macro_rules! thread {
+    ($f:expr) => {
+        {
+            let tmp = async move || $f;
+            Box::pin(tmp())
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! task_result {
+    ($id:expr, $kern:expr) => {
+        async {
+            let res = loop {
+                if let Some(res) = $kern.lock().get_task_result($id) {
+                    break res;
+                }
+                async{}.await;
+            };
+            res
+        }.await
+    };
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskRun(pub Unit, pub String);
 
@@ -37,10 +63,9 @@ impl Task {
     }
 
     pub fn run(self, kern: &Mutex<Kern>) -> TaskRunAsync {
-        let f = async move || {
+        thread!({
             let msg = kern.lock().msg(&self.usr, self.run.0)?;
             Kern::send(kern, self.run.1, msg).await
-        };
-        Box::pin(f())
+        })
     }
 }
