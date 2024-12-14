@@ -1,4 +1,3 @@
-use core::ops::Coroutine;
 use core::fmt::{Write, Display};
 
 use alloc::vec::Vec;
@@ -69,7 +68,7 @@ pub struct Mouse {
     pub click: (bool, bool)
 }
 
-pub type TimeAsync = Box<dyn Coroutine<Yield = (), Return = Result<(), TimeErr>>>;
+// pub type TimeAsync = Box<dyn Coroutine<Yield = (), Return = Result<(), TimeErr>>>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Duration {
@@ -94,7 +93,7 @@ pub enum TimeUnit {
 pub trait Time {
     fn start(&mut self) -> Result<(), TimeErr>;
     fn wait(&mut self, dur: Duration) -> Result<(), TimeErr>;
-    fn wait_async(&self, dur: Duration) -> TimeAsync;
+    // fn wait_async(&self, dur: Duration) -> TimeAsync;
     fn uptime(&self, units: TimeUnit) -> Result<u128, TimeErr>;
 }
 

@@ -12,7 +12,7 @@ use linuxfb::Framebuffer;
 use crossterm::{cursor, event, style, terminal, ExecutableCommand, QueueableCommand};
 
 use crate::vnix::utils::Maybe;
-use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, TimeAsync, Duration, TimeUnit};
+use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, Duration, TimeUnit};
 
 use crate::thread;
 
@@ -271,24 +271,24 @@ impl Time for LinuxTime {
         Ok(())
     }
 
-    fn wait_async(&self, dur: Duration) -> TimeAsync {
-        thread!({
-            let dur = match dur {
-                Duration::Micro(mcs) => std::time::Duration::from_micros(mcs as u64),
-                Duration::Milli(ms) => std::time::Duration::from_millis(ms as u64),
-                Duration::Seconds(sec) => std::time::Duration::from_secs(sec as u64)
-            };
+    // fn wait_async(&self, dur: Duration) -> TimeAsync {
+    //     thread!({
+    //         let dur = match dur {
+    //             Duration::Micro(mcs) => std::time::Duration::from_micros(mcs as u64),
+    //             Duration::Milli(ms) => std::time::Duration::from_millis(ms as u64),
+    //             Duration::Seconds(sec) => std::time::Duration::from_secs(sec as u64)
+    //         };
 
-            let timer = Instant::now();
+    //         let timer = Instant::now();
 
-            loop {
-                if timer.elapsed() >= dur {
-                    return Ok(())
-                }
-                yield;
-            }
-        })
-    }
+    //         loop {
+    //             if timer.elapsed() >= dur {
+    //                 return Ok(())
+    //             }
+    //             yield;
+    //         }
+    //     })
+    // }
 
     fn uptime(&self, units: TimeUnit) -> Result<u128, TimeErr> {
         let time = match units {

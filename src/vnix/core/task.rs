@@ -1,5 +1,4 @@
-use core::ops::{Coroutine, CoroutineState};
-use core::pin::Pin;
+use core::future::Future;
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -11,6 +10,8 @@ use super::msg::Msg;
 use super::unit::Unit;
 use super::kern::{KernErr, Kern};
 
+pub type ThreadAsync<'a, T> = Box<dyn Future<Output = T> + Unpin + 'a>;
+pub type TaskRunAsync<'a> = ThreadAsync<'a, Maybe<Msg, KernErr>>;
 
 #[derive(Debug, Clone)]
 pub struct TaskRun(pub Unit, pub String);
@@ -29,63 +30,14 @@ pub enum TaskSig {
     Kill
 }
 
-pub type TaskRunAsync<'a> = impl Coroutine<Yield = (), Return = Maybe<Msg, KernErr>> + 'a;
-pub type ThreadAsync<'a, T> = Box<dyn Coroutine<Yield = (), Return = T> + 'a>;
-
-#[macro_export]
-macro_rules! thread {
-    ($s:tt) => {
-       {
-            let hlr = move || $s;
-            Box::new(hlr)
-       } 
-    };
-}
-
-#[macro_export]
-macro_rules! thread_await {
-    ($t:expr) => {
-        {
-            let mut gen = Box::into_pin($t);
-            let res = loop {
-                if let CoroutineState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                    break res;
-                }
-                yield;
-            };
-            res
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! task_result {
-    ($id:expr, $kern:expr) => {
-        {
-            let res = loop {
-                if let Some(res) = $kern.lock().get_task_result($id) {
-                    break res;
-                }
-                yield;
-            };
-            res
-        }
-    };
-}
-
 impl Task {
     pub fn new(usr: String, name: String, id: usize, parent_id: usize, run: TaskRun) -> Self {
         Task{usr, name, id, parent_id, run}
     }
 
-    pub fn run<'a>(self, kern: &'a Mutex<Kern>) -> TaskRunAsync<'a> {
-        move || {
-            let msg = kern.lock().msg(&self.usr, self.run.0)?;
+    pub async fn run(self, kern: &Mutex<Kern>) -> Maybe<Msg, KernErr> {
+        let msg = kern.lock().msg(&self.usr, self.run.0)?;
 
-            if let Some(run) = Kern::send(kern, self.run.1, msg)? {
-                return thread_await!(run)
-            }
-            Ok(None)
-        }
+        Kern::send(kern, self.run.1, msg).await
     }
 }

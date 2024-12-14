@@ -5,8 +5,8 @@ use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::vnix::core::driver::{DrvErr, CLIErr, TermKey};
-use crate::vnix::utils::Maybe;
-use crate::vnix::core::task::ThreadAsync;
+// use crate::vnix::utils::Maybe;
+// use crate::vnix::core::task::ThreadAsync;
 
 use crate::thread;
 
@@ -116,65 +116,65 @@ impl Term {
         Ok(())
     }
 
-    pub fn input(term: Rc<Mutex<Self>>, secret:bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
-        thread!({
-            let save_pos = term.lock().pos.clone();
+    // pub fn input(term: Rc<Mutex<Self>>, secret:bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
+    //     thread!({
+    //         let save_pos = term.lock().pos.clone();
 
-            let mut s = String::new();
-            loop {
-                // get key
-                let mut grd = kern.lock();
-                let key = grd.drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
-                drop(grd);
+    //         let mut s = String::new();
+    //         loop {
+    //             // get key
+    //             let mut grd = kern.lock();
+    //             let key = grd.drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
+    //             drop(grd);
 
-                // push to string
-                if let Some(key) = key {
-                    match key {
-                        TermKey::Char(ch) => {
-                            if ch == '\n' || ch == '\r' {
-                                break;
-                            }
+    //             // push to string
+    //             if let Some(key) = key {
+    //                 match key {
+    //                     TermKey::Char(ch) => {
+    //                         if ch == '\n' || ch == '\r' {
+    //                             break;
+    //                         }
 
-                            if ch == '\u{8}' {
-                                if term.lock().pos.0 > save_pos.0 {
-                                    s.pop();
-                                    if !secret {
-                                        term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
-                                    }
-                                }
+    //                         if ch == '\u{8}' {
+    //                             if term.lock().pos.0 > save_pos.0 {
+    //                                 s.pop();
+    //                                 if !secret {
+    //                                     term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
+    //                                 }
+    //                             }
 
-                                yield;
-                                continue;
-                            }
+    //                             yield;
+    //                             continue;
+    //                         }
 
-                            if let Some(lim) = limit {
-                                if s.len() >= lim {
-                                    yield;
-                                    continue;
-                                }
-                            }
+    //                         if let Some(lim) = limit {
+    //                             if s.len() >= lim {
+    //                                 yield;
+    //                                 continue;
+    //                             }
+    //                         }
 
-                            if ch.is_control() {
-                                yield;
-                                continue;
-                            }
+    //                         if ch.is_control() {
+    //                             yield;
+    //                             continue;
+    //                         }
 
-                            s.push(ch);
-                            if !secret {
-                                term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
-                            }
-                        },
-                        TermKey::Esc => break,
-                        _ => yield
-                    }
-                }
-                yield;
-            }
+    //                         s.push(ch);
+    //                         if !secret {
+    //                             term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
+    //                         }
+    //                     },
+    //                     TermKey::Esc => break,
+    //                     _ => yield
+    //                 }
+    //             }
+    //             yield;
+    //         }
 
-            if s.is_empty() {
-                return Ok(None)
-            }
-            return Ok(Some(Unit::str(&s)))
-        })
-    }
+    //         if s.is_empty() {
+    //             return Ok(None)
+    //         }
+    //         return Ok(Some(Unit::str(&s)))
+    //     })
+    // }
 }
