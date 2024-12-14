@@ -13,11 +13,11 @@ use super::msg::Msg;
 use super::user::Usr;
 use super::task::{Task, TaskRun, TaskSig};
 use super::unit::{Unit, UnitParseErr, UnitAs, UnitNew, Path, UnitBase, Int, Dec};
-use super::serv::{Serv, ServErr};
+use super::serv::{Serv, ServErr, ServResult};
 use super::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
 
 use crate::vnix::serv::io::term::base;
-use crate::vnix::utils::{RamStore, Maybe};
+use crate::vnix::utils::RamStore;
 
 use spin::Mutex;
 
@@ -92,7 +92,7 @@ pub struct Kern {
     tasks_queue: Vec<Task>,
     tasks_running: Vec<Task>,
     tasks_signals: Vec<(usize, TaskSig)>,
-    task_result: Vec<(usize, Maybe<Msg, KernErr>)>
+    task_result: Vec<(usize, ServResult)>
 }
 
 impl Display for Addr {
@@ -341,7 +341,7 @@ impl Kern {
         self.tasks_running.iter().find(|t| t.id == self.curr_task_id).map(|t| t.clone())
     }
 
-    pub fn get_task_result(&mut self, id: usize) -> Option<Maybe<Msg, KernErr>> {
+    pub fn get_task_result(&mut self, id: usize) -> Option<ServResult> {
         self.task_result.extract_if(|(i, _)| *i == id).next().map(|(_, msg)| msg)
     }
 
@@ -350,7 +350,7 @@ impl Kern {
         Msg::new(usr, self.new_unit(u))
     }
 
-    async fn help_serv(kern: &Mutex<Self>, ath: String) -> Maybe<Msg, KernErr> {
+    async fn help_serv(kern: &Mutex<Self>, ath: String) -> ServResult {
         let serv = kern.lock().services.iter().map(|serv| Unit::str(&serv.info.name)).collect::<Vec<_>>();
         
         let u = Unit::map(&[(
@@ -360,7 +360,7 @@ impl Kern {
         kern.lock().msg(&ath, u).map(|m| Some(m))
     }
 
-    pub async fn send(mtx: &Mutex<Self>, serv: String, msg: Msg) -> Maybe<Msg, KernErr> {
+    pub async fn send(mtx: &Mutex<Self>, serv: String, msg: Msg) -> ServResult {
         // verify msg
         let usr = mtx.lock().get_usr(&msg.ath)?;
         usr.verify(msg.msg.clone(), &msg.sign, &msg.hash)?;
@@ -370,8 +370,11 @@ impl Kern {
             match s.as_str() {
                 "serv" => return Self::help_serv(mtx, msg.ath.clone()).await,
                 _ => if s.starts_with("help") {
-                    let tmp = mtx.lock();
-                    let serv = tmp.get_serv(serv.as_str())?;
+                    let serv = unsafe {
+                        let lck = mtx.lock();
+                        let serv = lck.get_serv(serv.as_str())? as *const Serv;
+                        &*serv
+                    };
                     let inst = serv.hlr.help_hlr(msg, serv.info.clone(), mtx);
                     return inst.await
                 }
@@ -379,8 +382,12 @@ impl Kern {
         }
 
         // send
-        let tmp = mtx.lock();
-        let serv = tmp.get_serv(serv.as_str())?;
+        let serv = unsafe {
+            let lck = mtx.lock();
+            let serv = lck.get_serv(serv.as_str())? as *const Serv;
+            &*serv
+        };
+
         let inst = serv.hlr.hlr(msg, serv.info.clone(), mtx);
         inst.await
     }

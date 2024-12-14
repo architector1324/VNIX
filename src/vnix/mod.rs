@@ -2,8 +2,8 @@ pub mod core;
 pub mod serv;
 pub mod utils;
 
-use ::core::fmt::Write;
 use ::core::writeln;
+use ::core::fmt::Write;
 
 use futures::executor::block_on;
 
@@ -12,7 +12,7 @@ use crate::vnix::core::driver::{CLIErr, DrvErr};
 use self::core::user::Usr;
 use self::core::task::TaskRun;
 use self::core::kern::{Kern, KernErr};
-use self::core::serv::Serv;
+use self::core::serv::{Serv, ServHlr};
 use self::core::unit::{Unit, UnitParse};
 
 // use self::serv::{io, sys, math, gfx, dat, time, test};
@@ -33,13 +33,13 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // (sys::task::SERV_PATH, Box::new(sys::task::help_hlr) as Box<ServHlr>, Box::new(sys::task::task_hlr) as Box<ServHlr>),
         // (sys::usr::SERV_PATH, Box::new(sys::usr::help_hlr) as Box<ServHlr>, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
         // (sys::hw::SERV_PATH, Box::new(sys::hw::help_hlr) as Box<ServHlr>, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
-        // (test::dump::SERV_PATH, Box::new(test::dump::help_hlr) as Box<ServHlr>, Box::new(test::dump::dump_hlr) as Box<ServHlr>),
-        (test::echo::SERV_PATH, test::echo::EchoHlr),
-        // (test::void::SERV_PATH, Box::new(test::void::help_hlr) as Box<ServHlr>, Box::new(test::void::void_hlr) as Box<ServHlr>)
+        (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::DumpHlr) as Box<dyn ServHlr>),
+        (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::EchoHlr) as Box<dyn ServHlr>),
+        (test::void::SERV_PATH, test::void::SERV_HELP, Box::new(test::void::VoidHlr) as Box<dyn ServHlr>)
     ];
 
-    for (name, hlr) in services {
-        let serv = Serv::new(name, Box::new(hlr));
+    for (name, help, hlr) in services {
+        let serv = Serv::new(name, help, hlr);
         kern.reg_serv(serv)?;
 
         writeln!(kern, "INFO vnix:kern: service `{}` registered", name).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
@@ -72,7 +72,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     let s = "123";
     let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let run = TaskRun(msg, "test.echo".into());
+    let run = TaskRun(msg, "test.dump".into());
     kern.reg_task(&_super.name, "test", run)?;
 
     kern.run()
