@@ -20,7 +20,7 @@ use self::serv::{io, test};
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
-        // (io::term::SERV_PATH, Box::new(io::term::help_hlr) as Box<ServHlr>, Box::new(io::term::term_hlr) as Box<ServHlr>),
+        (io::term::SERV_PATH, io::term::help::SERV_HELP, Box::new(io::term::TermHlr) as Box<dyn ServHlr>),
         (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::StoreHlr) as Box<dyn ServHlr>),
         // // ("auto.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         // (dat::proc::SERV_PATH, Box::new(dat::proc::help_hlr) as Box<ServHlr>, Box::new(dat::proc::proc_hlr) as Box<ServHlr>),
@@ -67,10 +67,10 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{say:{a:[1 {b:c} 3] d:-} nice:4 nl:t}@io.term";
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let s = "123";
+    let s = "{say:123 nl:t}";
     let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let run = TaskRun(msg, "test.dump".into());
+    let run = TaskRun(msg, "io.term".into());
     kern.reg_task(&_super.name, "test", run)?;
 
     kern.run()
