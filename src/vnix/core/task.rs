@@ -1,4 +1,5 @@
 use core::future::Future;
+use core::pin::Pin;
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -10,7 +11,7 @@ use super::msg::Msg;
 use super::unit::Unit;
 use super::kern::{KernErr, Kern};
 
-pub type ThreadAsync<'a, T> = Box<dyn Future<Output = T> + Unpin + 'a>;
+pub type ThreadAsync<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 pub type TaskRunAsync<'a> = ThreadAsync<'a, Maybe<Msg, KernErr>>;
 
 #[derive(Debug, Clone)]
@@ -37,7 +38,6 @@ impl Task {
 
     pub async fn run(self, kern: &Mutex<Kern>) -> Maybe<Msg, KernErr> {
         let msg = kern.lock().msg(&self.usr, self.run.0)?;
-
         Kern::send(kern, self.run.1, msg).await
     }
 }

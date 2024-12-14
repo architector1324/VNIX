@@ -1,6 +1,7 @@
 use core::fmt::{Display, Write};
+
+use futures::{future, pin_mut, select};
 use futures::executor::block_on;
-use core::unimplemented;
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
@@ -12,7 +13,7 @@ use super::msg::Msg;
 use super::user::Usr;
 use super::task::{Task, TaskRun, TaskSig};
 use super::unit::{Unit, UnitParseErr, UnitAs, UnitNew, Path, UnitBase, Int, Dec};
-use super::serv::{Serv, ServErr, ServHlrAsync};
+use super::serv::{Serv, ServErr};
 use super::driver::{CLIErr, CLI, Disp, Time, Rnd, Mem, DrvErr};
 
 use crate::vnix::serv::io::term::base;
@@ -371,7 +372,7 @@ impl Kern {
                 _ => if s.starts_with("help") {
                     let tmp = mtx.lock();
                     let serv = tmp.get_serv(serv.as_str())?;
-                    let inst = (serv.help_hlr)(msg, serv.info.clone(), mtx);
+                    let inst = serv.hlr.help_hlr(msg, serv.info.clone(), mtx);
                     return inst.await
                 }
             }
@@ -380,98 +381,95 @@ impl Kern {
         // send
         let tmp = mtx.lock();
         let serv = tmp.get_serv(serv.as_str())?;
-        let inst = (serv.hlr)(msg, serv.info.clone(), mtx);
+        let inst = serv.hlr.hlr(msg, serv.info.clone(), mtx);
         inst.await
     }
 
     pub fn run(self) -> Result<(), KernErr> {
         let kern_mtx = Mutex::new(self);
-        loop {
 
-        }
+        let kern_loop = async || {
+            loop {
+                let mut runs = kern_mtx.lock().tasks_queue.clone().into_iter().map(|t| {
+                    let task = t.clone();
+                    let run = t.run(&kern_mtx);
+    
+                    (task, (run, false))
+                }).collect::<Vec<_>>();
+    
+                kern_mtx.lock().tasks_queue = Vec::new();
+    
+                // run tasks
+                for (task, _) in runs.iter() {
+                    kern_mtx.lock().tasks_running.push(task.clone());
+                }
+    
+                loop {
+                    for (task, (run, done)) in &mut runs {
+                        // check signals
+                        {
+                            let mut grd = kern_mtx.lock();
+    
+                            if let Some(sig) = grd.tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
+                                match sig {
+                                    TaskSig::Kill => {
+                                        writeln!(grd, "INFO vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                                        grd.tasks_running.extract_if(|t| t.id == task.id).next();
+                                        grd.tasks_signals.extract_if(|(id, _)| *id == task.id).next();
+                                        *done = true
+                                    }
+                                }
+                            }
+                        }
+    
+                        if *done {
+                            continue;
+                        }
+    
+                        // run task
+                        kern_mtx.lock().curr_task_id = task.id;
+
+                        // if let CoroutineState::Complete(res) = Pin::new(run).resume(()) {
+                        //     match &res {
+                        //         Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
+                        //         Err(e) => {
+                        //             writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                        //         }
+                        //     };
+    
+                        //     kern_mtx.lock().task_result.push((task.id, res));
+                        //     kern_mtx.lock().tasks_running.extract_if(|t| t.id == task.id).next();
+                        //     *done = true;
+                        // }
+                    }
+    
+                    // run new tasks
+                    if !kern_mtx.lock().tasks_queue.is_empty() {
+                        let mut new_runs = kern_mtx.lock().tasks_queue.clone().into_iter().map(|t| {
+                            let task = t.clone();
+                            let run = t.run(&kern_mtx);
+    
+                            (task, (run, false))
+                        }).collect::<Vec<_>>();
+    
+                        kern_mtx.lock().tasks_queue = Vec::new();
+    
+                        for (task, _) in new_runs.iter() {
+                            kern_mtx.lock().tasks_running.push(task.clone());
+                            // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
+                        }
+    
+                        runs.append(&mut new_runs);
+                    }
+    
+                    // done
+                    if runs.iter().all(|(_, (_, done))| *done) {
+                        break;
+                    }
+                }
+            }
+        };
+
+        block_on(kern_loop())
     }
-
-    // pub fn run<'a>(self) -> Result<(), KernErr> {
-    //     let kern_mtx = Mutex::new(self);
-
-    //     loop {
-    //         let mut runs = kern_mtx.lock().tasks_queue.clone().into_iter().map(|t| {
-    //             let task = t.clone();
-    //             let run = t.run(&kern_mtx);
-
-    //             (task, (run, false))
-    //         }).collect::<Vec<_>>();
-
-    //         kern_mtx.lock().tasks_queue = Vec::new();
-
-    //         // run tasks
-    //         for (task, _) in runs.iter() {
-    //             kern_mtx.lock().tasks_running.push(task.clone());
-    //         }
-
-    //         loop {
-    //             for (task, (run, done)) in &mut runs {
-    //                 // check signals
-    //                 {
-    //                     let mut grd = kern_mtx.lock();
-
-    //                     if let Some(sig) = grd.tasks_signals.iter().find(|(id, _)| *id == task.id).map(|(_, sig)| sig.clone()) {
-    //                         match sig {
-    //                             TaskSig::Kill => {
-    //                                 writeln!(grd, "INFO vnix:kern: killed task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-    //                                 grd.tasks_running.extract_if(|t| t.id == task.id).next();
-    //                                 grd.tasks_signals.extract_if(|(id, _)| *id == task.id).next();
-    //                                 *done = true
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-
-    //                 if *done {
-    //                     continue;
-    //                 }
-
-    //                 // run task
-    //                 kern_mtx.lock().curr_task_id = task.id;
-
-    //                 if let CoroutineState::Complete(res) = Pin::new(run).resume(()) {
-    //                     match &res {
-    //                         Ok(..) => (), // writeln!(kern_mtx.lock(), "DEBG vnix:kern: done task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?,
-    //                         Err(e) => {
-    //                             writeln!(kern_mtx.lock(), "ERR vnix:{}#{}: {:?}", task.name, task.id, e).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-    //                         }
-    //                     };
-
-    //                     kern_mtx.lock().task_result.push((task.id, res));
-    //                     kern_mtx.lock().tasks_running.extract_if(|t| t.id == task.id).next();
-    //                     *done = true;
-    //                 }
-    //             }
-
-    //             // run new tasks
-    //             if !kern_mtx.lock().tasks_queue.is_empty() {
-    //                 let mut new_runs = kern_mtx.lock().tasks_queue.clone().into_iter().map(|t| {
-    //                     let task = t.clone();
-    //                     let run = t.run(&kern_mtx);
-
-    //                     (task, (run, false))
-    //                 }).collect::<Vec<_>>();
-
-    //                 kern_mtx.lock().tasks_queue = Vec::new();
-
-    //                 for (task, _) in new_runs.iter() {
-    //                     kern_mtx.lock().tasks_running.push(task.clone());
-    //                     // writeln!(kern_mtx.lock(), "DEBG vnix:kern: run task `{}#{}`", task.name, task.id).map_err(|_| KernErr::DrvErr(DrvErr::CLI(CLIErr::Write)))?;
-    //                 }
-
-    //                 runs.append(&mut new_runs);
-    //             }
-
-    //             // done
-    //             if runs.iter().all(|(_, (_, done))| *done) {
-    //                 break;
-    //             }
-    //         }
-    //     }
-    // }
 }

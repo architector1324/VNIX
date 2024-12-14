@@ -1,20 +1,25 @@
 use spin::Mutex;
-use alloc::boxed::Box;
 
-use crate::{thread, maybe_ok};
+use async_trait::async_trait;
+
+use crate::vnix::utils::Maybe;
+use crate::maybe_ok;
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
+use crate::vnix::core::serv::{ServHlr, ServInfo};
 use crate::vnix::core::unit::{Unit, UnitNew, UnitModify, UnitParse, UnitAs};
 
 
 pub const SERV_PATH: &'static str = "test.echo";
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
+pub struct EchoHlr;
 
+#[async_trait(?Send)]
+impl ServHlr for EchoHlr {
+    async fn help_hlr(&self, msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> Maybe<Msg, KernErr> {
+        let s = maybe_ok!(msg.msg.clone().as_str());
+    
         let help_s = "{
             name:test.echo
             info:`Test echo service`
@@ -26,8 +31,8 @@ pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
             man:-
         }";
         let help = Unit::parse(help_s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
+        async {}.await;
+    
         let res = match s.as_str() {
             "help" => help,
             "help.name" => maybe_ok!(help.find(["name"].into_iter())),
@@ -36,17 +41,14 @@ pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
             "help.man" => maybe_ok!(help.find(["man"].into_iter())),
             _ => return Ok(None)
         };
-
+    
         let _msg = Unit::map(&[
             (Unit::str("msg"), res)
         ]);
         kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn echo_hlr(msg: Msg, _serv: ServInfo, _kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        yield;
+    }
+    
+    async fn hlr(&self, msg: Msg, _serv: ServInfo, _kern: &Mutex<Kern>) -> Maybe<Msg, KernErr> {
         Ok(Some(msg))
-    })    
+    }
 }
