@@ -1,8 +1,8 @@
 use core::fmt::{Write, Display};
 
 use alloc::vec::Vec;
-use alloc::boxed::Box;
 
+use async_trait::async_trait;
 use crate::vnix::utils::Maybe;
 
 
@@ -90,10 +90,11 @@ pub enum TimeUnit {
     Year
 }
 
+#[async_trait(?Send)]
 pub trait Time {
     fn start(&mut self) -> Result<(), TimeErr>;
     fn wait(&mut self, dur: Duration) -> Result<(), TimeErr>;
-    // fn wait_async(&self, dur: Duration) -> TimeAsync;
+    async fn wait_async(&self, dur: Duration) -> Result<(), TimeErr>;
     fn uptime(&self, units: TimeUnit) -> Result<u128, TimeErr>;
 }
 
