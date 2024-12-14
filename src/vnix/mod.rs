@@ -5,8 +5,6 @@ pub mod utils;
 use ::core::writeln;
 use ::core::fmt::Write;
 
-use futures::executor::block_on;
-
 use crate::vnix::core::driver::{CLIErr, DrvErr};
 
 use self::core::user::Usr;
@@ -16,14 +14,14 @@ use self::core::serv::{Serv, ServHlr};
 use self::core::unit::{Unit, UnitParse};
 
 // use self::serv::{io, sys, math, gfx, dat, time, test};
-use self::serv::{test};
+use self::serv::{io, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // register service
     let services = [
         // (io::term::SERV_PATH, Box::new(io::term::help_hlr) as Box<ServHlr>, Box::new(io::term::term_hlr) as Box<ServHlr>),
-        // (io::store::SERV_PATH, Box::new(io::store::help_hlr) as Box<ServHlr>, Box::new(io::store::store_hlr) as Box<ServHlr>),
+        (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::StoreHlr) as Box<dyn ServHlr>),
         // // ("auto.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
         // (dat::proc::SERV_PATH, Box::new(dat::proc::help_hlr) as Box<ServHlr>, Box::new(dat::proc::proc_hlr) as Box<ServHlr>),
         // (dat::gen::SERV_PATH, Box::new(dat::gen::help_hlr) as Box<ServHlr>, Box::new(dat::gen::gen_hlr) as Box<ServHlr>),

@@ -16,14 +16,12 @@ use num::cast::ToPrimitive;
 use num::bigint::{BigInt, Sign};
 use num::rational::BigRational;
 
-use crate::{maybe, maybe_ok, task_result};
 use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::TaskRun;
 
 use crate::vnix::core::driver::MemSizeUnits;
-// use crate::{thread, thread_await, task_result, maybe, maybe_ok};
+use crate::{maybe, maybe_ok, task_result};
 
-use super::task::ThreadAsync;
 use super::kern::{Addr, KernErr, Kern};
 
 
@@ -207,7 +205,8 @@ pub struct DisplayShort(pub usize, pub Unit);
 // pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
 // pub type UnitReadAsync<'a> = UnitTypeReadAsync<'a, Unit>;
 
-pub type UnitAsyncResult = Maybe<(Unit, Rc<String>), KernErr>;
+pub type UnitTypeAsyncResult<T> = Maybe<(T, Rc<String>), KernErr>;
+pub type UnitAsyncResult = UnitTypeAsyncResult<Unit>;
 
 #[async_trait(?Send)]
 pub trait UnitReadAsyncI {
@@ -250,7 +249,7 @@ macro_rules! as_async {
 #[macro_export]
 macro_rules! as_map_find_async {
     ($msg:expr, $sch:expr, $ath:expr, $orig:expr, $kern:expr) => {
-        thread_await!($msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern))
+        $msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern).await
     };
 }
 
