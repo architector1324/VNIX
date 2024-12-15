@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use crate::maybe_ok;
 use crate::vnix::utils::Maybe;
 
+use super::task::Yield;
 use super::unit::{Unit, UnitNew, UnitModify, UnitParse, UnitAs};
 
 use super::msg::Msg;
@@ -22,7 +23,7 @@ pub trait ServHlr {
         let s = maybe_ok!(msg.msg.clone().as_str());
 
         let help = Unit::parse(serv.help.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        async{}.await;
+        Yield::now().await;
 
         let res = match s.as_str() {
             "help" => help,

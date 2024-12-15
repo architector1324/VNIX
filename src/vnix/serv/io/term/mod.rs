@@ -20,6 +20,7 @@ use crate::vnix::utils::Maybe;
 use crate::{maybe_ok, read_async, maybe, as_async};
 
 use crate::vnix::core::msg::Msg;
+use crate::vnix::core::task::Yield;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::driver::{DrvErr, CLIErr, DispErr};
 use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
@@ -150,7 +151,7 @@ impl TermHlr {
             ])
         };
 
-        async{}.await;
+        Yield::now().await;
 
         // get
         let res = match s.as_str() {

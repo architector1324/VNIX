@@ -9,9 +9,9 @@ use alloc::string::String;
 use spin::Mutex;
 
 use crate::vnix::utils::Maybe;
-use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::driver::{TermKey, DrvErr};
+use crate::vnix::core::task::{ThreadAsync, Yield};
 use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, DisplayStr, DisplayShort, DisplayNice, UnitTypeAsyncResult};
 
 use crate::{thread, as_async, maybe, read_async, as_map_find_as_async, maybe_ok};
@@ -30,7 +30,7 @@ pub async fn cls(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) ->
     term.lock().clear(&mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
     term.lock().flush(&mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
-    async{}.await;
+    Yield::now().await;
     Ok(Some(ath))
 }
 
@@ -43,7 +43,7 @@ pub async fn nl(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> 
     let term = kern.lock().term.clone();
     term.lock().print_ch('\n', &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
 
-    async{}.await;
+    Yield::now().await;
     Ok(Some(ath))
 }
 
@@ -168,7 +168,7 @@ pub async fn get_key(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>
                 if let Some(key) = kern.lock().drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))? {
                     break key;
                 }
-                async{}.await
+                Yield::now().await
             };
             Ok(Some((key, ath)))
         },

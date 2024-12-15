@@ -4,8 +4,9 @@ use async_trait::async_trait;
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::Kern;
-use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::task::Yield;
 use crate::vnix::core::unit::{Unit, UnitNew};
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
 
 
 pub const SERV_PATH: &'static str = "test.dump";
@@ -44,7 +45,7 @@ impl ServHlr for DumpHlr {
         let _msg = Unit::map(&[
             (Unit::str("msg"), u)
         ]);
-        async{}.await;
+        Yield::now().await;
 
         return kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
     }

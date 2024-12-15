@@ -5,6 +5,7 @@ use alloc::string::String;
 
 use crate::vnix::utils::Maybe;
 
+use crate::vnix::core::task::Yield;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitNew};
 use crate::vnix::core::driver::{DrvErr, CLIErr, TermKey};
@@ -138,19 +139,19 @@ impl Term {
                                 }
                             }
 
-                            async{}.await;
+                            Yield::now().await;
                             continue;
                         }
 
                         if let Some(lim) = limit {
                             if s.len() >= lim {
-                                async{}.await;
+                                Yield::now().await;
                                 continue;
                             }
                         }
 
                         if ch.is_control() {
-                            async{}.await;
+                            Yield::now().await;
                             continue;
                         }
 
@@ -160,10 +161,10 @@ impl Term {
                         }
                     },
                     TermKey::Esc => break,
-                    _ => async{}.await
+                    _ => Yield::now().await
                 }
             }
-            async{}.await;
+            Yield::now().await;
         }
 
         if s.is_empty() {

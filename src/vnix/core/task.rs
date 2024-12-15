@@ -1,5 +1,6 @@
 use core::future::Future;
 use core::pin::Pin;
+use futures::task::{Context, Poll};
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -15,6 +16,16 @@ pub type ThreadAsync<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 pub type TaskRunAsync<'a> = ThreadAsync<'a, Maybe<Msg, KernErr>>;
 
 
+pub struct Yield {
+    done: bool
+}
+
+impl Yield {
+    pub fn now() -> Self {
+        Self {done: false}
+    }
+}
+
 #[macro_export]
 macro_rules! thread {
     ($f:expr) => {
@@ -28,16 +39,31 @@ macro_rules! thread {
 #[macro_export]
 macro_rules! task_result {
     ($id:expr, $kern:expr) => {
-        async {
+        {
+            use crate::vnix::core::task;
             let res = loop {
                 if let Some(res) = $kern.lock().get_task_result($id) {
                     break res;
                 }
-                async{}.await;
+                task::Yield::now().await;
             };
             res
-        }.await
+        }
     };
+}
+
+impl Future for Yield {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.done {
+            Poll::Ready(())
+        } else {
+            self.done = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

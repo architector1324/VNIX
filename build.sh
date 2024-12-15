@@ -10,6 +10,7 @@ fi
 mkdir -p out
 
 cp target/x86_64-unknown-linux-musl/release/vnix ./out/vnix_x86_64
+rm ./out/vnix.store
 cp content/vnix.store ./out/vnix.store
 
 # dd if=/dev/zero of=./out/vnix.img bs=1048576 count=256

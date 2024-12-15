@@ -14,7 +14,7 @@ use self::core::serv::{Serv, ServHlr};
 use self::core::unit::{Unit, UnitParse};
 
 // use self::serv::{io, sys, math, gfx, dat, time, test};
-use self::serv::{io, test};
+use self::serv::{io, sys, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -28,9 +28,9 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         // (time::chrono::SERV_PATH, Box::new(time::chrono::help_hlr) as Box<ServHlr>, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         // (gfx::gfx2d::SERV_PATH, Box::new(gfx::gfx2d::help_hlr) as Box<ServHlr>, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         // (math::calc::SERV_PATH,  Box::new(math::calc::help_hlr) as Box<ServHlr>, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
-        // (sys::task::SERV_PATH, Box::new(sys::task::help_hlr) as Box<ServHlr>, Box::new(sys::task::task_hlr) as Box<ServHlr>),
-        // (sys::usr::SERV_PATH, Box::new(sys::usr::help_hlr) as Box<ServHlr>, Box::new(sys::usr::usr_hlr) as Box<ServHlr>),
-        // (sys::hw::SERV_PATH, Box::new(sys::hw::help_hlr) as Box<ServHlr>, Box::new(sys::hw::hw_hlr) as Box<ServHlr>),
+        (sys::task::SERV_PATH, sys::task::SERV_HELP, Box::new(sys::task::TaskHlr) as Box<dyn ServHlr>),
+        (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::UsrHlr) as Box<dyn ServHlr>),
+        (sys::hw::SERV_PATH, sys::hw::SERV_HELP, Box::new(sys::hw::HWHlr) as Box<dyn ServHlr>),
         (test::dump::SERV_PATH, test::dump::SERV_HELP, Box::new(test::dump::DumpHlr) as Box<dyn ServHlr>),
         (test::echo::SERV_PATH, test::echo::SERV_HELP, Box::new(test::echo::EchoHlr) as Box<dyn ServHlr>),
         (test::void::SERV_PATH, test::void::SERV_HELP, Box::new(test::void::VoidHlr) as Box<dyn ServHlr>)
@@ -67,21 +67,21 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // let s = "{say:{a:[1 {b:c} 3] d:-} nice:4 nl:t}@io.term";
     // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let s = "{say:123 nl:t}";
-    let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    // let s = "123";
+    // let msg = Unit::parse(s.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
 
-    let run = TaskRun(msg, "io.term".into());
-    kern.reg_task(&_super.name, "test", run)?;
-
-    kern.run()
-
-    // // run
-    // let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-    // let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
-
-    // let run = TaskRun(msg, "sys.task".into());
-
-    // kern.reg_task(&_super.name, "init.load", run)?;
+    // let run = TaskRun(msg, "io.term".into());
+    // kern.reg_task(&_super.name, "test", run)?;
 
     // kern.run()
+
+    // run
+    let path = Unit::parse("@task.hello".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
+
+    let run = TaskRun(msg, "sys.task".into());
+
+    kern.reg_task(&_super.name, "init.load", run)?;
+
+    kern.run()
 }

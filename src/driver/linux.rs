@@ -14,6 +14,7 @@ use linuxfb::Framebuffer;
 use crossterm::{cursor, event, style, terminal, ExecutableCommand, QueueableCommand};
 
 use crate::vnix::utils::Maybe;
+use crate::vnix::core::task::Yield;
 use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, Duration, TimeUnit};
 
 
@@ -286,7 +287,7 @@ impl Time for LinuxTime {
             if timer.elapsed() >= dur {
                 return Ok(())
             }
-            async{}.await;
+            Yield::now().await;
         }
     }
 

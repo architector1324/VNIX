@@ -1,26 +1,26 @@
-use core::pin::Pin;
 use core::slice::Iter;
-use core::ops::{Coroutine, CoroutineState};
-
-use spin::Mutex;
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use spin::Mutex;
+use async_trait::async_trait;
+
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async, maybe, as_map_find_as_async, as_async, maybe_ok, task_result};
+use crate::{read_async, as_map_find_async, maybe, as_map_find_as_async, as_async, maybe_ok, task_result};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::task::{ThreadAsync, TaskRun, TaskSig, Task};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitParse, UnitModify, UnitAs, UnitNew, UnitReadAsync, UnitTypeReadAsync};
+use crate::vnix::core::task::{Task, TaskRun, TaskSig, Yield};
+use crate::vnix::core::serv::{ServResult, ServHlr, ServInfo};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitModify, UnitAs, UnitNew, UnitAsyncResult, UnitTypeAsyncResult};
 
 
 pub const SERV_PATH: &'static str = "sys.task";
-const SERV_HELP: &'static str = "{
+
+pub const SERV_HELP: &'static str = "{
     name:sys.task
     info:`Service for task management`
     tut:[
@@ -350,17 +350,18 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn stream(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+
+pub struct TaskHlr;
+
+impl TaskHlr {
+    async fn stream(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         maybe_ok!(msg.clone().as_stream());
 
         let (msg, ath) = maybe!(read_async!(msg, ath, orig, kern));
         Ok(Some((msg, ath)))
-    })
-}
+    }
 
-fn _loop(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    async fn _loop(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         let msg = if let Some(msg) = msg.clone().as_map_find("task.loop") {
             msg
         } else if let Some((s, msg)) = msg.clone().as_pair() {
@@ -391,11 +392,9 @@ fn _loop(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Thre
         loop {
             read_async!(msg, ath, orig, kern)?;
         }
-    })
-}
+    }
 
-fn separate(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    async fn separate(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         let msg = if let Some(msg) = msg.clone().as_map_find("task.sep") {
             msg
         } else if let Some((s, msg)) = msg.clone().as_pair() {
@@ -415,13 +414,11 @@ fn separate(mut ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> T
             let run = TaskRun(_msg, serv);
             kern.lock().reg_task(&ath, "sys.task", run)?;
         }
-
+    
         Ok(Some(ath))
-    })
-}
+    }
 
-fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (lst, mut ath) = maybe!(as_map_find_as_async!(msg, "task", as_list, ath, orig, kern));
         let mut _msg = if let Some((_msg, _ath)) = as_map_find_async!(msg, "msg", ath, orig, kern)? {
             ath = _ath;
@@ -443,11 +440,9 @@ fn chain(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
             ath = Rc::new(u.ath);
         }
         return Ok(Some((_msg, ath)))
-    })
-}
+    }
 
-fn queue(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    async fn queue(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         let (lst, mut ath) = if let Some((lst, ath)) =  as_map_find_as_async!(msg, "task.que", as_list, ath, orig, kern)? {
             (lst, ath)
         } else if let Some((s, lst)) = msg.as_pair() {
@@ -469,11 +464,9 @@ fn queue(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
             }
         }
         Ok(Some(ath))
-    })
-}
+    }
 
-fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<(), KernErr>> {
-    thread!({
+    async fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<(), KernErr> {
         let lst = if let Some((lst, _)) =  as_map_find_as_async!(msg, "task.sim", as_list, ath, orig, kern)? {
             lst
         } else if let Some((s, lst)) = msg.as_pair() {
@@ -496,11 +489,9 @@ fn sim(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
             }
         }
         Ok(None)
-    })
-}
+    }
 
-fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    async fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         // let (u, serv, _) = maybe_ok!(msg.as_map_find("task.stk").and_then(|u| u.as_stream()));
         let (u, serv, _) = if let Some((u, serv, addr)) = msg.clone().as_map_find("task.stk").and_then(|u| u.as_stream()) {
             (u, serv, addr)
@@ -529,13 +520,11 @@ fn stack(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAs
             }
         }
         Ok(Some(ath))
-    })
-}
+    }
 
-fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Option<Unit>> {
-    thread!({
+    async fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Option<Unit>> {
         // loop
-        if let Some(_ath) = thread_await!(_loop(ath.clone(), msg.clone(), orig.clone(), kern))? {
+        if let Some(_ath) = Self::_loop(ath.clone(), msg.clone(), orig.clone(), kern).await? {
             if _ath != ath {
                 return Ok(Some((Some(msg), ath)))
             }
@@ -543,7 +532,7 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
 
         // separate
-        if let Some(_ath) = thread_await!(separate(ath.clone(), msg.clone(), orig.clone(), kern))? {
+        if let Some(_ath) = Self::separate(ath.clone(), msg.clone(), orig.clone(), kern).await? {
             if _ath != ath {
                 return Ok(Some((Some(msg), ath)))
             }
@@ -551,7 +540,7 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
 
         // chain
-        if let Some((msg, ath)) = thread_await!(chain(ath.clone(), msg.clone(), orig.clone(), kern))? {
+        if let Some((msg, ath)) = Self::chain(ath.clone(), msg.clone(), orig.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)]
             );
@@ -559,10 +548,10 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
     
         // sim
-        thread_await!(sim(ath.clone(), msg.clone(), orig.clone(), kern))?;
+        Self::sim(ath.clone(), msg.clone(), orig.clone(), kern).await?;
     
         // queue
-        if let Some(_ath) = thread_await!(queue(ath.clone(), msg.clone(), orig.clone(), kern))? {
+        if let Some(_ath) = Self::queue(ath.clone(), msg.clone(), orig.clone(), kern).await? {
             if _ath != ath {
                 return Ok(Some((Some(msg), ath)))
             }
@@ -570,7 +559,7 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
 
         // stack
-        if let Some(_ath) = thread_await!(stack(ath.clone(), msg.clone(), orig.clone(), kern))? {
+        if let Some(_ath) = Self::stack(ath.clone(), msg.clone(), orig.clone(), kern).await? {
             if _ath != ath {
                 return Ok(Some((Some(msg), ath)))
             }
@@ -578,7 +567,7 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
 
         // stream
-        if let Some((msg, ath)) = thread_await!(stream(ath.clone(), msg.clone(), orig.clone(), kern))? {
+        if let Some((msg, ath)) = Self::stream(ath.clone(), msg.clone(), orig.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)]
             );
@@ -586,11 +575,9 @@ fn run(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
 
         Ok(None)
-    })
-}
+    }
 
-fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let s = maybe_ok!(msg.as_str());
 
         let info = {
@@ -650,7 +637,7 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
                 (Unit::str("tree"), task_tree)
             ])
         };
-        yield;
+        Yield::now().await;
 
         // get
         let res = match s.as_str() {
@@ -661,11 +648,9 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
             _ => return Ok(None)
         };
         Ok(Some((res, ath)))
-    })
-}
+    }
 
-fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    async fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         let (sig, id) = maybe_ok!(msg.as_pair());
 
         let (sig, ath) = maybe!(as_async!(sig, as_str, ath, orig, kern));
@@ -677,44 +662,24 @@ fn signal(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadA
         }
 
         Ok(Some(ath))
-    })
+    }
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
 
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for TaskHlr {
+    async fn hlr(&self, mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, mut ath) = maybe!(read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern));
 
         // task
-        if let Some((u, ath)) = thread_await!(run(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((u, ath)) = Self::run(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = _msg.clone().merge_with(maybe_ok!(u));
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
 
         // get
-        if let Some((u, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((u, ath)) = Self::get(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), u)
             ]);
@@ -722,7 +687,7 @@ pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // signal
-        if let Some(_ath) = thread_await!(signal(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = Self::signal(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg.clone())?;
@@ -731,5 +696,5 @@ pub fn task_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         Ok(Some(msg))
-    })
+    }
 }
