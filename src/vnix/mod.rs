@@ -13,7 +13,7 @@ use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
 use self::core::unit::{Unit, UnitParse};
 
-use self::serv::{io, sys, math, /*gfx,*/ dat, time, test};
+use self::serv::{io, sys, math, gfx, dat, time, test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -25,7 +25,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (dat::proc::SERV_PATH, dat::proc::SERV_HELP, Box::new(dat::proc::ProcHlr) as Box<dyn ServHlr>),
         (dat::gen::SERV_PATH, dat::gen::SERV_HELP, Box::new(dat::gen::GenHlr) as Box<dyn ServHlr>),
         (time::chrono::SERV_PATH, time::chrono::SERV_HELP, Box::new(time::chrono::ChronoHlr) as Box<dyn ServHlr>),
-        // (gfx::gfx2d::SERV_PATH, Box::new(gfx::gfx2d::help_hlr) as Box<ServHlr>, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
+        (gfx::gfx2d::SERV_PATH, gfx::gfx2d::SERV_HELP, Box::new(gfx::gfx2d::GFX2DHlr) as Box<dyn ServHlr>),
         (math::calc::SERV_PATH,  math::calc::SERV_HELP, Box::new(math::calc::CalcHlr) as Box<dyn ServHlr>),
         (sys::task::SERV_PATH, sys::task::SERV_HELP, Box::new(sys::task::TaskHlr) as Box<dyn ServHlr>),
         (sys::usr::SERV_PATH, sys::usr::SERV_HELP, Box::new(sys::usr::UsrHlr) as Box<dyn ServHlr>),

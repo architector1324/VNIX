@@ -1,25 +1,24 @@
-use core::pin::Pin;
-use core::ops::{Coroutine, CoroutineState};
-
-use spin::Mutex;
-
 use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use spin::Mutex;
+use async_trait::async_trait;
+
 use crate::vnix::core::driver::DrvErr;
 
 use crate::vnix::utils;
-use crate::{thread, thread_await, as_async, maybe_ok, maybe, read_async, as_map_find_as_async};
+use crate::{as_async, maybe_ok, maybe, read_async, as_map_find_as_async};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitParse, UnitModify, UnitReadAsyncI, UnitTypeReadAsync};
+use crate::vnix::core::serv::{ServHlr, ServResult, ServInfo};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeAsyncResult};
 
 
 pub const SERV_PATH: &'static str = "gfx.2d";
-const SERV_HELP: &'static str = "{
+
+pub const SERV_HELP: &'static str = "{
     name:gfx.2d
     info:`Service for rendering 2d graphics to image, create video from image sequence, apply filters, effects etc.`
     tut:[
@@ -70,8 +69,10 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<((usize, usize), u32)> {
-    thread!({
+pub struct GFX2DHlr;
+
+impl GFX2DHlr {
+    async fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<((usize, usize), u32)> {
         // #ff0000
         if let Some(col) = msg.clone().as_str() {
             let col = maybe_ok!(utils::hex_to_u32(&col));
@@ -113,37 +114,16 @@ fn fill_act(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
             return Ok(Some(((res, col), ath)))
         }
         Ok(None)
-    })
+    }
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn gfx2d_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for GFX2DHlr {
+    async fn hlr(&self, msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath, msg.msg.clone(), kern));
 
-        if let Some((((w, h), col), ath)) = thread_await!(fill_act(ath.clone(), _msg.clone(), _msg, kern))? {
+        if let Some((((w, h), col), ath)) = Self::fill_act(ath.clone(), _msg.clone(), _msg, kern).await? {
             let msg = Unit::map(&[
                 (
                     Unit::str("msg"),
@@ -174,5 +154,5 @@ pub fn gfx2d_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync 
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg));
         }
         Ok(Some(msg))
-    })
+    }
 }
