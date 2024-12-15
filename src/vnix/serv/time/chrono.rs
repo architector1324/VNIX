@@ -1,23 +1,24 @@
-use core::pin::Pin;
-use core::ops::{Coroutine, CoroutineState};
-
 use alloc::rc::Rc;
-use alloc::string::String;
-use spin::Mutex;
 use alloc::boxed::Box;
+use alloc::string::String;
 
-use crate::vnix::core::driver::{Duration, DrvErr, TimeUnit};
+use spin::Mutex;
+use async_trait::async_trait;
 
-use crate::{thread, thread_await, as_map_find_as_async, as_async, read_async, maybe, maybe_ok};
+use crate::vnix::core::driver::{DrvErr, Duration, Time, TimeUnit};
+
+use crate::vnix::core::task::Yield;
+use crate::{as_async, as_map_find_as_async, maybe, maybe_ok, read_async};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitParse, UnitModify, UnitTypeReadAsync, UnitNew};
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeAsyncResult, UnitNew};
 
 
 pub const SERV_PATH: &'static str = "time.chrono";
-const SERV_HELP: &'static str = "{
+
+pub const SERV_HELP: &'static str = "{
     name:time.chrono
     info:`Service for time managment`
     tut:[
@@ -77,8 +78,10 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Duration> {
-    thread!({
+pub struct ChronoHlr;
+
+impl ChronoHlr {
+    async fn wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Duration> {
         // sec
         if let Some(sec) = msg.clone().as_uint() {
             return Ok(Some((Duration::Seconds(sec as usize), ath)))
@@ -110,15 +113,13 @@ fn wait(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
         }
 
         Ok(None)
-    })
-}
+    }
 
-fn bench(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
-    thread!({
+    async fn bench(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<usize> {
         // (bch.<units> <unit>)
         let (s, u) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
-
+    
         let units = match s.as_str() {
             "bch.mcs" => TimeUnit::Micro,
             "bch.ms" => TimeUnit::Milli,
@@ -137,13 +138,11 @@ fn bench(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitType
 
         let end = kern.lock().drv.time.uptime(units).map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
         let elapsed = (end - start) as usize;
-
+    
         Ok(Some((elapsed, ath)))
-    })
-}
+    }
 
-fn get_up(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
-    thread!({
+    async fn get_up(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<usize> {
         // up.<units>
         let s = maybe_ok!(msg.as_str());
 
@@ -161,43 +160,27 @@ fn get_up(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTy
         };
 
         let up = kern.lock().drv.time.uptime(units).map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
-        yield;
+        Yield::now().await;
 
         Ok(Some((up as usize, ath)))
-    })
+    }
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn chrono_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for ChronoHlr {
+    async fn hlr(&self, mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // wait
-        if let Some((dur, _ath)) = thread_await!(wait(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
-            let wait = kern.lock().drv.time.wait_async(dur);
-            thread_await!(wait).map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
+        if let Some((dur, _ath)) = Self::wait(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+            let time = unsafe {
+                let lck = kern.lock();
+                let time = &lck.drv.time as *const Box<dyn Time>;
+                &*time
+            };
+
+            time.wait_async(dur).await.map_err(|e| KernErr::DrvErr(DrvErr::Time(e)))?;
 
             if ath != _ath {
                 msg = kern.lock().msg(&_ath.clone(), msg.msg)?;
@@ -206,7 +189,7 @@ pub fn chrono_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrA
         }
 
         // up
-        if let Some((elapsed, _ath)) = thread_await!(get_up(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((elapsed, _ath)) = Self::get_up(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(elapsed as u32))]
             );
@@ -214,7 +197,7 @@ pub fn chrono_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrA
         }
 
         // bench
-        if let Some((elapsed, _ath)) = thread_await!(bench(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((elapsed, _ath)) = Self::bench(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(elapsed as u32))]
             );
@@ -222,5 +205,5 @@ pub fn chrono_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrA
         }
 
         Ok(Some(msg))
-    })
+    }
 }

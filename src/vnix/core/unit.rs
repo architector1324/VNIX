@@ -5,13 +5,12 @@ use alloc::{format, vec};
 use alloc::string::String;
 use num::Zero;
 
-use core::pin::Pin;
 use core::slice::Iter;
 use core::fmt::Display;
-use core::ops::{Coroutine, CoroutineState};
 use core::cmp::PartialOrd;
 
 use spin::Mutex;
+use async_trait::async_trait;
 
 use num::cast::ToPrimitive;
 use num::bigint::{BigInt, Sign};
@@ -21,9 +20,8 @@ use crate::vnix::utils::Maybe;
 use crate::vnix::core::task::TaskRun;
 
 use crate::vnix::core::driver::MemSizeUnits;
-use crate::{thread, thread_await, task_result, maybe, maybe_ok};
+use crate::{maybe, maybe_ok, task_result};
 
-use super::task::ThreadAsync;
 use super::kern::{Addr, KernErr, Kern};
 
 
@@ -204,18 +202,19 @@ pub struct DisplayNice(pub usize, pub usize, pub Unit);
 #[derive(Debug, Clone)]
 pub struct DisplayShort(pub usize, pub Unit);
 
-pub type UnitTypeReadAsync<'a, T> = ThreadAsync<'a, Maybe<(T, Rc<String>), KernErr>>;
-pub type UnitReadAsync<'a> = UnitTypeReadAsync<'a, Unit>;
+pub type UnitTypeAsyncResult<T> = Maybe<(T, Rc<String>), KernErr>;
+pub type UnitAsyncResult = UnitTypeAsyncResult<Unit>;
 
+#[async_trait(?Send)]
 pub trait UnitReadAsyncI {
-    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
-    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a>;
+    async fn read_async(self, ath: Rc<String>, orig: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult;
+    async fn as_map_find_async(self, sch: String, ath: Rc<String>, orig: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult;
 }
 
 #[macro_export]
 macro_rules! read_async {
     ($msg:expr, $ath:expr, $orig:expr, $kern:expr) => {
-        thread_await!($msg.clone().read_async($ath.clone(), $orig.clone(), $kern))
+        $msg.clone().read_async($ath.clone(), $orig.clone(), $kern).await
     };
 }
 
@@ -244,7 +243,7 @@ macro_rules! as_async {
 #[macro_export]
 macro_rules! as_map_find_async {
     ($msg:expr, $sch:expr, $ath:expr, $orig:expr, $kern:expr) => {
-        thread_await!($msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern))
+        $msg.clone().as_map_find_async($sch.into(), $ath.clone(), $orig.clone(), $kern).await
     };
 }
 
@@ -469,32 +468,29 @@ impl UnitAs for Unit {
     }
 }
 
+#[async_trait(?Send)]
 impl UnitReadAsyncI for Unit {
-    fn read_async<'a>(self, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
-        thread!({
-            match self.0.as_ref() {
-                UnitBase::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
-                UnitBase::Stream(msg, serv, _addr) => {
-                    let run = TaskRun(msg.clone(), Rc::unwrap_or_clone(serv.clone()));
-                    let id = kern.lock().reg_task(&ath, "unit.read", run)?;
+    async fn read_async(self, ath: Rc<String>, orig: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
+        match self.0.as_ref() {
+            UnitBase::Ref(path) => Ok(orig.find(path.iter().map(|s| s.as_str())).map(|u| (u, ath))),
+            UnitBase::Stream(msg, serv, _addr) => {
+                let run = TaskRun(msg.clone(), Rc::unwrap_or_clone(serv.clone()));
+                let id = kern.lock().reg_task(&ath, "unit.read", run)?;
 
-                    let res = maybe!(task_result!(id, kern));
-                    let msg = maybe_ok!(res.msg.as_map_find("msg"));
+                let res = maybe!(task_result!(id, kern));
+                let msg = maybe_ok!(res.msg.as_map_find("msg"));
 
-                    Ok(Some((msg, Rc::new(res.ath))))
-                },
-                _ => Ok(Some((self.clone(), ath)))
-            }
-        })
+                Ok(Some((msg, Rc::new(res.ath))))
+            },
+            _ => Ok(Some((self.clone(), ath)))
+        }
     }
 
-    fn as_map_find_async<'a>(self, sch: String, ath: Rc<String>, orig: Unit, kern: &'a Mutex<Kern>) -> UnitReadAsync<'a> {
-        thread!({
-            if let Some(msg) = self.as_map_find(&sch) {
-                return thread_await!(msg.read_async(ath, orig, kern))
-            }
-            Ok(None)
-        })
+    async fn as_map_find_async(self, sch: String, ath: Rc<String>, orig: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
+        if let Some(msg) = self.as_map_find(&sch) {
+            return msg.read_async(ath, orig, kern).await
+        }
+        Ok(None)
     }
 }
 
@@ -614,23 +610,23 @@ impl PartialOrd for Unit {
         match self.0.as_ref() {
             UnitBase::Bool(a) =>
                 match other.0.as_ref() {
-                    UnitBase::Bool(b) => a.partial_cmp(b),
+                    UnitBase::Bool(b) => a.partial_cmp(&b),
                     _ => None
                 },
             UnitBase::Byte(a) =>
                 match other.0.as_ref() {
-                    UnitBase::Byte(b) => a.partial_cmp(b),
+                    UnitBase::Byte(b) => a.partial_cmp(&b),
                     _ => None
                 },
             UnitBase::Int(a) =>
                 match other.0.as_ref() {
-                    UnitBase::Int(b) => a.partial_cmp(b),
+                    UnitBase::Int(b) => a.partial_cmp(&b),
                     UnitBase::Dec(b) => a.0.as_ref().partial_cmp(&b.0.to_integer()),
                     _ => None
                 },
             UnitBase::Dec(a) =>
             match other.0.as_ref() {
-                UnitBase::Dec(b) => a.partial_cmp(b),
+                UnitBase::Dec(b) => a.partial_cmp(&b),
                 UnitBase::Int(b) => a.0.to_integer().partial_cmp(b.0.as_ref()),
                 _ => None
             },

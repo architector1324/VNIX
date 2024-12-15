@@ -1,15 +1,13 @@
 pub mod base;
+pub mod help;
 
-mod help;
 mod text;
 mod media;
 
 use core::fmt::Display;
 
-use core::pin::Pin;
-use core::ops::{Coroutine, CoroutineState};
-
 use spin::Mutex;
+use async_trait::async_trait;
 
 use alloc::format;
 use alloc::vec::Vec;
@@ -18,16 +16,15 @@ use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::vnix::core::driver::{DrvErr, CLIErr, DispErr};
-
-use crate::vnix::core::task::ThreadAsync;
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, maybe_ok, read_async, maybe, as_async};
+use crate::{maybe_ok, read_async, maybe, as_async};
 
 use crate::vnix::core::msg::Msg;
+use crate::vnix::core::task::Yield;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServInfo, ServHlrAsync};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitModify, UnitParse, UnitReadAsyncI, UnitReadAsync};
+use crate::vnix::core::driver::{DrvErr, CLIErr, DispErr};
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::unit::{Unit, UnitAs, UnitAsyncResult, UnitModify, UnitNew, UnitReadAsyncI};
 
 
 pub const SERV_PATH: &'static str = "io.term";
@@ -47,8 +44,10 @@ impl Display for Mode {
     }
 }
 
-fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+pub struct TermHlr;
+
+impl TermHlr {
+    async fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let s = maybe_ok!(msg.as_str());
 
         let info = {
@@ -152,7 +151,7 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
             ])
         };
 
-        yield;
+        Yield::now().await;
 
         // get
         let res = match s.as_str() {
@@ -174,11 +173,9 @@ fn get(ath: Rc<String>, _orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
             _ => return Ok(None)
         };
         return Ok(Some((res, ath)))
-    })
-}
-
-fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    }
+    
+    async fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         let (s, msg) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -229,39 +226,17 @@ fn set(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsyn
             },
             _ => Ok(None)
         }
-        
-    })
+    }    
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(help::SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for TermHlr {
+    async fn hlr(&self, mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, mut ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // get command
-        if let Some((msg, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::get(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -269,7 +244,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // set command
-        if let Some(_ath) = thread_await!(set(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = Self::set(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -278,7 +253,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // cls command
-        if let Some(_ath) = thread_await!(text::cls(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = text::cls(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -287,7 +262,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // nl command
-        if let Some(_ath) = thread_await!(text::nl(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = text::nl(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -296,7 +271,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // get key command
-        if let Some((key, ath)) = thread_await!(text::get_key(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((key, ath)) = text::get_key(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str(format!("{key}").as_str()))
             ]);
@@ -304,7 +279,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // input command
-        if let Some((_msg, ath)) = thread_await!(text::input(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((_msg, ath)) = text::input(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if let Some(msg) = _msg {
                 let msg = Unit::map(&[
                     (Unit::str("msg"), msg)
@@ -315,7 +290,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // image command
-        if let Some((_, _ath)) = thread_await!(media::img((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((_, _ath)) = media::img((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -324,7 +299,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // video command
-        if let Some(_ath) = thread_await!(media::vid((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = media::vid((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -333,7 +308,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // sprite command
-        if let Some(_ath) = thread_await!(media::spr(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = media::spr(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -342,7 +317,7 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
         }
 
         // say command
-        if let Some(_ath) = thread_await!(text::say(false, false, None, None, ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = text::say(false, false, None, None, ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -350,5 +325,5 @@ pub fn term_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsy
             return Ok(Some(msg))
         }
         Ok(Some(msg))
-    })
+    }
 }

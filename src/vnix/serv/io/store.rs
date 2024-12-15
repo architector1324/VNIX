@@ -1,26 +1,23 @@
-use core::pin::Pin;
-use core::ops::{Coroutine, CoroutineState};
-
-use spin::Mutex;
-
 use alloc::rc::Rc;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::vnix::core::driver::MemSizeUnits;
+use spin::Mutex;
+use async_trait::async_trait;
 
 use crate::vnix::utils::Maybe;
-use crate::{thread, thread_await, read_async, as_map_find_async, as_async, maybe, maybe_ok};
+use crate::{read_async, as_map_find_async, as_async, maybe, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::task::ThreadAsync;
+use crate::vnix::core::driver::MemSizeUnits;
+
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitParse, UnitModify, UnitReadAsyncI, UnitTypeReadAsync, UnitReadAsync};
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::unit::{Unit, UnitNew, UnitAs, UnitTypeAsyncResult, UnitReadAsyncI, UnitAsyncResult};
 
 
 pub const SERV_PATH: &'static str = "io.store";
-const SERV_HELP: &'static str = "{
+pub const SERV_HELP: &'static str = "{
     name:io.store
     info:`Service for managing units disk storage`
     tut:[
@@ -73,8 +70,10 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
-    thread!({
+pub struct StoreHlr;
+
+impl StoreHlr {
+    async fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<usize> {
         let (s, u, ath) = if let Some(s) = msg.clone().as_str() {
             // database
             (s, kern.lock().ram_store.data.clone(), ath)
@@ -96,11 +95,9 @@ fn get_size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitT
 
         let size = u.size(units);
         Ok(Some((size, ath)))
-    })
-}
-
-fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    }
+    
+    async fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         // load
         if let Some(s) = msg.clone().as_str() {
             if s.as_str() != "load" {
@@ -120,48 +117,26 @@ fn load(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
             return Ok(Some((u, ath)))
         }
         Ok(None)
-    })
-}
-
-fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Rc<String>, KernErr>> {
-    thread!({
+    }
+    
+    async fn save(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Maybe<Rc<String>, KernErr> {
         let (u, ath) = maybe!(as_map_find_async!(msg, "save", ath, orig, kern));
         let path = maybe_ok!(msg.as_map_find("out").and_then(|u| u.as_path()));
 
         kern.lock().ram_store.save(Unit::path_share(path), u);
         Ok(Some(ath))
-    })
+    }
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
 
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for StoreHlr {
+    async fn hlr(&self, mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // get size
-        if let Some((size, ath)) = thread_await!(get_size(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((size, ath)) = Self::get_size(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(size as u32))]
             );
@@ -169,7 +144,7 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
         }
 
         // load
-        if let Some((u, ath)) = thread_await!(load(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((u, ath)) = Self::load(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), u)]
             );
@@ -177,12 +152,12 @@ pub fn store_hlr(mut msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAs
         }
 
         // save
-        if let Some(_ath) = thread_await!(save(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some(_ath) = Self::save(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if ath != _ath {
                 msg = kern.lock().msg(&_ath.clone(), _msg)?;
             }
         }
 
         Ok(Some(msg))
-    })
+    }
 }

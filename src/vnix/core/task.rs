@@ -1,5 +1,7 @@
-use core::ops::{Coroutine, CoroutineState};
 use core::pin::Pin;
+use core::future::Future;
+
+use futures::task::{Context, Poll};
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -11,6 +13,59 @@ use super::msg::Msg;
 use super::unit::Unit;
 use super::kern::{KernErr, Kern};
 
+pub type ThreadAsync<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+pub type TaskRunAsync<'a> = ThreadAsync<'a, Maybe<Msg, KernErr>>;
+
+
+pub struct Yield {
+    done: bool
+}
+
+impl Yield {
+    pub fn now() -> Self {
+        Self {done: false}
+    }
+}
+
+#[macro_export]
+macro_rules! thread {
+    ($f:tt) => {
+        {
+            use futures::future::FutureExt;
+            async move $f.boxed_local()
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! task_result {
+    ($id:expr, $kern:expr) => {
+        {
+            use crate::vnix::core::task;
+            let res = loop {
+                if let Some(res) = $kern.lock().get_task_result($id) {
+                    break res;
+                }
+                task::Yield::now().await;
+            };
+            res
+        }
+    };
+}
+
+impl Future for Yield {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.done {
+            Poll::Ready(())
+        } else {
+            self.done = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct TaskRun(pub Unit, pub String);
@@ -29,63 +84,15 @@ pub enum TaskSig {
     Kill
 }
 
-pub type TaskRunAsync<'a> = impl Coroutine<Yield = (), Return = Maybe<Msg, KernErr>> + 'a;
-pub type ThreadAsync<'a, T> = Box<dyn Coroutine<Yield = (), Return = T> + 'a>;
-
-#[macro_export]
-macro_rules! thread {
-    ($s:tt) => {
-       {
-            let hlr = move || $s;
-            Box::new(hlr)
-       } 
-    };
-}
-
-#[macro_export]
-macro_rules! thread_await {
-    ($t:expr) => {
-        {
-            let mut gen = Box::into_pin($t);
-            let res = loop {
-                if let CoroutineState::Complete(res) = Pin::new(&mut gen).resume(()) {
-                    break res;
-                }
-                yield;
-            };
-            res
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! task_result {
-    ($id:expr, $kern:expr) => {
-        {
-            let res = loop {
-                if let Some(res) = $kern.lock().get_task_result($id) {
-                    break res;
-                }
-                yield;
-            };
-            res
-        }
-    };
-}
-
 impl Task {
     pub fn new(usr: String, name: String, id: usize, parent_id: usize, run: TaskRun) -> Self {
         Task{usr, name, id, parent_id, run}
     }
 
-    pub fn run<'a>(self, kern: &'a Mutex<Kern>) -> TaskRunAsync<'a> {
-        move || {
+    pub fn run(self, kern: &Mutex<Kern>) -> TaskRunAsync {
+        thread!({
             let msg = kern.lock().msg(&self.usr, self.run.0)?;
-
-            if let Some(run) = Kern::send(kern, self.run.1, msg)? {
-                return thread_await!(run)
-            }
-            Ok(None)
-        }
+            Kern::send(kern, self.run.1, msg).await
+        })
     }
 }

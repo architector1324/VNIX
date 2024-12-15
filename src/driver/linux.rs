@@ -1,3 +1,8 @@
+use core::pin::Pin;
+use core::task::Poll;
+use core::task::Context;
+use core::future::Future;
+
 use std::io::stdout;
 use std::io::Write;
 
@@ -6,15 +11,16 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::RngCore;
 
+use async_trait::async_trait;
+
 use sysinfo;
 use linuxfb::Framebuffer;
 
 use crossterm::{cursor, event, style, terminal, ExecutableCommand, QueueableCommand};
 
 use crate::vnix::utils::Maybe;
-use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, TimeAsync, Duration, TimeUnit};
+use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, Duration, TimeUnit};
 
-use crate::thread;
 
 pub struct LinuxCLI {
 }
@@ -32,6 +38,12 @@ pub struct LinuxRnd;
 
 pub struct LinuxMem;
 
+
+struct LinuxSleepAsync {
+    done: bool,
+    dur: core::time::Duration,
+    timer: Instant
+}
 
 impl LinuxCLI {
     pub fn new() -> Result<Self, DrvErr> {
@@ -64,6 +76,32 @@ impl LinuxTime {
     pub fn new() -> Self {
         LinuxTime {
             uptime: Instant::now()
+        }
+    }
+}
+
+impl LinuxSleepAsync {
+    fn new(dur: core::time::Duration) -> Self {
+        Self {
+            dur,
+            timer: Instant::now(),
+            done: false
+        }
+    }
+}
+
+impl Future for LinuxSleepAsync {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.done {
+            Poll::Ready(())
+        } else {
+            if self.timer.elapsed() > self.dur {
+                self.done = true;
+            }
+            cx.waker().wake_by_ref();
+            Poll::Pending
         }
     }
 }
@@ -255,6 +293,7 @@ impl Disp for LinuxDisp {
     }
 }
 
+#[async_trait(?Send)]
 impl Time for LinuxTime {
     fn start(&mut self) -> Result<(), TimeErr> {
         Ok(())
@@ -271,23 +310,15 @@ impl Time for LinuxTime {
         Ok(())
     }
 
-    fn wait_async(&self, dur: Duration) -> TimeAsync {
-        thread!({
-            let dur = match dur {
-                Duration::Micro(mcs) => std::time::Duration::from_micros(mcs as u64),
-                Duration::Milli(ms) => std::time::Duration::from_millis(ms as u64),
-                Duration::Seconds(sec) => std::time::Duration::from_secs(sec as u64)
-            };
+    async fn wait_async(&self, dur: Duration) -> Result<(), TimeErr> {
+        let dur = match dur {
+            Duration::Micro(mcs) => std::time::Duration::from_micros(mcs as u64),
+            Duration::Milli(ms) => std::time::Duration::from_millis(ms as u64),
+            Duration::Seconds(sec) => std::time::Duration::from_secs(sec as u64)
+        };
 
-            let timer = Instant::now();
-
-            loop {
-                if timer.elapsed() >= dur {
-                    return Ok(())
-                }
-                yield;
-            }
-        })
+        LinuxSleepAsync::new(dur).await;
+        Ok(())
     }
 
     fn uptime(&self, units: TimeUnit) -> Result<u128, TimeErr> {

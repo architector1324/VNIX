@@ -1,17 +1,14 @@
 use spin::Mutex;
 
 use alloc::rc::Rc;
-use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::vnix::core::driver::{DrvErr, CLIErr, TermKey};
 use crate::vnix::utils::Maybe;
-use crate::vnix::core::task::ThreadAsync;
 
-use crate::thread;
-
+use crate::vnix::core::task::Yield;
 use crate::vnix::core::kern::{Kern, KernErr};
 use crate::vnix::core::unit::{Unit, UnitNew};
+use crate::vnix::core::driver::{DrvErr, CLIErr, TermKey};
 
 
 #[derive(Debug)]
@@ -116,65 +113,63 @@ impl Term {
         Ok(())
     }
 
-    pub fn input(term: Rc<Mutex<Self>>, secret:bool, limit: Option<usize>, kern: &Mutex<Kern>) -> ThreadAsync<Maybe<Unit, KernErr>> {
-        thread!({
-            let save_pos = term.lock().pos.clone();
+    pub async fn input(term: Rc<Mutex<Self>>, secret:bool, limit: Option<usize>, kern: &Mutex<Kern>) -> Maybe<Unit, KernErr> {
+        let save_pos = term.lock().pos.clone();
 
-            let mut s = String::new();
-            loop {
-                // get key
-                let mut grd = kern.lock();
-                let key = grd.drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
-                drop(grd);
+        let mut s = String::new();
+        loop {
+            // get key
+            let mut grd = kern.lock();
+            let key = grd.drv.cli.get_key(false).map_err(|e| KernErr::DrvErr(DrvErr::CLI(e)))?;
+            drop(grd);
 
-                // push to string
-                if let Some(key) = key {
-                    match key {
-                        TermKey::Char(ch) => {
-                            if ch == '\n' || ch == '\r' {
-                                break;
-                            }
+            // push to string
+            if let Some(key) = key {
+                match key {
+                    TermKey::Char(ch) => {
+                        if ch == '\n' || ch == '\r' {
+                            break;
+                        }
 
-                            if ch == '\u{8}' {
-                                if term.lock().pos.0 > save_pos.0 {
-                                    s.pop();
-                                    if !secret {
-                                        term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
-                                    }
-                                }
-
-                                yield;
-                                continue;
-                            }
-
-                            if let Some(lim) = limit {
-                                if s.len() >= lim {
-                                    yield;
-                                    continue;
+                        if ch == '\u{8}' {
+                            if term.lock().pos.0 > save_pos.0 {
+                                s.pop();
+                                if !secret {
+                                    term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
                                 }
                             }
 
-                            if ch.is_control() {
-                                yield;
+                            Yield::now().await;
+                            continue;
+                        }
+
+                        if let Some(lim) = limit {
+                            if s.len() >= lim {
+                                Yield::now().await;
                                 continue;
                             }
+                        }
 
-                            s.push(ch);
-                            if !secret {
-                                term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
-                            }
-                        },
-                        TermKey::Esc => break,
-                        _ => yield
-                    }
+                        if ch.is_control() {
+                            Yield::now().await;
+                            continue;
+                        }
+
+                        s.push(ch);
+                        if !secret {
+                            term.lock().print_ch(ch, &mut kern.lock()).map_err(|e| KernErr::DrvErr(e))?;
+                        }
+                    },
+                    TermKey::Esc => break,
+                    _ => Yield::now().await
                 }
-                yield;
             }
+            Yield::now().await;
+        }
 
-            if s.is_empty() {
-                return Ok(None)
-            }
-            return Ok(Some(Unit::str(&s)))
-        })
+        if s.is_empty() {
+            return Ok(None)
+        }
+        return Ok(Some(Unit::str(&s)))
     }
 }
