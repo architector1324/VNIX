@@ -21,5 +21,5 @@ sysinfo = "0.30.5"
 rand = "0.8.5"
 linuxfb = "0.3.1"
 crossterm = "0.27.0"
-futures = "0.3.31"
+futures = { version = "0.3.31", default-features = false, features = ["executor"]}
 async-trait = "0.1.83"

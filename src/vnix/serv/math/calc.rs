@@ -1,9 +1,7 @@
-use core::pin::Pin;
-use core::ops::{Coroutine, CoroutineState};
-
 use num::BigInt;
 
 use spin::Mutex;
+use async_trait::async_trait;
 
 use alloc::vec;
 use alloc::rc::Rc;
@@ -11,16 +9,18 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::{thread, thread_await, as_map_find_async, as_async, maybe, maybe_ok};
+use crate::vnix::core::task::{ThreadAsync, Yield};
+use crate::{thread, as_map_find_async, as_async, maybe};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, Int, UnitNew, UnitAs, UnitParse, UnitModify, UnitReadAsyncI, UnitTypeReadAsync};
+use crate::vnix::core::kern::Kern;
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::unit::{Unit, Int, UnitNew, UnitAs, UnitReadAsyncI, UnitTypeAsyncResult};
 
 
 pub const SERV_PATH: &'static str = "math.calc";
-const SERV_HELP: &'static str = "{
+
+pub const SERV_HELP: &'static str = "{
     name:math.calc
     info:`Service for integer mathematical computation`
     tut:[
@@ -245,154 +245,135 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn calc_single_op_int(op: &str, v: Int) -> Option<Int> {
-    let res = match op {
-        "neg" => -v.0.as_ref(),
-        "abs" => num::abs(Rc::unwrap_or_clone(v.0)),
-        "inc" => v.0.as_ref() + 1,
-        "dec" => v.0.as_ref() - 1,
-        "sqr" => v.0.as_ref() * v.0.as_ref(),
-        "sqrt" => v.0.sqrt(),
-        "fac" => (1..=v.to_nat()?).fold(BigInt::from(1), |a, b| BigInt::from(a) * BigInt::from(b)),
-        // "log" => libm::truncf(libm::logf(v as f32)) as i32,
-        _ => return None
-    };
-    Some(Int(Rc::new(res)))
-}
+pub struct CalcHlr;
 
-fn calc_multi_op_int(op: &str, vals: Vec<Int>) -> Option<Int> {
-    vals.into_iter().try_reduce(|a, b| {
+impl CalcHlr {
+    fn calc_single_op_int(op: &str, v: Int) -> Option<Int> {
         let res = match op {
-            "sum" => a.0.as_ref() + b.0.as_ref(),
-            "sub" => a.0.as_ref() - b.0.as_ref(),
-            "pow" => a.0.pow(b.to_nat()?),
-            "mul" => a.0.as_ref() * b.0.as_ref(),
-            "div" => a.0.as_ref() / b.0.as_ref(),
-            "mod" => a.0.as_ref() % b.0.as_ref(),
-            "min" => a.0.as_ref().clone().min(b.0.as_ref().clone()),
-            "max" => a.0.as_ref().clone().max(b.0.as_ref().clone()),
+            "neg" => -v.0.as_ref(),
+            "abs" => num::abs(Rc::unwrap_or_clone(v.0)),
+            "inc" => v.0.as_ref() + 1,
+            "dec" => v.0.as_ref() - 1,
+            "sqr" => v.0.as_ref() * v.0.as_ref(),
+            "sqrt" => v.0.sqrt(),
+            "fac" => (1..=v.to_nat()?).fold(BigInt::from(1), |a, b| BigInt::from(a) * BigInt::from(b)),
+            // "log" => libm::truncf(libm::logf(v as f32)) as i32,
             _ => return None
         };
         Some(Int(Rc::new(res)))
-    }).flatten()
-}
-
-fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Int> {
-    thread!({
-        // val
-        if let Some((val, ath)) = as_async!(msg, as_int_big, ath, orig, kern)? {
-            return Ok(Some((Int(val), ath)))
-        }
-
-        // (op val)
-        if let Some(((op, val), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
-            let (op, ath) = maybe!(as_async!(op, as_str, ath, orig, kern));
-            let (val, ath) = maybe!(thread_await!(op_int(ath.clone(), orig.clone(), val, kern)));
-
-            return Ok(calc_single_op_int(&op, val).map(|v| (v, ath)))
-        }
-
-        // {<op>:<val>}
-        let ops = ["neg", "abs", "inc", "dec", "sqr", "sqrt", "fac", "log"];
-        for op in ops {
-            if let Some((val, ath)) = as_map_find_async!(msg, op, ath, orig, kern)? {
-                let (val, ath) = maybe!(thread_await!(op_int(ath.clone(), orig.clone(), val, kern)));
-                return Ok(calc_single_op_int(&op, val).map(|v| (v, ath)))
-            }
-        }
-        Ok(None)
-    })
-}
-
-fn multi_args_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Int>> {
-    thread!({
-        // (v0 v1)
-        if let Some(((v0, v1), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
-            let (v0, ath) = maybe!(thread_await!(op_int(ath.clone(), orig.clone(), v0, kern)));
-            let (v1, ath) = maybe!(thread_await!(op_int(ath.clone(), orig.clone(), v1, kern)));
+    }
     
-            return Ok(Some((vec![v0, v1], ath)))
-        }
+    fn calc_multi_op_int(op: &str, vals: Vec<Int>) -> Option<Int> {
+        vals.into_iter().try_reduce(|a, b| {
+            let res = match op {
+                "sum" => a.0.as_ref() + b.0.as_ref(),
+                "sub" => a.0.as_ref() - b.0.as_ref(),
+                "pow" => a.0.pow(b.to_nat()?),
+                "mul" => a.0.as_ref() * b.0.as_ref(),
+                "div" => a.0.as_ref() / b.0.as_ref(),
+                "mod" => a.0.as_ref() % b.0.as_ref(),
+                "min" => a.0.as_ref().clone().min(b.0.as_ref().clone()),
+                "max" => a.0.as_ref().clone().max(b.0.as_ref().clone()),
+                _ => return None
+            };
+            Some(Int(Rc::new(res)))
+        }).flatten()
+    }
     
-        // [v ..]
-        if let Some((lst, mut ath)) = as_async!(msg, as_list, ath, orig, kern)? {
-            let mut vals = Vec::new();
-            for v in Rc::unwrap_or_clone(lst) {
-                let (v, _ath) = maybe!(thread_await!(op_int(ath.clone(), orig.clone(), v, kern)));
-                vals.push(v);
-    
-                ath = _ath;
-                yield;
-            }
-            return Ok(Some((vals, ath)))
-        }
-        Ok(None)
-    })
-}
-
-fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Int> {
-    thread!({
+    async fn multi_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Int> {
         // (op (v0 v1)) | (op [v ..])
         if let Some(((op, args), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
             let (op, ath) = maybe!(as_async!(op, as_str, ath, orig, kern));
-            let (args, ath) = maybe!(thread_await!(multi_args_int(ath.clone(), orig.clone(), args, kern)));
-
-            return Ok(calc_multi_op_int(&op, args).map(|v| (v, ath)))
+            let (args, ath) = maybe!(Self::multi_args_int(ath.clone(), orig.clone(), args, kern).await);
+    
+            return Ok(Self::calc_multi_op_int(&op, args).map(|v| (v, ath)))
         }
-
+    
         let ops = ["sum", "sub", "pow", "mul", "div", "mod", "min", "max"];
         for op in ops {
             if let Some((args, ath)) = as_map_find_async!(msg, op, ath, orig, kern)? {
-                let (args, ath) = maybe!(thread_await!(multi_args_int(ath.clone(), orig.clone(), args, kern)));
-                return Ok(calc_multi_op_int(&op, args).map(|v| (v, ath)))
+                let (args, ath) = maybe!(Self::multi_args_int(ath.clone(), orig.clone(), args, kern).await);
+                return Ok(Self::calc_multi_op_int(&op, args).map(|v| (v, ath)))
             }
         }
         Ok(None)
-    })
+    }
+    
+    fn single_op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<UnitTypeAsyncResult<Int>> {
+        thread!({
+            // val
+            if let Some((val, ath)) = as_async!(msg, as_int_big, ath, orig, kern)? {
+                return Ok(Some((Int(val), ath)))
+            }
+    
+            // (op val)
+            if let Some(((op, val), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
+                let (op, ath) = maybe!(as_async!(op, as_str, ath, orig, kern));
+                let (val, ath) = maybe!(Self::op_int(ath.clone(), orig.clone(), val, kern).await);
+    
+                return Ok(Self::calc_single_op_int(&op, val).map(|v| (v, ath)))
+            }
+    
+            // {<op>:<val>}
+            let ops = ["neg", "abs", "inc", "dec", "sqr", "sqrt", "fac", "log"];
+            for op in ops {
+                if let Some((val, ath)) = as_map_find_async!(msg, op, ath, orig, kern)? {
+                    let (val, ath) = maybe!(Self::op_int(ath.clone(), orig.clone(), val, kern).await);
+                    return Ok(Self::calc_single_op_int(&op, val).map(|v| (v, ath)))
+                }
+            }
+            Ok(None)
+        })
+    }
+    
+    fn multi_args_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<UnitTypeAsyncResult<Vec<Int>>> {
+        thread!({
+            // (v0 v1)
+            if let Some(((v0, v1), ath)) = as_async!(msg, as_pair, ath, orig, kern)? {
+                let (v0, ath) = maybe!(Self::op_int(ath.clone(), orig.clone(), v0, kern).await);
+                let (v1, ath) = maybe!(Self::op_int(ath.clone(), orig.clone(), v1, kern).await);
+        
+                return Ok(Some((vec![v0, v1], ath)))
+            }
+    
+            // [v ..]
+            if let Some((lst, mut ath)) = as_async!(msg, as_list, ath, orig, kern)? {
+                let mut vals = Vec::new();
+                for v in Rc::unwrap_or_clone(lst) {
+                    let (v, _ath) = maybe!(Self::op_int(ath.clone(), orig.clone(), v, kern).await);
+                    vals.push(v);
+        
+                    ath = _ath;
+                    Yield::now().await;
+                }
+                return Ok(Some((vals, ath)))
+            }
+            Ok(None)
+        })
+    }
+    
+    fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> ThreadAsync<UnitTypeAsyncResult<Int>> {
+        thread!({
+            // single operation
+            if let Some((val, ath)) = Self::single_op_int(ath.clone(), orig.clone(), msg.clone(), kern).await? {
+                return Ok(Some((val, ath)))
+            }
+    
+            // multiple operands operation
+            if let Some((val, ath)) = Self::multi_op_int(ath, orig, msg, kern).await? {
+                return Ok(Some((val, ath)))
+            }
+            Ok(None)
+        })
+    }
 }
 
-fn op_int(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Int> {
-    thread!({
-        // single operation
-        if let Some((val, ath)) = thread_await!(single_op_int(ath.clone(), orig.clone(), msg.clone(), kern))? {
-            return Ok(Some((val, ath)))
-        }
-
-        // multiple operands operation
-        if let Some((val, ath)) = thread_await!(multi_op_int(ath, orig, msg, kern))? {
-            return Ok(Some((val, ath)))
-        }
-        Ok(None)
-    })
-}
-
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn calc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for CalcHlr {
+    async fn hlr(&self, msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
-
-        if let Some((val, ath)) = thread_await!(op_int(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern))? {
+    
+        if let Some((val, ath)) = Self::op_int(ath.clone(), msg.msg.clone(), msg.msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::int_share(val.0))]
             );
@@ -400,5 +381,5 @@ pub fn calc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         Ok(Some(msg))
-    })
+    }
 }

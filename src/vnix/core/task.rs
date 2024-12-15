@@ -1,5 +1,6 @@
-use core::future::Future;
 use core::pin::Pin;
+use core::future::Future;
+
 use futures::task::{Context, Poll};
 
 use alloc::boxed::Box;
@@ -28,10 +29,10 @@ impl Yield {
 
 #[macro_export]
 macro_rules! thread {
-    ($f:expr) => {
+    ($f:tt) => {
         {
-            let tmp = async move || $f;
-            Box::pin(tmp())
+            use futures::future::FutureExt;
+            async move $f.boxed_local()
         }
     }
 }

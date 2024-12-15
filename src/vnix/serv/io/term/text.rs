@@ -3,7 +3,6 @@ use alloc::format;
 use alloc::vec::Vec;
 
 use alloc::rc::Rc;
-use alloc::boxed::Box;
 use alloc::string::String;
 
 use spin::Mutex;
