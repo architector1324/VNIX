@@ -1,3 +1,8 @@
+use core::pin::Pin;
+use core::task::Poll;
+use core::task::Context;
+use core::future::Future;
+
 use std::io::stdout;
 use std::io::Write;
 
@@ -14,7 +19,6 @@ use linuxfb::Framebuffer;
 use crossterm::{cursor, event, style, terminal, ExecutableCommand, QueueableCommand};
 
 use crate::vnix::utils::Maybe;
-use crate::vnix::core::task::Yield;
 use crate::vnix::core::driver::{CLI, CLIErr, DispErr, DrvErr, Disp, TermKey, Time, TimeErr, Rnd, RndErr, Mem, MemErr, MemSizeUnits, Mouse, Duration, TimeUnit};
 
 
@@ -34,6 +38,12 @@ pub struct LinuxRnd;
 
 pub struct LinuxMem;
 
+
+struct LinuxSleepAsync {
+    done: bool,
+    dur: core::time::Duration,
+    timer: Instant
+}
 
 impl LinuxCLI {
     pub fn new() -> Result<Self, DrvErr> {
@@ -66,6 +76,32 @@ impl LinuxTime {
     pub fn new() -> Self {
         LinuxTime {
             uptime: Instant::now()
+        }
+    }
+}
+
+impl LinuxSleepAsync {
+    fn new(dur: core::time::Duration) -> Self {
+        Self {
+            dur,
+            timer: Instant::now(),
+            done: false
+        }
+    }
+}
+
+impl Future for LinuxSleepAsync {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.done {
+            Poll::Ready(())
+        } else {
+            if self.timer.elapsed() > self.dur {
+                self.done = true;
+            }
+            cx.waker().wake_by_ref();
+            Poll::Pending
         }
     }
 }
@@ -281,14 +317,8 @@ impl Time for LinuxTime {
             Duration::Seconds(sec) => std::time::Duration::from_secs(sec as u64)
         };
 
-        let timer = Instant::now();
-
-        loop {
-            if timer.elapsed() >= dur {
-                return Ok(())
-            }
-            Yield::now().await;
-        }
+        LinuxSleepAsync::new(dur).await;
+        Ok(())
     }
 
     fn uptime(&self, units: TimeUnit) -> Result<u128, TimeErr> {
