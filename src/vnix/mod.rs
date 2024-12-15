@@ -13,8 +13,7 @@ use self::core::kern::{Kern, KernErr};
 use self::core::serv::{Serv, ServHlr};
 use self::core::unit::{Unit, UnitParse};
 
-// use self::serv::{io, sys, math, gfx, dat, time, test};
-use self::serv::{io, sys, test};
+use self::serv::{io, sys, /*math, gfx,*/ dat, /*time,*/ test};
 
 
 pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
@@ -23,8 +22,8 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
         (io::term::SERV_PATH, io::term::help::SERV_HELP, Box::new(io::term::TermHlr) as Box<dyn ServHlr>),
         (io::store::SERV_PATH, io::store::SERV_HELP, Box::new(io::store::StoreHlr) as Box<dyn ServHlr>),
         // // ("auto.fsm", Box::new(etc::fsm::FSM::default()) as Box<dyn ServHlr>),
-        // (dat::proc::SERV_PATH, Box::new(dat::proc::help_hlr) as Box<ServHlr>, Box::new(dat::proc::proc_hlr) as Box<ServHlr>),
-        // (dat::gen::SERV_PATH, Box::new(dat::gen::help_hlr) as Box<ServHlr>, Box::new(dat::gen::gen_hlr) as Box<ServHlr>),
+        (dat::proc::SERV_PATH, dat::proc::SERV_HELP, Box::new(dat::proc::ProcHlr) as Box<dyn ServHlr>),
+        (dat::gen::SERV_PATH, dat::gen::SERV_HELP, Box::new(dat::gen::GenHlr) as Box<dyn ServHlr>),
         // (time::chrono::SERV_PATH, Box::new(time::chrono::help_hlr) as Box<ServHlr>, Box::new(time::chrono::chrono_hlr) as Box<ServHlr>),
         // (gfx::gfx2d::SERV_PATH, Box::new(gfx::gfx2d::help_hlr) as Box<ServHlr>, Box::new(gfx::gfx2d::gfx2d_hlr) as Box<ServHlr>),
         // (math::calc::SERV_PATH,  Box::new(math::calc::help_hlr) as Box<ServHlr>, Box::new(math::calc::calc_hlr) as Box<ServHlr>),
@@ -76,7 +75,7 @@ pub fn vnix_entry(mut kern: Kern) -> Result<(), KernErr> {
     // kern.run()
 
     // run
-    let path = Unit::parse("@task.hello".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
+    let path = Unit::parse("@task.init".chars()).map_err(|e| KernErr::ParseErr(e))?.0;
     let msg = kern.ram_store.load(path).ok_or(KernErr::DbLoadFault)?;
 
     let run = TaskRun(msg, "sys.task".into());

@@ -1,13 +1,7 @@
-use core::pin::Pin;
 use core::cmp::Ordering;
-use core::ops::{Coroutine, CoroutineState};
 
-use alloc::borrow::ToOwned;
-use sha3::{Digest, Sha3_256};
-use base64ct::{Base64, Encoding};
-
-use spin::Mutex;
 use alloc::rc::Rc;
+use alloc::borrow::ToOwned;
 
 use alloc::vec;
 use alloc::format;
@@ -15,18 +9,25 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
+use spin::Mutex;
+use async_trait::async_trait;
+
+use sha3::{Digest, Sha3_256};
+use base64ct::{Base64, Encoding};
+
 use crate::vnix::utils;
-use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok};
+use crate::{as_async, maybe, read_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
 use crate::vnix::core::driver::MemSizeUnits;
 use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeReadAsync, UnitNew, UnitAsBytes, UnitReadAsync, UnitParse, UnitModify};
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitTypeAsyncResult, UnitNew, UnitAsBytes, UnitAsyncResult, UnitParse, UnitModify};
 
 
 pub const SERV_PATH: &'static str = "dat.proc";
-const SERV_HELP: &'static str = "{
+
+pub const SERV_HELP: &'static str = "{
     name:dat.proc
     info:`Common data processing service`
     tut:[
@@ -443,8 +444,10 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn len(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
-    thread!({
+pub struct ProcHlr;
+
+impl ProcHlr {
+    async fn len(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<usize> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
         
@@ -467,11 +470,9 @@ fn len(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         }
 
         Ok(None)
-    })
-}
+    }
 
-fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -498,11 +499,9 @@ fn sort(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
             return Ok(Some((Unit::list(&lst), ath)))
         }
         Ok(None)
-    })
-}
+    }
 
-fn rev(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn rev(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -525,11 +524,9 @@ fn rev(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             return Ok(Some((Unit::list(&lst), ath)))
         }
         Ok(None)
-    })
-}
+    }
 
-fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -586,11 +583,9 @@ fn cat(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             },
             _ => Ok(None)
         }
-    })
-}
+    }
 
-fn product(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn product(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -620,11 +615,9 @@ fn product(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRe
 
         let res = lst0.iter().cloned().flat_map(|u0| core::iter::repeat(u0).zip(lst1.iter().cloned()).map(|(u0, u1)| Unit::pair(u0, u1)).collect::<Vec<_>>()).collect::<Vec<_>>();
         Ok(Some((Unit::list(&res), ath)))
-    })
-}
+    }
 
-fn split(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn split(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -648,11 +641,9 @@ fn split(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
             }
             _ => Ok(None)
         }
-    })
-}
+    }
 
-fn map(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn map(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, stream) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -688,11 +679,9 @@ fn map(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             return Ok(Some((Unit::pair(a, b), ath)))
         }
         Ok(None)
-    })
-}
+    }
 
-fn fold(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn fold(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, stream) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -722,11 +711,9 @@ fn fold(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
         }
 
         Ok(Some((res, ath)))
-    })
-}
+    }
 
-fn scan(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn scan(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, stream) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -758,11 +745,9 @@ fn scan(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
         }
 
         Ok(Some((Unit::list(&res_lst), ath)))
-    })
-}
+    }
 
-fn dup(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn dup(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -776,11 +761,9 @@ fn dup(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
 
         let lst = (0..cnt).map(|_| u.clone()).collect::<Vec<_>>();
         Ok(Some((Unit::list_share(Rc::new(lst)), ath)))
-    })
-}
+    }
 
-fn make(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn make(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -831,11 +814,9 @@ fn make(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadA
             _ => return Ok(None)
         };
         Ok(Some((u, ath)))
-    })
-}
+    }
 
-fn keys(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Unit>> {
-    thread!({
+    async fn keys(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Vec<Unit>> {
         let (s, map) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -847,11 +828,9 @@ fn keys(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
         let keys = map.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
 
         Ok(Some((keys, ath)))
-    })
-}
+    }
 
-fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -866,11 +845,9 @@ fn get(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
 
         let u = maybe_ok!(src.find(path.iter().map(|s| s.as_str())));
         Ok(Some((u, ath)))
-    })
-}
+    }
 
-fn first_last(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn first_last(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -902,11 +879,9 @@ fn first_last(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Uni
             _ => return Ok(None)
         };
         Ok(Some((u, ath)))
-    })
-}
+    }
 
-fn is_in(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<bool> {
-    thread!({
+    async fn is_in(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<bool> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -931,11 +906,9 @@ fn is_in(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitType
         };
 
         Ok(Some((res, ath)))
-    })
-}
+    }
 
-fn take(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Unit>> {
-    thread!({
+    async fn take(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Vec<Unit>> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -949,11 +922,9 @@ fn take(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
 
         let res = lst.iter().take(count as usize).cloned().collect::<Vec<_>>();
         Ok(Some((res, ath)))
-    })
-}
+    }
 
-fn group(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn group(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -987,11 +958,9 @@ fn group(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
             }
         }
         Ok(Some((Unit::list(&res), ath)))
-    })
-}
+    }
 
-fn flatten(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn flatten(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1016,11 +985,9 @@ fn flatten(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRe
             }
         }
         Ok(Some((Unit::list(&res), ath)))
-    })
-}
+    }
 
-fn cut(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Vec<Unit>> {
-    thread!({
+    async fn cut(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Vec<Unit>> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1034,11 +1001,9 @@ fn cut(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
 
         let res = lst.iter().skip(count as usize).cloned().collect::<Vec<_>>();
         Ok(Some((res, ath)))
-    })
-}
+    }
 
-fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Rc<String>> {
-    thread!({
+    async fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Rc<String>> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1052,11 +1017,9 @@ fn zip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeRe
         let s = utils::compress_bytes(&b)?;
 
         return Ok(Some((Rc::new(s), ath)))
-    })
-}
+    }
 
-fn unzip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn unzip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat_s) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1070,11 +1033,9 @@ fn unzip(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitRead
         let msg = Unit::parse(dat.iter()).map_err(|e| KernErr::ParseErr(e))?.0;
 
         Ok(Some((msg, ath)))
-    })
-}
+    }
 
-fn hash(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<Rc<String>> {
-    thread!({
+    async fn hash(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<Rc<String>> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1088,11 +1049,9 @@ fn hash(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
         let s = Base64::encode_string(&h[..]);
 
         return Ok(Some((Rc::new(s), ath)))
-    })
-}
+    }
 
-fn size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeReadAsync<usize> {
-    thread!({
+    async fn size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeAsyncResult<usize> {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1108,11 +1067,9 @@ fn size(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitTypeR
         let size = dat.size(units);
 
         Ok(Some((size, ath)))
-    })
-}
+    }
 
-fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1146,11 +1103,9 @@ fn serialize(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
             _ => return Ok(None)
         };
         return Ok(Some((u, ath)))
-    })
-}
+    }
 
-fn enumerate(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+    async fn enumerate(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -1175,38 +1130,17 @@ fn enumerate(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> Unit
             return Ok(Some((Unit::list(&lst), ath)))
         }
         Ok(None)
-    })
+    }
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for ProcHlr {
+    async fn hlr(&self, msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // len
-        if let Some((len, ath)) = thread_await!(len(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((len, ath)) = Self::len(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(len as u32))
             ]);
@@ -1214,7 +1148,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // sort
-        if let Some((msg, ath)) = thread_await!(sort(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::sort(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1222,7 +1156,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // rev
-        if let Some((msg, ath)) = thread_await!(rev(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::rev(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1230,7 +1164,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // enumerate
-        if let Some((msg, ath)) = thread_await!(enumerate(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::enumerate(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1238,7 +1172,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // map
-        if let Some((msg, ath)) = thread_await!(map(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::map(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1246,7 +1180,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // reduce
-        if let Some((msg, ath)) = thread_await!(fold(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::fold(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1254,7 +1188,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // scan
-        if let Some((msg, ath)) = thread_await!(scan(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::scan(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1262,7 +1196,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // reduce
-        if let Some((msg, ath)) = thread_await!(dup(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::dup(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1270,7 +1204,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // concatenate
-        if let Some((msg, ath)) = thread_await!(cat(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::cat(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1278,7 +1212,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // product
-        if let Some((msg, ath)) = thread_await!(product(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::product(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1286,7 +1220,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // split
-        if let Some((msg, ath)) = thread_await!(split(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::split(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1294,7 +1228,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // make
-        if let Some((msg, ath)) = thread_await!(make(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::make(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1302,7 +1236,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // keys
-        if let Some((keys, ath)) = thread_await!(keys(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((keys, ath)) = Self::keys(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::list(&keys))
             ]);
@@ -1310,7 +1244,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // take
-        if let Some((res, ath)) = thread_await!(take(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((res, ath)) = Self::take(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::list(&res))
             ]);
@@ -1318,7 +1252,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // group
-        if let Some((msg, ath)) = thread_await!(group(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::group(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1326,7 +1260,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // flatten
-        if let Some((msg, ath)) = thread_await!(flatten(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::flatten(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1334,7 +1268,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // cut
-        if let Some((res, ath)) = thread_await!(cut(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((res, ath)) = Self::cut(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::list(&res))
             ]);
@@ -1342,7 +1276,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // get
-        if let Some((msg, ath)) = thread_await!(get(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::get(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1350,7 +1284,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // first/last
-        if let Some((msg, ath)) = thread_await!(first_last(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::first_last(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1358,7 +1292,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // first/last
-        if let Some((res, ath)) = thread_await!(is_in(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((res, ath)) = Self::is_in(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::bool(res))
             ]);
@@ -1366,7 +1300,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // zip
-        if let Some((s, ath)) = thread_await!(zip(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((s, ath)) = Self::zip(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str_share(s))
             ]);
@@ -1374,7 +1308,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // unzip
-        if let Some((msg, ath)) = thread_await!(unzip(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::unzip(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -1382,7 +1316,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // hash
-        if let Some((s, ath)) = thread_await!(hash(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((s, ath)) = Self::hash(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str_share(s))
             ]);
@@ -1390,7 +1324,7 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // size
-        if let Some((size, ath)) = thread_await!(size(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((size, ath)) = Self::size(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::uint(size as u32))
             ]);
@@ -1398,12 +1332,12 @@ pub fn proc_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         // serialize
-        if let Some((msg, ath)) = thread_await!(serialize(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::serialize(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
             return kern.lock().msg(&ath, msg).map(|msg| Some(msg))
         }
         Ok(Some(msg))
-    })
+    }
 }

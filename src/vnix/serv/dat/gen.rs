@@ -1,23 +1,23 @@
-use core::pin::Pin;
-use core::ops::{Coroutine, CoroutineState};
-
-use spin::Mutex;
 use alloc::rc::Rc;
 
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::string::String;
 
-use crate::{thread, thread_await, as_async, maybe, read_async, maybe_ok};
+use spin::Mutex;
+use async_trait::async_trait;
+
+use crate::{as_async, maybe, read_async, maybe_ok};
 
 use crate::vnix::core::msg::Msg;
-use crate::vnix::core::kern::{Kern, KernErr};
-use crate::vnix::core::serv::{ServHlrAsync, ServInfo};
-use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitNew, UnitParse, UnitModify, UnitReadAsync};
+use crate::vnix::core::kern::Kern;
+use crate::vnix::core::serv::{ServHlr, ServInfo, ServResult};
+use crate::vnix::core::unit::{Unit, UnitReadAsyncI, UnitAs, UnitNew, UnitAsyncResult};
 
 
 pub const SERV_PATH: &'static str = "dat.gen";
-const SERV_HELP: &'static str = "{
+
+pub const SERV_HELP: &'static str = "{
     name:dat.gen
     info:`Common data generation service`
     tut:[
@@ -62,8 +62,10 @@ const SERV_HELP: &'static str = "{
     }
 }";
 
-fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAsync {
-    thread!({
+pub struct GenHlr;
+
+impl GenHlr {
+    async fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitAsyncResult {
         let (s, dat) = maybe_ok!(msg.as_pair());
         let (s, ath) = maybe!(as_async!(s, as_str, ath, orig, kern));
 
@@ -97,38 +99,17 @@ fn lin(ath: Rc<String>, orig: Unit, msg: Unit, kern: &Mutex<Kern>) -> UnitReadAs
             _ => return Ok(None)
         };
         Ok(Some((u, ath)))
-    })
+    }
 }
 
-pub fn help_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
-        let s = maybe_ok!(msg.msg.clone().as_str());
-        let help = Unit::parse(SERV_HELP.chars()).map_err(|e| KernErr::ParseErr(e))?.0;
-        yield;
-
-        let res = match s.as_str() {
-            "help" => help,
-            "help.name" => maybe_ok!(help.find(["name"].into_iter())),
-            "help.info" => maybe_ok!(help.find(["info"].into_iter())),
-            "help.tut" => maybe_ok!(help.find(["tut"].into_iter())),
-            "help.man" => maybe_ok!(help.find(["man"].into_iter())),
-            _ => return Ok(None)
-        };
-
-        let _msg = Unit::map(&[
-            (Unit::str("msg"), res)
-        ]);
-        kern.lock().msg(&msg.ath, _msg).map(|msg| Some(msg))
-    })
-}
-
-pub fn gen_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
-    thread!({
+#[async_trait(?Send)]
+impl ServHlr for GenHlr {
+    async fn hlr(&self, msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServResult {
         let ath = Rc::new(msg.ath.clone());
         let (_msg, ath) = maybe!(read_async!(msg.msg.clone(), ath.clone(), msg.msg.clone(), kern));
 
         // lin
-        if let Some((msg, ath)) = thread_await!(lin(ath.clone(), _msg.clone(), _msg.clone(), kern))? {
+        if let Some((msg, ath)) = Self::lin(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), msg)
             ]);
@@ -136,5 +117,5 @@ pub fn gen_hlr(msg: Msg, _serv: ServInfo, kern: &Mutex<Kern>) -> ServHlrAsync {
         }
 
         Ok(Some(msg))
-    })
+    }
 }
