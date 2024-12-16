@@ -10,9 +10,10 @@
 
 extern crate alloc;
 
-mod vnix;
 mod driver;
-mod content;
+
+use ::vnix::vnix;
+use ::vnix::content;
 
 use spin::Mutex;
 
@@ -65,7 +66,7 @@ fn main() {
         println!("WARN loader:disp: not available, using stub driver");
     }
 
-    let disp_stub = driver::stub::StubDisp;
+    let disp_stub = ::vnix::driver::stub::StubDisp;
 
     // others
     let time = driver::linux::LinuxTime::new();
