@@ -253,7 +253,7 @@ impl ServHlr for TermHlr {
         }
 
         // cls command
-        if let Some(_ath) = text::cls(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some(_ath) = text::Text::cls(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -262,7 +262,7 @@ impl ServHlr for TermHlr {
         }
 
         // nl command
-        if let Some(_ath) = text::nl(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some(_ath) = text::Text::nl(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -271,7 +271,7 @@ impl ServHlr for TermHlr {
         }
 
         // get key command
-        if let Some((key, ath)) = text::get_key(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some((key, ath)) = text::Text::get_key(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             let msg = Unit::map(&[
                 (Unit::str("msg"), Unit::str(format!("{key}").as_str()))
             ]);
@@ -279,7 +279,7 @@ impl ServHlr for TermHlr {
         }
 
         // input command
-        if let Some((_msg, ath)) = text::input(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some((_msg, ath)) = text::Text::input(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if let Some(msg) = _msg {
                 let msg = Unit::map(&[
                     (Unit::str("msg"), msg)
@@ -290,7 +290,7 @@ impl ServHlr for TermHlr {
         }
 
         // image command
-        if let Some((_, _ath)) = media::img((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some((_, _ath)) = media::Media::img((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -299,7 +299,7 @@ impl ServHlr for TermHlr {
         }
 
         // video command
-        if let Some(_ath) = media::vid((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some(_ath) = media::Media::vid((0, 0), ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -308,7 +308,7 @@ impl ServHlr for TermHlr {
         }
 
         // sprite command
-        if let Some(_ath) = media::spr(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some(_ath) = media::Media::spr(ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
@@ -317,7 +317,7 @@ impl ServHlr for TermHlr {
         }
 
         // say command
-        if let Some(_ath) = text::say(false, false, None, None, ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
+        if let Some(_ath) = text::Text::say(false, false, None, None, ath.clone(), _msg.clone(), _msg.clone(), kern).await? {
             if _ath != ath {
                 ath = _ath;
                 msg = kern.lock().msg(&ath, _msg)?;
