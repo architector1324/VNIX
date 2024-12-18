@@ -63,6 +63,20 @@ rustup target add aarch64-unknown-linux-musl
 cargo build --release --target=aarch64-unknown-linux-musl
 ```
 
+## Build and run Docker
+1. Build docker image:
+```bash
+docker build -t vnix .
+```
+
+2. Run docker image:
+```bash
+docker run --rm -it vnix
+```
+
+> **Note**: in docker container there is no graphical mode.
+
+
 ## Run on QEMU
 1. Prepare boot img:
 ```bash

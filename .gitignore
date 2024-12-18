@@ -3,3 +3,4 @@ bin/*
 content/*
 !content/vnix.store
 Cargo.lock
+.vscode/*
